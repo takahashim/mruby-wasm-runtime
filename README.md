@@ -79,6 +79,19 @@ To open the browser samples, run `make serve` and visit
   ≥18 with `--experimental-wasm-exnref`. Hosts without modern EH
   support won't load the artifact.
 
+## Bundled components
+
+This repo's published artifacts (`@takahashim/mruby-wasm-js` on npm,
+GitHub Release tarballs) statically bundle the upstream toolchain
+versions pinned in the `Makefile`:
+
+| Component | Version | Pinned in |
+|---|---|---|
+| upstream mruby | 4.0.0 | `MRUBY_TAG` |
+| wasi-sdk | 33.0 | `WASI_SDK_VERSION` |
+
+See [`CHANGELOG.md`](./CHANGELOG.md) for bundled versions per release.
+
 ## Related projects
 
 - [`ruby/ruby.wasm`](https://github.com/ruby/ruby.wasm) official

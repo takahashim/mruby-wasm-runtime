@@ -1,7 +1,7 @@
 {
-  "name": "mruby-wasm-js",
-  "version": "0.0.0-dev",
-  "description": "Minimal mruby ↔ JavaScript bridge for WASM hosts",
+  "name": "@takahashim/mruby-wasm-js",
+  "version": "0.1.0",
+  "description": "Minimal mruby ↔ JavaScript bridge for WebAssembly. Run mruby in browsers and Node with a JS::Object DOM/JS interop API.",
   "type": "module",
   "main": "./index.js",
   "exports": {
@@ -17,6 +17,28 @@
     "README.md",
     "LICENSE"
   ],
+  "keywords": [
+    "mruby",
+    "ruby",
+    "webassembly",
+    "wasm",
+    "wasi",
+    "browser",
+    "createvm"
+  ],
+  "author": "takahashim <takahashimm@gmail.com>",
   "license": "MIT",
+  "homepage": "https://github.com/takahashim/mruby-wasm-runtime#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/takahashim/mruby-wasm-runtime.git",
+    "directory": "mrbgem/mruby-wasm-js"
+  },
+  "bugs": {
+    "url": "https://github.com/takahashim/mruby-wasm-runtime/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "engines": { "node": ">=18" }
 }

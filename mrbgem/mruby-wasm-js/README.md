@@ -48,7 +48,7 @@ these undefined symbols:
 ```js
 // Via npm / bare specifier (preferred — package.json#main resolves
 // to ./index.js):
-import { createVM } from "mruby-wasm-js";
+import { createVM } from "@takahashim/mruby-wasm-js";
 
 // Or via explicit path (vendored / unpublished consumers):
 import { createVM } from "./vendor/mruby-wasm-js/index.js";
@@ -105,7 +105,7 @@ Module-level exports:
 #### Populating the virtual filesystem
 
 ```js
-import { createVM, Directory, File } from "mruby-wasm-js";
+import { createVM, Directory, File } from "@takahashim/mruby-wasm-js";
 
 // 1. Declarative — hand the whole tree to createVM.
 const vm = await createVM({

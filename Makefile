@@ -80,7 +80,7 @@ BUILD_WASM_CMD := $(BUILD_DIR)/mruby-cmd.wasm
 GEM_DIR := $(CURDIR)/mrbgem/mruby-wasm-js
 DIST_DIR_JS  := $(CURDIR)/dist/mruby-wasm-js
 DIST_DIR_CMD := $(CURDIR)/dist/mruby-wasm-cmd
-DIST_VERSION := 0.0.0-dev
+DIST_VERSION := 0.1.0
 
 .PHONY: all wasi-sdk js cmd serve test \
         dist-js dist-cmd dist \
