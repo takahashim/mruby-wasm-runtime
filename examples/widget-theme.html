@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>mruby-widget — provide/inject theme demo</title>
+    <style>
+      :root {
+        --bg: #fafafa; --panel: #fff; --border: #e5e5e5;
+        --accent: #b94f3f; --text: #222; --muted: #888;
+      }
+      * { box-sizing: border-box; transition: background-color 200ms, color 200ms, border-color 200ms; }
+      body {
+        font-family: system-ui, -apple-system, sans-serif;
+        max-width: 620px; margin: 0 auto; padding: 2em 1em;
+        line-height: 1.55; color: var(--text); background: var(--bg);
+      }
+      h1 { margin: 0 0 0.3em 0; }
+      .lede { color: var(--muted); margin-top: 0; }
+      .toolbar {
+        display: flex; gap: 0.6em; align-items: center; margin: 1em 0;
+      }
+      button {
+        font-size: 1em; padding: 0.45em 1em; border-radius: 6px;
+        border: 1px solid var(--accent); background: var(--accent);
+        color: white; cursor: pointer;
+      }
+      button:hover { opacity: 0.88; }
+      .card {
+        background: var(--panel); padding: 1em 1.2em; border-radius: 10px;
+        margin: 0.7em 0; border: 1px solid var(--border);
+      }
+      .card.is-dark {
+        background: #1f1f23; color: #ddd; border-color: #333;
+      }
+      .card.is-dark h3 { color: #fff; }
+      .card.is-dark .badge { background: #3a3a40; color: #ddd; }
+      .badge {
+        display: inline-block; padding: 0.1em 0.6em; border-radius: 999px;
+        background: #eee; color: #555; font-size: 0.85em; font-weight: 600;
+      }
+      h3 { margin: 0 0 0.4em 0; font-size: 1em; }
+      .status { color: var(--muted); font-size: 0.9em; }
+      #boot { color: var(--muted); font-size: 0.85em; margin-top: 2em; }
+    </style>
+  </head>
+  <body>
+    <h1>provide / inject — theme demo</h1>
+    <p class="lede">
+      The outer <code>theme-app</code> widget publishes a <code>:theme</code>
+      signal in its <code>provides</code> hook. Each <code>theme-card</code>
+      and <code>theme-badge</code> widget calls <code>inject(:theme)</code>
+      in its setup and binds its CSS classes reactively. None of the inner
+      widgets know who provides the theme — they just ask for it by key.
+    </p>
+
+    <div data-widget="theme-app">
+      <div class="toolbar">
+        <button data-ref="toggle">Toggle theme</button>
+        <span class="status" data-ref="status"></span>
+      </div>
+
+      <div data-widget="theme-card" class="card">
+        <h3>First card</h3>
+        <p>This card asks <code>inject(:theme)</code>. Two levels deep, the
+           badge does the same independently.
+           <span data-widget="theme-badge" class="badge" data-ref="badge_root">
+             status
+           </span>
+        </p>
+      </div>
+
+      <div data-widget="theme-card" class="card">
+        <h3>Second card</h3>
+        <p>Both cards re-render only their CSS class on toggle — the DOM
+           nodes are not replaced, so any focus / scroll / nested widget
+           state is preserved.</p>
+      </div>
+    </div>
+
+    <p id="boot">booting…</p>
+
+    <script type="module">
+      import { createVM } from "../mrbgem/mruby-wasm-js/js/index.js";
+      const boot = document.getElementById("boot");
+      try {
+        const vm = await createVM({ wasm: "../build/mruby-js.wasm" });
+        vm.eval(`
+class ThemeApp < MRubyWasm::Widget
+  # provides runs in pre-order — before any descendant's setup. By the
+  # time a child calls inject(:theme), this signal is already in scope.
+  def provides
+    @theme = signal("light")
+    provide :theme, @theme
+  end
+
+  def setup
+    refs.toggle.on(:click) do
+      @theme.update { |t| t == "dark" ? "light" : "dark" }
+    end
+
+    bind refs.status, :text do
+      "current: \#{@theme.value}"
+    end
+  end
+end
+
+class ThemeCard < MRubyWasm::Widget
+  def setup
+    @theme = inject(:theme)
+
+    # bind on root: the widget's own DOM root gets the .is-dark class
+    # whenever the inherited theme is "dark".
+    bind root, class: { "is-dark" => memo { @theme.value == "dark" } }
+  end
+end
+
+class ThemeBadge < MRubyWasm::Widget
+  def setup
+    @theme = inject(:theme)
+
+    bind root, :text do
+      @theme.value == "dark" ? "🌙 dark" : "☀️ light"
+    end
+  end
+end
+
+MRubyWasm.register_widget "theme-app",   ThemeApp
+MRubyWasm.register_widget "theme-card",  ThemeCard
+MRubyWasm.register_widget "theme-badge", ThemeBadge
+MRubyWasm.start
+puts "theme demo mounted"
+`);
+        boot.textContent = "ready — click 'Toggle theme'";
+      } catch (err) {
+        console.error(err);
+        boot.textContent = "boot failed: " + err.message;
+      }
+    </script>
+  </body>
+</html>

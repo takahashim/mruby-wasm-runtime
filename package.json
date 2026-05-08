@@ -1,0 +1,9 @@
+{
+  "name": "mruby-wasm-runtime-dev",
+  "private": true,
+  "type": "module",
+  "description": "Dev dependencies for mruby-wasm-runtime test runner.",
+  "devDependencies": {
+    "happy-dom": "^15.11.7"
+  }
+}

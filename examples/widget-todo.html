@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>mruby-widget — todo demo (bind_list)</title>
+    <style>
+      :root {
+        --bg: #fafafa; --panel: #fff; --border: #e5e5e5;
+        --accent: #b94f3f; --muted: #888; --text: #222;
+      }
+      * { box-sizing: border-box; }
+      body {
+        font-family: system-ui, -apple-system, sans-serif;
+        max-width: 560px; margin: 0 auto; padding: 2em 1em;
+        line-height: 1.55; color: var(--text); background: var(--bg);
+      }
+      h1 { margin: 0 0 0.3em 0; }
+      .lede { color: var(--muted); margin-top: 0; }
+      .panel {
+        background: var(--panel); padding: 1em 1.2em; border-radius: 10px;
+        margin: 1em 0; border: 1px solid var(--border);
+      }
+      .row { display: flex; gap: 0.5em; align-items: center; }
+      input[type="text"] {
+        flex: 1; font-size: 1em; padding: 0.45em 0.7em;
+        border: 1px solid var(--border); border-radius: 6px;
+      }
+      button {
+        font-size: 1em; padding: 0.45em 0.95em; border-radius: 6px;
+        border: 1px solid var(--accent); background: var(--accent);
+        color: white; cursor: pointer;
+      }
+      button:hover { opacity: 0.88; }
+      ul.todos {
+        list-style: none; padding: 0; margin: 1em 0 0 0;
+        display: flex; flex-direction: column; gap: 0.4em;
+      }
+      ul.todos li {
+        display: flex; align-items: center; gap: 0.6em;
+        padding: 0.5em 0.7em; border-radius: 6px;
+        background: var(--bg); border: 1px solid var(--border);
+      }
+      ul.todos li span { flex: 1; }
+      .dismiss {
+        background: transparent; border: 1px solid transparent;
+        color: var(--muted); font-size: 1.1em; line-height: 1;
+        padding: 0.1em 0.4em; cursor: pointer;
+      }
+      .dismiss:hover { color: var(--accent); border-color: var(--border); }
+      .status { color: var(--muted); font-size: 0.9em; margin-top: 0.6em; }
+      #boot { color: var(--muted); font-size: 0.85em; margin-top: 2em; }
+    </style>
+  </head>
+  <body>
+    <h1>mruby-widget — todo demo</h1>
+    <p class="lede">
+      The todo list is rendered by <code>bind_list</code> from a single
+      <code>@items</code> signal — there is no manual DOM manipulation
+      below. Adding an item updates the signal; <code>bind_list</code>
+      diffs the new array against the previous one and inserts only the
+      new <code>&lt;li&gt;</code>. The MutationObserver picks that node
+      up and mounts a <code>todo-item</code> widget on it.
+    </p>
+
+    <!-- The <ul> is empty in the seed HTML; bind_list owns its children. -->
+    <div data-widget="todo-list" class="panel">
+      <div class="row">
+        <input data-ref="input" type="text" placeholder="What needs doing?">
+        <button data-ref="add">Add</button>
+      </div>
+      <ul data-ref="list" class="todos"></ul>
+      <p class="status" data-ref="status"></p>
+    </div>
+
+    <p id="boot">booting…</p>
+
+    <script type="module">
+      import { createVM } from "../mrbgem/mruby-wasm-js/js/index.js";
+      const boot = document.getElementById("boot");
+      try {
+        const vm = await createVM({ wasm: "../build/mruby-js.wasm" });
+        vm.eval(`
+# Each <li> is its own widget. lifecycle scoped to the row: when
+# bind_list removes the <li>, the MutationObserver unmounts this and
+# the click handler / cleanup is released.
+class TodoItem < MRubyWasm::Widget
+  def setup
+    refs.dismiss.on(:click) do
+      # bubbles: true lets the event cross the data-widget boundary up
+      # to the parent TodoList. event.target on the parent side is the
+      # <li> that fired, so the parent can read its data-id.
+      root.dispatch(:item_dismissed, bubbles: true)
+    end
+  end
+end
+
+class TodoList < MRubyWasm::Widget
+  def setup
+    @next_id = signal(3)
+    @items   = signal([
+      { id: 1, title: "Read the spec" },
+      { id: 2, title: "Try class & style binding" },
+    ])
+
+    refs.add.on(:click) { add_item }
+    refs.input.on(:keydown) do |event|
+      add_item if event[:key].to_s == "Enter"
+    end
+
+    # Remove by id when a child TodoItem dispatches :item_dismissed.
+    # We update the *signal*, not the DOM directly — bind_list handles
+    # the DOM. This is the inversion that makes the list declarative.
+    root.on(:item_dismissed) do |event|
+      li = event[:target]
+      id = li.call(:getAttribute, "data-id").to_s.to_i
+      @items.update { |arr| arr.reject { |it| it[:id] == id } }
+    end
+
+    # The whole list rendering. Only the <li> for items whose id and
+    # title haven't changed since last render keeps its DOM node;
+    # everything else is a precise add / remove / replace.
+    bind_list refs.list, @items, key: ->(it) { it[:id] } do |it|
+      HTML.tag(:li,
+        HTML.safe_join([
+          HTML.tag(:span, it[:title]),
+          HTML.tag(:button, "×",
+            class: "dismiss",
+            **{ :"data-ref" => "dismiss",
+                :"aria-label" => "delete" }),
+        ]),
+        **{ :"data-widget" => "todo-item",
+            :"data-id"     => it[:id].to_s })
+    end
+
+    bind refs.status, :text do
+      n = @items.value.length
+      case n
+      when 0 then "all done!"
+      when 1 then "1 item"
+      else        "\#{n} items"
+      end
+    end
+  end
+
+  private
+
+  def add_item
+    text = refs.input.value.to_s
+    return if text.empty?
+    id = @next_id.value
+    @next_id.update { |n| n + 1 }
+    # Source-of-truth update — DOM follows.
+    @items.update { |arr| arr + [{ id: id, title: text }] }
+    refs.input.value = ""
+  end
+end
+
+MRubyWasm.register_widget "todo-list", TodoList
+MRubyWasm.register_widget "todo-item", TodoItem
+MRubyWasm.start
+puts "todo demo (bind_list) mounted"
+`);
+        boot.textContent = "ready — type and press Enter / click Add";
+      } catch (err) {
+        console.error(err);
+        boot.textContent = "boot failed: " + err.message;
+      }
+    </script>
+  </body>
+</html>

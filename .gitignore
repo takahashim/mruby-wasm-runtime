@@ -13,6 +13,10 @@ dist/
 # commit it built against — auto-generated, no need to track.
 build_config/*.lock
 
+# Node test runner deps
+node_modules/
+package-lock.json
+
 # Editor / OS
 *.swp
 .DS_Store

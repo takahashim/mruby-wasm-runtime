@@ -1,6 +1,18 @@
 # mruby cross-build for WASI (wasm32-wasip1) — JS-host variant.
 # Sibling to build_config/wasi-cmd.rb. Driven by `make js` (the Makefile
 # sets WASI_SDK_PATH and MRUBY_CONFIG).
+#
+# Build mode (debug vs release) is selected via MRUBY_WASM_RELEASE:
+#
+#   unset / "0"  → debug build (default for `make js` / `make test`).
+#                  Includes .debug_* sections (~3MB) for readable stack
+#                  traces and DWARF-style debugging in browser DevTools.
+#                  No optimisation flags; matches mruby core's defaults.
+#   "1"          → release build (used by `make js-release` / `dist-js`).
+#                  -Os + --strip-debug. Roughly 1/4 the byte size.
+#
+# The two modes write to different mruby build directories so
+# `make js js-release` rebuilds neither — they coexist on disk.
 
 wasi_sdk = ENV.fetch("WASI_SDK_PATH") { abort "Set WASI_SDK_PATH" }
 sysroot = "#{wasi_sdk}/share/wasi-sysroot"
@@ -8,7 +20,10 @@ clang = "#{wasi_sdk}/bin/clang"
 ar = "#{wasi_sdk}/bin/llvm-ar"
 target = "wasm32-wasip1"
 
-MRuby::CrossBuild.new("wasi-js") do |conf|
+release = ENV["MRUBY_WASM_RELEASE"] == "1"
+build_name = release ? "wasi-js-release" : "wasi-js"
+
+MRuby::CrossBuild.new(build_name) do |conf|
   conf.toolchain :clang
 
   conf.cc.command = clang
@@ -26,12 +41,19 @@ MRuby::CrossBuild.new("wasi-js") do |conf|
   # gaps. See hal-wasi-io/README.md for details.
   shim_dir = File.expand_path("../mrbgem/hal-wasi-io/include", __dir__)
   stub_flags = ["-isystem", shim_dir, "-include", "#{shim_dir}/wasi-shims.h"]
-  conf.cc.flags.concat(common_flags + sjlj_flags + stub_flags)
-  conf.cxx.flags.concat(common_flags + sjlj_flags + stub_flags)
+  size_flags = release ? ["-Os"] : []
+  conf.cc.flags.concat(common_flags + size_flags + sjlj_flags + stub_flags)
+  conf.cxx.flags.concat(common_flags + size_flags + sjlj_flags + stub_flags)
   conf.linker.flags.concat(common_flags)
 
   # Allow undefined imports (we declare them via __attribute__((import_module)))
   conf.linker.flags << "-Wl,--allow-undefined"
+
+  # In release mode, drop `.debug_*` custom sections at link time. They
+  # make up ~75% of the unstripped artifact and are unused at runtime.
+  # The `name` section is preserved so wasm stack traces still show
+  # function names.
+  conf.linker.flags << "-Wl,--strip-debug" if release
 
   # Reactor module: export `_initialize` (runs ctors, then returns)
   # instead of `_start`. The JS host keeps the instance alive and drives
@@ -55,6 +77,7 @@ MRuby::CrossBuild.new("wasi-js") do |conf|
   conf.gem core: "mruby-random"
 
   conf.gem File.expand_path("../mrbgem/mruby-wasm-js", __dir__)
+  conf.gem File.expand_path("../mrbgem/mruby-widget", __dir__)
   # Ruby surface for WASI primitives that mruby core doesn't ship.
   conf.gem File.expand_path("../mrbgem/mruby-wasi-dir", __dir__)
   conf.gem File.expand_path("../mrbgem/mruby-wasi-env", __dir__)

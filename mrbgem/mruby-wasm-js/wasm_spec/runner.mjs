@@ -24,6 +24,18 @@ globalThis.fetch = async (url) => {
   });
 };
 
+// --- DOM shim (happy-dom) for widget specs -------------------------------
+// happy-dom is a devDependency of the repo root package.json.
+//
+// We only expose `document` on the host globalThis. CustomEvent /
+// MutationObserver / Event are read from `document.defaultView` (the
+// happy-dom Window instance) by the Ruby widget layer, so we avoid
+// shadowing Node's built-in Event constructor and breaking the existing
+// EventTarget tests.
+const { Window } = await import("happy-dom");
+const dom = new Window({ url: "https://test.local/" });
+globalThis.document = dom.document;
+
 const wasmUrl = process.env.MRUBY_WASM_PATH
   ? pathToFileURL(resolve(process.cwd(), process.env.MRUBY_WASM_PATH)).href
   : new URL("../../../build/mruby-js.wasm", import.meta.url).href;
@@ -70,22 +82,35 @@ assert(!vm.fs.has("/data"), "fs.has returns false for directories");
 
 // --- Load spec_helper + all test_*.rb -------------------------------------
 const testDir = here;
-const allFiles = (await readdir(testDir)).sort();
+const widgetSpecDir = resolve(here, "../../mruby-widget/wasm_spec");
 const helper = "spec_helper.rb";
-const testFiles = allFiles.filter((f) => f.startsWith("test_") && f.endsWith(".rb"));
 
 console.log(`[runner] loading ${helper}`);
 vm.eval(await readFile(join(testDir, helper), "utf8"));
 
-for (const f of testFiles) {
-  const src = await readFile(join(testDir, f), "utf8");
-  console.log(`[runner] running ${f}`);
-  const rc = vm.eval(src);
-  if (rc !== 0) {
-    console.error(`[runner] ${f} failed to load (parse/runtime error)`);
-    process.exit(1);
+async function runDir(dir, label) {
+  let entries;
+  try {
+    entries = await readdir(dir);
+  } catch (_e) {
+    return; // dir may not exist for some configurations
+  }
+  const testFiles = entries
+    .filter((f) => f.startsWith("test_") && f.endsWith(".rb"))
+    .sort();
+  for (const f of testFiles) {
+    const src = await readFile(join(dir, f), "utf8");
+    console.log(`[runner] running ${label}/${f}`);
+    const rc = vm.eval(src);
+    if (rc !== 0) {
+      console.error(`[runner] ${label}/${f} failed to load (parse/runtime error)`);
+      process.exit(1);
+    }
   }
 }
+
+await runDir(testDir, "mruby-wasm-js");
+await runDir(widgetSpecDir, "mruby-widget");
 
 // Wait so any pending Promises (await tests, real-async setTimeout
 // inside tests) have time to settle before we print the summary.

@@ -69,20 +69,22 @@ MRUBY_TAG := 4.0.0
 
 MRUBY_CONFIG_JS  := $(CURDIR)/build_config/wasi-js.rb
 MRUBY_CONFIG_CMD := $(CURDIR)/build_config/wasi-cmd.rb
-LIBMRUBY_JS  := $(MRUBY_DIR)/build/wasi-js/lib/libmruby.a
+LIBMRUBY_JS         := $(MRUBY_DIR)/build/wasi-js/lib/libmruby.a
+LIBMRUBY_JS_RELEASE := $(MRUBY_DIR)/build/wasi-js-release/lib/libmruby.a
 LIBMRUBY_CMD := $(MRUBY_DIR)/build/wasi-cmd/lib/libmruby.a
 
 # ── outputs ─────────────────────────────────────────────────────────────
 BUILD_DIR := $(CURDIR)/build
-BUILD_WASM_JS  := $(BUILD_DIR)/mruby-js.wasm
-BUILD_WASM_CMD := $(BUILD_DIR)/mruby-cmd.wasm
+BUILD_WASM_JS         := $(BUILD_DIR)/mruby-js.wasm
+BUILD_WASM_JS_RELEASE := $(BUILD_DIR)/mruby-js.release.wasm
+BUILD_WASM_CMD        := $(BUILD_DIR)/mruby-cmd.wasm
 
 GEM_DIR := $(CURDIR)/mrbgem/mruby-wasm-js
 DIST_DIR_JS  := $(CURDIR)/dist/mruby-wasm-js
 DIST_DIR_CMD := $(CURDIR)/dist/mruby-wasm-cmd
 DIST_VERSION := 0.1.0
 
-.PHONY: all wasi-sdk js cmd serve test \
+.PHONY: all wasi-sdk js js-release cmd serve test node-deps \
         dist-js dist-cmd dist \
         smoke-cmd smoke-cmd-wasmtime smoke-all \
         clean distclean print-version
@@ -120,6 +122,9 @@ $(MRUBY_DIR)/.git:
 $(LIBMRUBY_JS): | wasi-sdk $(MRUBY_DIR)/.git
 	cd $(MRUBY_DIR) && rake MRUBY_CONFIG=$(MRUBY_CONFIG_JS)
 
+$(LIBMRUBY_JS_RELEASE): | wasi-sdk $(MRUBY_DIR)/.git
+	cd $(MRUBY_DIR) && MRUBY_WASM_RELEASE=1 rake MRUBY_CONFIG=$(MRUBY_CONFIG_JS)
+
 $(LIBMRUBY_CMD): | wasi-sdk $(MRUBY_DIR)/.git
 	cd $(MRUBY_DIR) && rake MRUBY_CONFIG=$(MRUBY_CONFIG_CMD)
 
@@ -128,7 +133,15 @@ $(BUILD_DIR):
 	mkdir -p $(BUILD_DIR)
 
 # ── JS-host wasm ────────────────────────────────────────────────────────
+# Two flavours:
+#   js          → debug build at build/mruby-js.wasm (~4MB, .debug_*
+#                 sections preserved). Used by `make test` and local
+#                 development for readable browser-DevTools stack traces.
+#   js-release  → optimised at build/mruby-js.release.wasm (~1MB, -Os
+#                 + --strip-debug). Consumed by `dist-js` for the
+#                 published artifact.
 js: $(BUILD_WASM_JS)
+js-release: $(BUILD_WASM_JS_RELEASE)
 
 $(BUILD_WASM_JS): $(LIBMRUBY_JS) | $(BUILD_DIR)
 	$(CLANG) --target=$(TARGET) --sysroot=$(SYSROOT) \
@@ -139,7 +152,20 @@ $(BUILD_WASM_JS): $(LIBMRUBY_JS) | $(BUILD_DIR)
 	  -Wl,--whole-archive $(LIBMRUBY_JS) -Wl,--no-whole-archive \
 	  -o $(BUILD_WASM_JS) \
 	  -lsetjmp
-	@echo "Built $(BUILD_WASM_JS)"
+	@echo "Built $(BUILD_WASM_JS) ($$(du -h $(BUILD_WASM_JS) | cut -f1))"
+
+$(BUILD_WASM_JS_RELEASE): $(LIBMRUBY_JS_RELEASE) | $(BUILD_DIR)
+	$(CLANG) --target=$(TARGET) --sysroot=$(SYSROOT) \
+	  -Os \
+	  -mexec-model=reactor \
+	  -Wl,--allow-undefined \
+	  -Wl,--strip-debug \
+	  -Wl,--export=js_invoke_proc \
+	  -Wl,--export=js_eval_handle \
+	  -Wl,--whole-archive $(LIBMRUBY_JS_RELEASE) -Wl,--no-whole-archive \
+	  -o $(BUILD_WASM_JS_RELEASE) \
+	  -lsetjmp
+	@echo "Built $(BUILD_WASM_JS_RELEASE) ($$(du -h $(BUILD_WASM_JS_RELEASE) | cut -f1))"
 
 # ── command wasm (mruby-bin-mruby) ──────────────────────────────────────
 cmd: $(BUILD_WASM_CMD)
@@ -149,7 +175,11 @@ $(BUILD_WASM_CMD): $(LIBMRUBY_CMD) | $(BUILD_DIR)
 	@echo "Built $(BUILD_WASM_CMD)"
 
 # ── test / smoke ────────────────────────────────────────────────────────
-test: js
+node_modules: package.json
+	npm install --no-audit --no-fund --silent
+	@touch node_modules
+
+test: js node_modules
 	MRUBY_WASM_PATH=$(BUILD_WASM_JS) node mrbgem/mruby-wasm-js/wasm_spec/runner.mjs
 
 smoke-cmd: cmd
@@ -179,13 +209,13 @@ smoke-all: test smoke-cmd smoke-cmd-wasmtime
 	@echo "[smoke-all] all checks passed"
 
 # ── distribution bundles ────────────────────────────────────────────────
-dist-js: js
+dist-js: js-release
 	@rm -rf $(DIST_DIR_JS)
 	@mkdir -p $(DIST_DIR_JS)
-	cp $(GEM_DIR)/js/*.js     $(DIST_DIR_JS)/
-	cp $(GEM_DIR)/README.md   $(DIST_DIR_JS)/README.md
-	cp $(GEM_DIR)/LICENSE     $(DIST_DIR_JS)/LICENSE
-	cp $(BUILD_WASM_JS)       $(DIST_DIR_JS)/mruby-js.wasm
+	cp $(GEM_DIR)/js/*.js              $(DIST_DIR_JS)/
+	cp $(GEM_DIR)/README.md            $(DIST_DIR_JS)/README.md
+	cp $(GEM_DIR)/LICENSE              $(DIST_DIR_JS)/LICENSE
+	cp $(BUILD_WASM_JS_RELEASE)        $(DIST_DIR_JS)/mruby-js.wasm
 	@sed 's/"version": "0.0.0-dev"/"version": "$(DIST_VERSION)"/' \
 	    $(GEM_DIR)/package.json > $(DIST_DIR_JS)/package.json
 	@echo "Built $(DIST_DIR_JS)/ (version $(DIST_VERSION))"
