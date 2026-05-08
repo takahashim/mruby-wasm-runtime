@@ -1,0 +1,18 @@
+# Vendored toolchain (heavy, downloaded by `make wasi-sdk`)
+vendor/
+
+# mruby source clone — fetched by `make mruby-js` / `make mruby-cmd`, not part of this repo
+mruby/
+
+# Build outputs
+build/
+# `make dist` outputs (regenerated each release)
+dist/
+
+# rake/mruby creates a lockfile next to MRUBY_CONFIG recording the mruby
+# commit it built against — auto-generated, no need to track.
+build_config/*.lock
+
+# Editor / OS
+*.swp
+.DS_Store

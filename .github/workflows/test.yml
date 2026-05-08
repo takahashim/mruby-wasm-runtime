@@ -1,0 +1,61 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          # Need ≥24 for stable --experimental-wasm-exnref support
+          # (used by `make smoke-cmd` to load mruby-cmd.wasm's modern EH).
+          node-version: '24'
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          # Used to drive mruby's `rake` build system.
+          ruby-version: '3.4'
+          bundler-cache: false
+
+      # Bump the cache key suffix when MRUBY_TAG / WASI_SDK_VERSION
+      # change in the Makefile so stale caches don't shadow updates.
+      - name: Cache wasi-sdk tarball
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/mruby-wasm-runtime
+          key: wasi-sdk-33.0-x86_64-linux
+
+      - name: Cache mruby clone
+        uses: actions/cache@v4
+        with:
+          path: mruby
+          key: mruby-4.0.0
+
+      - name: Build JS-host wasm
+        run: make js
+
+      - name: Build command wasm
+        run: make cmd
+
+      - name: Run wasm_spec (167+ tests)
+        run: make test
+
+      - name: Run command smoke via Node WASI
+        run: make smoke-cmd
+
+      - name: Install wasmtime
+        run: |
+          curl https://wasmtime.dev/install.sh -sSf | bash
+          echo "$HOME/.wasmtime/bin" >> "$GITHUB_PATH"
+
+      - name: Run command smoke via wasmtime
+        run: make smoke-cmd-wasmtime
