@@ -87,21 +87,37 @@ module HTML
       Safe.new(str)
     end
 
-    # Build an HTML element string. Body is escaped if it's a plain
-    # String, used as-is if it's HTML::Safe, omitted if nil. Attributes
-    # are always key+value escaped; nil/false values are skipped; true
-    # values produce a valueless attribute (`<input disabled>`).
+    # Build an HTML element string.
+    #
+    # Body forms:
+    #   - nil (or omitted)        — empty body
+    #   - HTML::Safe              — used as-is (already escaped)
+    #   - Array                   — each element rendered recursively
+    #                                (Safe → as-is, String → escaped, nil → skipped)
+    #   - block (when body=nil)   — block return value used as body
+    #   - other                    — coerced via to_s and escaped
+    #
+    # Attribute keys:
+    #   - Symbol `:data_widget`   → "data-widget" (`_` auto-converted to `-`,
+    #                                idiomatic for kebab-case HTML attrs)
+    #   - String `"xml:space"`    → used as-is (escape hatch for `:`, `_`,
+    #                                or any name you want left untouched)
+    #
+    # Attribute values:
+    #   - nil / false             — attribute omitted entirely
+    #   - true                     — valueless attribute (`<input disabled>`)
+    #   - other                    — `to_s` and value-escaped
     #
     # No void-element handling: every tag is rendered with an explicit
-    # close (`<input ...></input>`). Modern browsers accept it, and
-    # void-element rules are an extra surface we don't need yet.
-    def tag(name, body = nil, **attrs)
+    # close (`<input ...></input>`). Modern browsers accept it.
+    def tag(name, body = nil, **attrs, &block)
+      body = block.call if body.nil? && block
       name_str = name.to_s
       out = String.new
       out << "<" << name_str
       attrs.each do |k, v|
         next if v.nil? || v == false
-        key = escape(k.to_s)
+        key = escape(__attr_key__(k))
         if v == true
           out << " " << key
         else
@@ -109,16 +125,31 @@ module HTML
         end
       end
       out << ">"
+      __append_body__(out, body)
+      out << "</" << name_str << ">"
+      Safe.new(out)
+    end
+
+    # Internal: attribute name normalisation. Symbol keys map `_` to
+    # `-`; String keys pass through. See `tag` docs for the rationale.
+    def __attr_key__(k)
+      k.is_a?(Symbol) ? k.to_s.tr("_", "-") : k.to_s
+    end
+
+    # Internal: append body content to `out`, dispatching on type.
+    # Recurses into Arrays so nested fragments compose without
+    # `safe_join`. Skips nil entries — handy for conditional children.
+    def __append_body__(out, body)
       case body
       when nil
-        # empty body
+        # empty
       when Safe
         out << body.to_s
+      when Array
+        body.each { |child| __append_body__(out, child) }
       else
         out << escape(body.to_s)
       end
-      out << "</" << name_str << ">"
-      Safe.new(out)
     end
 
     # Concatenate items into one Safe. Each item is escaped if plain,
@@ -132,4 +163,17 @@ module HTML
       Safe.new(pieces.join(sep_str))
     end
   end
+end
+
+# Top-level shortcut for `HTML.tag`. Useful when fragments nest deeply
+# and `HTML.tag(...)` becomes visually noisy. The module form
+# (`HTML.tag`, `HTML.escape`, `HTML.safe_join`, `HTML.raw`,
+# `HTML::Safe`) remains the canonical discoverable API — this is just
+# a thin sugar method.
+#
+# Note: in Ruby, the constant `HTML` (a module) and the method
+# `HTML(...)` (this delegator) live in different namespaces and
+# coexist, mirroring Kernel's `Integer(x)` / `Array(x)` pattern.
+def HTML(name, body = nil, **attrs, &block)
+  ::HTML.tag(name, body, **attrs, &block)
 end

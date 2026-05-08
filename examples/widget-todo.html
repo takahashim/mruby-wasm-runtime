@@ -120,16 +120,11 @@ class TodoList < MRubyWasm::Widget
     # title haven't changed since last render keeps its DOM node;
     # everything else is a precise add / remove / replace.
     bind_list refs.list, @items, key: ->(it) { it[:id] } do |it|
-      HTML.tag(:li,
-        HTML.safe_join([
-          HTML.tag(:span, it[:title]),
-          HTML.tag(:button, "×",
-            class: "dismiss",
-            **{ :"data-ref" => "dismiss",
-                :"aria-label" => "delete" }),
-        ]),
-        **{ :"data-widget" => "todo-item",
-            :"data-id"     => it[:id].to_s })
+      HTML(:li, [
+        HTML(:span, it[:title]),
+        HTML(:button, "×",
+          class: "dismiss", data_ref: "dismiss", aria_label: "delete"),
+      ], data_widget: "todo-item", data_id: it[:id].to_s)
     end
 
     bind refs.status, :text do

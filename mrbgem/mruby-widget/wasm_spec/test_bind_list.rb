@@ -9,7 +9,7 @@ Spec.describe "bind_list" do
       define_method(:setup) do
         @items = signal([{id: 1, t: "a"}, {id: 2, t: "b"}, {id: 3, t: "c"}])
         bind_list refs.list, @items, key: ->(it) { it[:id] } do |it|
-          HTML.tag(:li, it[:t])
+          HTML(:li, it[:t])
         end
       end
     end
@@ -35,7 +35,7 @@ Spec.describe "bind_list" do
       define_method(:setup) do
         @items = signal([{id: 1, t: "a"}, {id: 2, t: "b"}])
         bind_list refs.list, @items, key: ->(it) { it[:id] } do |it|
-          HTML.tag(:li, it[:t])
+          HTML(:li, it[:t])
         end
       end
     end
@@ -69,7 +69,7 @@ Spec.describe "bind_list" do
       define_method(:setup) do
         @items = signal([{id: 1, t: "a"}, {id: 2, t: "b"}, {id: 3, t: "c"}])
         bind_list refs.list, @items, key: ->(it) { it[:id] } do |it|
-          HTML.tag(:li, it[:t])
+          HTML(:li, it[:t])
         end
       end
     end
@@ -103,7 +103,7 @@ Spec.describe "bind_list" do
       define_method(:setup) do
         @items = signal([{id: 1, t: "a"}, {id: 2, t: "b"}])
         bind_list refs.list, @items, key: ->(it) { it[:id] } do |it|
-          HTML.tag(:li, it[:t])
+          HTML(:li, it[:t])
         end
       end
     end
@@ -143,7 +143,7 @@ Spec.describe "bind_list" do
       define_method(:setup) do
         @items = signal([{id: 1, t: "a"}, {id: 2, t: "b"}, {id: 3, t: "c"}])
         bind_list refs.list, @items, key: ->(it) { it[:id] } do |it|
-          HTML.tag(:li, it[:t])
+          HTML(:li, it[:t])
         end
       end
     end
@@ -186,8 +186,9 @@ Spec.describe "bind_list" do
       define_method(:setup) do
         @items = signal([{id: 1, t: "alpha"}, {id: 2, t: "beta"}])
         bind_list refs.list, @items, key: ->(it) { it[:id] } do |it|
-          HTML.tag(:li, HTML.tag(:span, it[:t], **{:"data-ref" => "label"}),
-                   **{:"data-widget" => "bl-leaf"})
+          HTML(:li,
+            HTML(:span, it[:t], data_ref: "label"),
+            data_widget: "bl-leaf")
         end
       end
     end
@@ -220,7 +221,7 @@ Spec.describe "bind_list" do
         define_method(:setup) do
           items = signal([{id: 1, t: "a"}, {id: 1, t: "b"}])
           bind_list refs.list, items, key: ->(it) { it[:id] } do |it|
-            HTML.tag(:li, it[:t])
+            HTML(:li, it[:t])
           end
         end
       end
