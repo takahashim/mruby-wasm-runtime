@@ -1,0 +1,93 @@
+name: Release
+
+# Triggered by pushing a tag like v0.1.0. The "release" Environment in
+# repo settings should require manual approval and restrict to v* tags
+# (Settings → Environments → release → Deployment branches/tags).
+on:
+  push:
+    tags: ['v*']
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    # The "release" Environment gates this job behind manual approval +
+    # restricts which refs can run it. Configure in repo Settings.
+    environment: release
+
+    permissions:
+      id-token: write   # required: npm Trusted Publishing OIDC
+      contents: write   # required: gh release create
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.4'
+          bundler-cache: false
+
+      # Same cache keys as test.yml so cold/warm cycles share state.
+      - name: Cache wasi-sdk tarball
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/mruby-wasm-runtime
+          key: wasi-sdk-33.0-x86_64-linux
+
+      - name: Cache mruby clone
+        uses: actions/cache@v4
+        with:
+          path: mruby
+          key: mruby-4.0.0
+
+      # ── Pre-flight: tag, package.json, and Makefile must agree ──────
+      - name: Verify version consistency
+        run: |
+          TAG_VERSION="${GITHUB_REF_NAME#v}"
+          PKG_VERSION=$(node -p "require('./mrbgem/mruby-wasm-js/package.json').version")
+          MAKE_VERSION=$(make print-version)
+          echo "tag=$TAG_VERSION  package.json=$PKG_VERSION  Makefile=$MAKE_VERSION"
+          if [ "$TAG_VERSION" != "$PKG_VERSION" ] || [ "$TAG_VERSION" != "$MAKE_VERSION" ]; then
+            echo "::error::Version mismatch — bump CHANGELOG.md, mrbgem/mruby-wasm-js/package.json, and Makefile DIST_VERSION before tagging."
+            exit 1
+          fi
+
+      # ── Build + tests must pass before we publish anything ──────────
+      - name: Build dist
+        run: make dist
+
+      - name: Run wasm_spec
+        run: make test
+
+      - name: Run command smoke (Node WASI)
+        run: make smoke-cmd
+
+      # ── Publish: npm via OIDC + provenance, then GitHub Release ────
+      - name: Publish to npm with provenance
+        run: |
+          cd dist/mruby-wasm-js
+          npm publish --provenance --access public
+
+      - name: Create release tarballs
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          cd dist
+          tar czf "mruby-wasm-js-v${VERSION}.tar.gz"  mruby-wasm-js/
+          tar czf "mruby-wasm-cmd-v${VERSION}.tar.gz" mruby-wasm-cmd/
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "${GITHUB_REF_NAME}" \
+            dist/mruby-wasm-js-*.tar.gz \
+            dist/mruby-wasm-cmd-*.tar.gz \
+            --title "${GITHUB_REF_NAME}" \
+            --generate-notes

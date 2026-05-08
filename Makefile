@@ -85,7 +85,7 @@ DIST_VERSION := 0.1.0
 .PHONY: all wasi-sdk js cmd serve test \
         dist-js dist-cmd dist \
         smoke-cmd smoke-cmd-wasmtime smoke-all \
-        clean distclean
+        clean distclean print-version
 
 all: js
 
@@ -216,3 +216,8 @@ ifeq ($(WASI_SDK_VENDORED),yes)
 endif
 	# NB: $(WASI_SDK_CACHE_TAR) under ~/.cache/ is intentionally NOT removed —
 	# it's shared across clones. To force a re-download, remove it manually.
+
+# Used by .github/workflows/release.yml to verify package.json / tag /
+# Makefile versions all agree before publish.
+print-version:
+	@echo $(DIST_VERSION)
