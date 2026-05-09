@@ -301,6 +301,141 @@ module Grainet
     end
   end
 
+  # Three-pass key-based list reconciliation engine for `Bindable#bind_list`.
+  # Holds the `by_key` cache across runs so DOM nodes for unchanged keys
+  # survive signal updates (preserving focus, nested widget identity, etc.).
+  # See docs/grainet-spec.md "bind_list" for the user-facing contract.
+  class BindListReconciler
+    def initialize(parent_el, key_fn, template_name, host, item_proc)
+      @parent_el     = parent_el
+      @key_fn        = key_fn
+      @template_name = template_name
+      @host          = host
+      @item_proc     = item_proc
+      @by_key        = {}
+      @label         = "bind_list(#{parent_el.name || '?'})"
+    end
+
+    def run(items)
+      new_keys = items.map { |item| @key_fn.call(item) }
+      check_unique_keys!(new_keys)
+      apply_items(items, new_keys)
+      prune_missing(new_keys)
+      reorder_nodes(new_keys)
+    end
+
+    private
+
+    # Failure-loud only in dev mode; production assumes the caller
+    # supplies unique keys (spec doc: "重複 key — invalid").
+    def check_unique_keys!(new_keys)
+      return unless Grainet.dev_mode? && new_keys.uniq.length != new_keys.length
+      raise Grainet::Error,
+            "bind_list duplicate keys in #{@label}: #{new_keys.inspect}"
+    end
+
+    def apply_items(items, new_keys)
+      items.each_with_index do |item, idx|
+        apply_one(item, new_keys[idx])
+      end
+    end
+
+    # `case`/`when` (C-level `Module#===`) is required for the result
+    # dispatch: `result.is_a?(...)` would forward to JS via
+    # method_missing when result is a `JS::Object` and throw.
+    def apply_one(item, k)
+      existing = @by_key[k]
+      prev_t = existing && existing[:mode] == :template ? existing[:template] : nil
+      if @template_name
+        t = prev_t || @host.template(@template_name)
+        @item_proc.call(item, t)
+        apply_template(k, existing, t)
+      else
+        result = @item_proc.call(item, prev_t)
+        case result
+        when Template
+          apply_template(k, existing, result)
+        when HTML::Safe, String
+          apply_string(k, existing, result.to_s)
+        when JS::Object
+          raise Grainet::Error,
+                "bind_list block returned a raw JS::Object. Wrap it via " \
+                "Grainet::Template.new(node), or use the template(name) helper."
+        else
+          raise Grainet::Error,
+                "bind_list block must return Grainet::Template, HTML::Safe, or " \
+                "String; got #{result.class.name rescue '(unknown)'}"
+        end
+      end
+    end
+
+    # Diff is by underlying node identity (not Template identity) so
+    # `prev`-pass-through and `Template.new(same_node)` both reuse.
+    def apply_template(k, existing, template)
+      node = template.to_js
+      if existing && existing[:mode] == :template && existing[:node] == node
+        return
+      end
+      if existing
+        parent = existing[:node][:parentNode]
+        parent.call(:replaceChild, node, existing[:node]) unless parent.js_null?
+        existing[:node] = node
+        existing[:template] = template
+        existing[:html] = nil
+        existing[:mode] = :template
+      else
+        @by_key[k] = { node: node, template: template, html: nil, mode: :template }
+      end
+    end
+
+    def apply_string(k, existing, new_html)
+      if existing && existing[:mode] == :string && existing[:html] == new_html
+        return
+      end
+      if existing
+        new_node = build_node(new_html)
+        parent = existing[:node][:parentNode]
+        parent.call(:replaceChild, new_node, existing[:node]) unless parent.js_null?
+        existing[:node] = new_node
+        existing[:html] = new_html
+        existing[:template] = nil
+        existing[:mode] = :string
+      else
+        @by_key[k] = { node: build_node(new_html), template: nil, html: new_html, mode: :string }
+      end
+    end
+
+    def prune_missing(new_keys)
+      new_set = {}
+      new_keys.each { |k| new_set[k] = true }
+      gone = []
+      @by_key.each_key { |k| gone << k unless new_set[k] }
+      gone.each do |k|
+        record = @by_key.delete(k)
+        n = record[:node]
+        n.call(:remove) unless n.js_null?
+      end
+    end
+
+    def reorder_nodes(new_keys)
+      parent_js = @parent_el.to_js
+      children = parent_js[:children]
+      new_keys.each_with_index do |k, i|
+        node = @by_key[k][:node]
+        ref_node = children[i]
+        parent_js.call(:insertBefore, node, ref_node) unless ref_node == node
+      end
+    end
+
+    # Build a single DOM Element from an HTML fragment string.
+    def build_node(html_str)
+      doc = JS.global[:document]
+      tpl = doc.call(:createElement, "template")
+      tpl[:innerHTML] = html_str
+      tpl[:content][:firstElementChild]
+    end
+  end
+
   # DOM-binding DSL (`bind` / `model` / `bind_list`) as a reusable
   # mixin. Pulled out of Widget so future host classes can opt in
   # without inheriting the full Widget lifecycle. The host class is
@@ -338,77 +473,15 @@ module Grainet
 
     # See docs/grainet-spec.md "bind_list" for the full surface
     # (key shortcuts, managed-template mode, block return contract,
-    # mode pinning).
+    # mode pinning). Heavy lifting lives in `BindListReconciler`.
     def bind_list(ref, source, key:, template: nil, &item_proc)
       raise ArgumentError, "bind_list requires a block" unless item_proc
-      key_fn = coerce_bind_list_key(key)
       el = coerce_ref(ref)
-      label = "bind_list(#{el.name || "?"})"
-      by_key = {}
-      template_name = template
-
-      effect(label: label) do
-        items = source.value || []
-        new_keys = items.map { |item| key_fn.call(item) }
-
-        if Grainet.dev_mode? && new_keys.uniq.length != new_keys.length
-          raise Grainet::Error,
-                "bind_list duplicate keys in #{label}: #{new_keys.inspect}"
-        end
-
-        new_set = {}
-        new_keys.each { |k| new_set[k] = true }
-
-        # `case`/`when` (C-level `Module#===`) is required here:
-        # `result.is_a?(...)` would forward to JS via method_missing
-        # when result is a `JS::Object` and throw.
-        items.each_with_index do |item, idx|
-          k = new_keys[idx]
-          existing = by_key[k]
-          if template_name
-            prev_t = existing && existing[:mode] == :template ? existing[:template] : nil
-            t = prev_t || template(template_name)
-            item_proc.call(item, t)
-            bind_list_apply_template(by_key, k, existing, t)
-          else
-            prev = existing && existing[:mode] == :template ? existing[:template] : nil
-            result = item_proc.call(item, prev)
-            case result
-            when Template
-              bind_list_apply_template(by_key, k, existing, result)
-            when HTML::Safe, String
-              bind_list_apply_string(by_key, k, existing, result.to_s)
-            when JS::Object
-              raise Grainet::Error,
-                    "bind_list block returned a raw JS::Object. Wrap it via " \
-                    "Grainet::Template.new(node), or use the template(name) helper."
-            else
-              raise Grainet::Error,
-                    "bind_list block must return Grainet::Template, HTML::Safe, or " \
-                    "String; got #{result.class.name rescue '(unknown)'}"
-            end
-          end
-        end
-
-        # Pass 2 — drop nodes whose keys are no longer present.
-        gone = []
-        by_key.each_key { |k| gone << k unless new_set[k] }
-        gone.each do |k|
-          record = by_key.delete(k)
-          n = record[:node]
-          n.call(:remove) unless n.js_null?
-        end
-
-        # Pass 3 — position each node at its desired index.
-        parent_js = el.to_js
-        children = parent_js[:children]
-        new_keys.each_with_index do |k, i|
-          node = by_key[k][:node]
-          ref_node = children[i]
-          parent_js.call(:insertBefore, node, ref_node) unless ref_node == node
-        end
+      reconciler = BindListReconciler.new(
+        el, coerce_bind_list_key(key), template, self, item_proc)
+      effect(label: "bind_list(#{el.name || '?'})") do
+        reconciler.run(source.value || [])
       end
-
       nil
     end
 
@@ -495,49 +568,6 @@ module Grainet
       end
     end
 
-    # Build a single DOM Element from an HTML fragment string.
-    def bind_list_node(html_str)
-      doc = JS.global[:document]
-      tpl = doc.call(:createElement, "template")
-      tpl[:innerHTML] = html_str
-      tpl[:content][:firstElementChild]
-    end
-
-    # Diff is by underlying node identity (not Template identity) so
-    # `prev`-pass-through and `Template.new(same_node)` both reuse.
-    def bind_list_apply_template(by_key, k, existing, template)
-      node = template.to_js
-      if existing && existing[:mode] == :template && existing[:node] == node
-        return
-      end
-      if existing
-        parent = existing[:node][:parentNode]
-        parent.call(:replaceChild, node, existing[:node]) unless parent.js_null?
-        existing[:node] = node
-        existing[:template] = template
-        existing[:html] = nil
-        existing[:mode] = :template
-      else
-        by_key[k] = { node: node, template: template, html: nil, mode: :template }
-      end
-    end
-
-    def bind_list_apply_string(by_key, k, existing, new_html)
-      if existing && existing[:mode] == :string && existing[:html] == new_html
-        return
-      end
-      if existing
-        new_node = bind_list_node(new_html)
-        parent = existing[:node][:parentNode]
-        parent.call(:replaceChild, new_node, existing[:node]) unless parent.js_null?
-        existing[:node] = new_node
-        existing[:html] = new_html
-        existing[:template] = nil
-        existing[:mode] = :string
-      else
-        by_key[k] = { node: bind_list_node(new_html), template: nil, html: new_html, mode: :string }
-      end
-    end
   end
 
   # The user-inheritable base. Users write `class Counter < Grainet::Widget`.
