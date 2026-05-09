@@ -73,6 +73,29 @@ module Grainet
       end
     end
 
+    # HTML attribute read/write/remove. Mirrors Template#attr.
+    #   ref.attr("data-id")            → "42" or nil
+    #   ref.attr("data-id", 42)        → writes setAttribute (to_s coerced)
+    #   ref.attr("data-id", nil)       → removeAttribute (matches set_style semantics)
+    ATTR_NO_VALUE = Object.new.freeze
+    def attr(name, value = ATTR_NO_VALUE)
+      if value.equal?(ATTR_NO_VALUE)
+        v = @js.call(:getAttribute, name.to_s)
+        v.js_null? ? nil : v.to_s
+      elsif value.nil?
+        @js.call(:removeAttribute, name.to_s)
+        nil
+      else
+        @js.call(:setAttribute, name.to_s, value.to_s)
+        value
+      end
+    end
+
+    # `data-*` shortcut. `ref.data(:id)` ≡ `ref.attr("data-id")`.
+    def data(name, value = ATTR_NO_VALUE)
+      attr("data-#{name}", value)
+    end
+
     def toggle_class(name, force)
       @js[:classList].call(:toggle, name.to_s, !!force)
     end
@@ -243,8 +266,27 @@ module Grainet
       @node
     end
 
-    def set_attribute(name, value)
-      @node.call(:setAttribute, name.to_s, value.to_s)
+    # HTML attribute read/write/remove on the cloned root. Same shape as
+    # `RefElement#attr` so per-row code reads consistently:
+    #
+    #   bind_list refs.list, items, key: "id", template: "row" do |it, t|
+    #     t.data(:id, it["id"])
+    #   end
+    def attr(name, value = RefElement::ATTR_NO_VALUE)
+      if value.equal?(RefElement::ATTR_NO_VALUE)
+        v = @node.call(:getAttribute, name.to_s)
+        v.js_null? ? nil : v.to_s
+      elsif value.nil?
+        @node.call(:removeAttribute, name.to_s)
+        nil
+      else
+        @node.call(:setAttribute, name.to_s, value.to_s)
+        value
+      end
+    end
+
+    def data(name, value = RefElement::ATTR_NO_VALUE)
+      attr("data-#{name}", value)
     end
   end
 
@@ -568,6 +610,14 @@ module Grainet
     end
 
     # ---- Reactive helpers ------------------------------------------
+
+    # Wrap a raw `JS::Object` DOM element as a RefElement bound to this
+    # widget. Use when you have a JS-side element (event.target,
+    # querySelector result, etc.) and want the framework's ergonomic
+    # API (`attr`, `data`, `on` with auto-cleanup, `text=` etc.) on it.
+    def ref(js_element)
+      RefElement.new(js_element, self)
+    end
 
     def signal(initial)
       Signal.new(initial)

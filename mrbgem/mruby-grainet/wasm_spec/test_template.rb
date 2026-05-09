@@ -87,22 +87,34 @@ Spec.describe "Grainet.template" do
     Spec.assert_equal "hand-built", t.to_js[:textContent].to_s
   end
 
-  Spec.assert "Template#set_attribute writes the attribute on the root" do
+  Spec.assert "Template#attr writes the attribute on the root" do
     body = JS.global[:document][:body]
     body[:innerHTML] = '<template data-template="row4"><li></li></template>'
     t = Grainet.template("row4")
-    t.set_attribute("data-id", "42")
-    Spec.assert_equal "42", t.to_js.call(:getAttribute, "data-id").to_s
+    t.attr("data-id", "42")
+    Spec.assert_equal "42", t.attr("data-id")
     body[:innerHTML] = ""
     JS.eval("new Promise(r => setTimeout(r, 0))").await
   end
 
-  Spec.assert "Template#set_attribute coerces non-String values via to_s" do
+  Spec.assert "Template#attr coerces non-String values via to_s" do
     body = JS.global[:document][:body]
     body[:innerHTML] = '<template data-template="row5"><li></li></template>'
     t = Grainet.template("row5")
-    t.set_attribute("data-id", 42)
-    Spec.assert_equal "42", t.to_js.call(:getAttribute, "data-id").to_s
+    t.attr("data-id", 42)
+    Spec.assert_equal "42", t.attr("data-id")
+    body[:innerHTML] = ""
+    JS.eval("new Promise(r => setTimeout(r, 0))").await
+  end
+
+  Spec.assert "Template#attr returns nil for unset attributes and supports remove" do
+    body = JS.global[:document][:body]
+    body[:innerHTML] = '<template data-template="row6"><li data-keep="hi"></li></template>'
+    t = Grainet.template("row6")
+    Spec.assert_true t.attr("data-missing").nil?
+    Spec.assert_equal "hi", t.attr("data-keep")
+    t.attr("data-keep", nil)
+    Spec.assert_true t.attr("data-keep").nil?
     body[:innerHTML] = ""
     JS.eval("new Promise(r => setTimeout(r, 0))").await
   end

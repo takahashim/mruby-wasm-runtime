@@ -153,13 +153,13 @@
 class KanbanCard < Grainet::Widget
   def setup
     root.on(:dragstart) do |event|
-      id = root.to_js.call(:getAttribute, "data-id").to_s
-      event[:dataTransfer].call(:setData, "text/plain", id)
+      id = root.data(:id)
+      event[:dataTransfer].setData("text/plain", id)
       event[:dataTransfer][:effectAllowed] = "move"
     end
 
     refs.delete.on(:click) do
-      id = root.to_js.call(:getAttribute, "data-id").to_s.to_i
+      id = root.data(:id).to_i
       root.dispatch("card:deleted", detail: { "id" => id }, bubbles: true)
     end
   end
@@ -168,20 +168,20 @@ end
 class KanbanColumn < Grainet::Widget
   def setup
     @cards = inject(:cards)
-    status = root.to_js.call(:getAttribute, "data-status").to_s
+    status = root.data(:status)
 
     @filtered = memo { @cards.value.select { |c| c["status"] == status } }
     bind refs.count, text: memo { @filtered.value.length }
 
     bind_list refs.list, @filtered, key: "id", template: "card-row" do |card, t|
-      t.set_attribute("data-id", card["id"])
+      t.data(:id, card["id"])
       t.refs.title.text = card["title"]
     end
 
     # Drop target: any abort-allowed dragover defaults to "no drop", so
     # we must preventDefault explicitly to make the area droppable.
     root.on(:dragover) do |event|
-      event.call(:preventDefault)
+      event.preventDefault
       event[:dataTransfer][:dropEffect] = "move"
       root.toggle_class("drag-over", true)
     end
@@ -189,9 +189,9 @@ class KanbanColumn < Grainet::Widget
       root.toggle_class("drag-over", false)
     end
     root.on(:drop) do |event|
-      event.call(:preventDefault)
+      event.preventDefault
       root.toggle_class("drag-over", false)
-      id = event[:dataTransfer].call(:getData, "text/plain").to_s.to_i
+      id = event[:dataTransfer].getData("text/plain").to_s.to_i
       root.dispatch("card:moved",
                     detail: { "id" => id, "status" => status },
                     bubbles: true)

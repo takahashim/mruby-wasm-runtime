@@ -120,8 +120,7 @@ class TodoList < Grainet::Widget
     # We update the *signal*, not the DOM directly — bind_list handles
     # the DOM. This is the inversion that makes the list declarative.
     root.on(:item_dismissed) do |event|
-      li = event[:target]
-      id = li.call(:getAttribute, "data-id").to_s.to_i
+      id = ref(event[:target]).data(:id).to_i
       @items.update { |arr| arr.reject { |it| it["id"] == id } }
     end
 
@@ -130,7 +129,7 @@ class TodoList < Grainet::Widget
     # and fills the title slot. Returning the same JS node when prev
     # is set keeps the row's todo-item widget mounted across updates.
     bind_list refs.list, @items, key: "id", template: "todo-row" do |it, t|
-      t.set_attribute("data-id", it["id"])
+      t.data(:id, it["id"])
       t.refs.title.text = it["title"]
     end
 

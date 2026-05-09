@@ -153,7 +153,7 @@ class SignupForm < Grainet::Widget
     end
 
     root.on(:submit) do |event|
-      event.call(:preventDefault)
+      event.preventDefault
       next unless @form_valid.value
       # Notify the outer ActivityLog widget. The event bubbles past the
       # form's data-widget boundary because we set bubbles: true.
