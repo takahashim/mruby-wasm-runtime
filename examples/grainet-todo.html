@@ -129,11 +129,9 @@ class TodoList < Grainet::Widget
     # in the page holds the row markup; bind_list clones it per item
     # and fills the title slot. Returning the same JS node when prev
     # is set keeps the row's todo-item widget mounted across updates.
-    bind_list refs.list, @items, key: "id" do |it, prev|
-      t = prev || template("todo-row")
+    bind_list refs.list, @items, key: "id", template: "todo-row" do |it, t|
       t.set_attribute("data-id", it["id"])
       t.refs.title.text = it["title"]
-      t
     end
 
     bind refs.status, :text do

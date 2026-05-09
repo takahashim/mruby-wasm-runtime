@@ -274,7 +274,7 @@ module Grainet
       nil
     end
 
-    # bind_list(ref, source, key:) { |item, prev| ... }
+    # bind_list(ref, source, key:, template: nil) { |item, prev_or_t| ... }
     #
     # `key:` accepts either a String shortcut (`key: "id"` ≡
     # `->(it) { it["id"] }`) or a `Proc` for derived/composite keys.
@@ -282,27 +282,35 @@ module Grainet
     # convention; matches `to_ruby` output). Passing a `Symbol` raises
     # with a hint to use the String form.
     #
-    # Block return value:
-    #   - HTML::Safe / String — string mode. Cached HTML is compared;
-    #     identical strings skip the DOM swap.
-    #   - Grainet::Template  — template mode. The wrapped element is
-    #     used directly. If the same Template (or one wrapping the same
-    #     underlying node) is returned across renders for the same key,
-    #     no DOM op. Otherwise the cached node is replaced.
+    # Two operating modes:
     #
-    # The block is always called with `(item, prev)`. `prev` is the
-    # cached Template for that key when the previous render was
-    # template mode, else nil. Blocks declared as `do |it| ... end`
-    # silently ignore the second arg per Ruby's lax block arity.
+    # 1. **Managed template mode** (`template: "name"` given):
+    #    bind_list owns the clone/reuse of `<template data-template>`
+    #    internally. The block receives `(item, t)` where `t` is the
+    #    (cached or fresh) `Grainet::Template`. Mutate `t` in place;
+    #    the block's return value is ignored.
+    #
+    #      bind_list refs.list, @items, key: "id", template: "todo-row" do |it, t|
+    #        t.refs.title.text = it["title"]
+    #      end
+    #
+    # 2. **Block-controlled mode** (no `template:` kwarg): the block
+    #    receives `(item, prev)` and must return one of:
+    #      - HTML::Safe / String — string mode. Cached HTML is compared
+    #        for skip semantics.
+    #      - Grainet::Template  — template mode. Same node returned
+    #        across renders skips the DOM op.
+    #    Returning a raw JS::Object or other type raises a clear error.
     #
     # Mode is pinned per-key on first render. Switching modes on the
     # same key forces a replaceChild.
-    def bind_list(ref, source, key:, &item_proc)
+    def bind_list(ref, source, key:, template: nil, &item_proc)
       raise ArgumentError, "bind_list requires a block" unless item_proc
       key_fn = __coerce_bind_list_key__(key)
       el = coerce_ref(ref)
       label = "bind_list(#{el.name || "?"})"
       by_key = {}
+      template_name = template
 
       effect(label: label) do
         items = source.value || []
@@ -324,21 +332,28 @@ module Grainet
         items.each_with_index do |item, idx|
           k = new_keys[idx]
           existing = by_key[k]
-          prev = existing && existing[:mode] == :template ? existing[:template] : nil
-          result = item_proc.call(item, prev)
-          case result
-          when Template
-            __bind_list_apply_template__(by_key, k, existing, result)
-          when HTML::Safe, String
-            __bind_list_apply_string__(by_key, k, existing, result.to_s)
-          when JS::Object
-            raise Grainet::Error,
-                  "bind_list block returned a raw JS::Object. Wrap it via " \
-                  "Grainet::Template.new(node), or use the template(name) helper."
+          if template_name
+            prev_t = existing && existing[:mode] == :template ? existing[:template] : nil
+            t = prev_t || template(template_name)
+            item_proc.call(item, t)
+            __bind_list_apply_template__(by_key, k, existing, t)
           else
-            raise Grainet::Error,
-                  "bind_list block must return Grainet::Template, HTML::Safe, or " \
-                  "String; got #{result.class.name rescue '(unknown)'}"
+            prev = existing && existing[:mode] == :template ? existing[:template] : nil
+            result = item_proc.call(item, prev)
+            case result
+            when Template
+              __bind_list_apply_template__(by_key, k, existing, result)
+            when HTML::Safe, String
+              __bind_list_apply_string__(by_key, k, existing, result.to_s)
+            when JS::Object
+              raise Grainet::Error,
+                    "bind_list block returned a raw JS::Object. Wrap it via " \
+                    "Grainet::Template.new(node), or use the template(name) helper."
+            else
+              raise Grainet::Error,
+                    "bind_list block must return Grainet::Template, HTML::Safe, or " \
+                    "String; got #{result.class.name rescue '(unknown)'}"
+            end
           end
         end
 

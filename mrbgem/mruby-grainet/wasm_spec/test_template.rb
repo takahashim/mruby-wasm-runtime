@@ -219,6 +219,73 @@ Spec.describe "bind_list with Template" do
     JS.eval("new Promise(r => setTimeout(r, 0))").await
   end
 
+  Spec.assert "managed template mode (template: kwarg) clones and mutates in place" do
+    doc = JS.global[:document]
+    body = doc[:body]
+    body[:innerHTML] = <<~HTML
+      <template data-template="bl_mgd"><li><span data-ref="t"></span></li></template>
+      <div data-widget="bl-mgd-1"><ul data-ref="list"></ul></div>
+    HTML
+
+    items_sig = nil
+    klass = Class.new(Grainet::Widget) do
+      define_method(:setup) do
+        items = signal([{"id" => 1, "t" => "alpha"}, {"id" => 2, "t" => "beta"}])
+        items_sig = items
+        bind_list refs.list, items, key: "id", template: "bl_mgd" do |it, t|
+          t.refs.t.text = it["t"]
+        end
+      end
+    end
+    Grainet.register "bl-mgd-1", klass
+    Grainet.start
+    JS.eval("new Promise(r => setTimeout(r, 0))").await
+
+    list = doc.call(:querySelector, "[data-ref='list']")
+    Spec.assert_equal 2, list[:children][:length].to_i
+    node_a_before = list[:children][0]
+
+    items_sig.update do |arr|
+      arr.map { |it| it["id"] == 1 ? {"id" => 1, "t" => "ALPHA!"} : it }
+    end
+
+    # Same DOM node, mutated in place.
+    Spec.assert_true list[:children][0] == node_a_before
+    Spec.assert_equal "ALPHA!", list[:children][0].call(:querySelector, "[data-ref='t']")[:textContent].to_s
+
+    body[:innerHTML] = ""
+    JS.eval("new Promise(r => setTimeout(r, 0))").await
+  end
+
+  Spec.assert "managed template mode ignores block return value" do
+    doc = JS.global[:document]
+    body = doc[:body]
+    body[:innerHTML] = <<~HTML
+      <template data-template="bl_mgd2"><li><span data-ref="t"></span></li></template>
+      <div data-widget="bl-mgd-2"><ul data-ref="list"></ul></div>
+    HTML
+
+    klass = Class.new(Grainet::Widget) do
+      define_method(:setup) do
+        items = signal([{"id" => 1, "t" => "x"}])
+        bind_list refs.list, items, key: "id", template: "bl_mgd2" do |it, t|
+          t.refs.t.text = it["t"]
+          "this string is ignored"   # not Template, not even Safe; managed mode discards
+        end
+      end
+    end
+    Grainet.register "bl-mgd-2", klass
+    Grainet.start
+    JS.eval("new Promise(r => setTimeout(r, 0))").await
+
+    list = doc.call(:querySelector, "[data-ref='list']")
+    Spec.assert_equal 1, list[:children][:length].to_i
+    Spec.assert_equal "x", list[:children][0].call(:querySelector, "[data-ref='t']")[:textContent].to_s
+
+    body[:innerHTML] = ""
+    JS.eval("new Promise(r => setTimeout(r, 0))").await
+  end
+
   Spec.assert "non-Template / non-String return raises clear error" do
     doc = JS.global[:document]
     body = doc[:body]
