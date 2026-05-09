@@ -454,10 +454,10 @@ effect の本体内で signal を `value=` した場合 (= 自分が依存して
 @cards = persistent_signal("kanban-cards") { default_cards }
 # 同等の手書き:
 #   raw = JS.global[:localStorage].call(:getItem, "kanban-cards")
-#   initial = raw.js_null? ? default_cards : JS.global[:JSON].call(:parse, raw.to_s).to_ruby
+#   initial = raw.js_null? ? default_cards : Grainet::JSON.parse(raw.to_s)
 #   @cards = signal(initial)
 #   effect { JS.global[:localStorage].call(:setItem, "kanban-cards",
-#               JS.global[:JSON].call(:stringify, JS.wrap(@cards.value)).to_s) }
+#               Grainet::JSON.generate(@cards.value)) }
 ```
 
 API:
@@ -1440,6 +1440,7 @@ end
 | `Fetchy.new(base:, headers:)` | shared defaults を持ったインスタンス生成 |
 | `Grainet.dev_mode` / `dev_mode?` / `dev_mode=` | dev mode toggle |
 | `Grainet.logger` / `logger=` | 警告 / 例外フック (`->(severity, message, error)`) |
+| `Grainet::JSON.parse(string)` / `.generate(value)` | `JS.global[:JSON]` の薄いラッパ。`generate` は内部で `JS.wrap` するので Array/Hash/scalar 自動対応、`parse` は `to_ruby` 適用済み |
 | `Grainet::Error` | この gem 由来の例外 |
 
 ### HTML

@@ -639,7 +639,7 @@ module Grainet
         begin
           raw = storage.call(:getItem, k)
           unless raw.js_null?
-            initial = JS.global[:JSON].call(:parse, raw.to_s).to_ruby
+            initial = Grainet::JSON.parse(raw.to_s)
             loaded = true
           end
         rescue JS::Error => e
@@ -649,8 +649,7 @@ module Grainet
       initial = block_default ? block_default.call : default unless loaded
       s = signal(initial)
       effect(label: "persist:#{k}") do
-        json = JS.global[:JSON].call(:stringify, JS.wrap(s.value)).to_s
-        JS.global[:localStorage].call(:setItem, k, json)
+        JS.global[:localStorage].call(:setItem, k, Grainet::JSON.generate(s.value))
       end
       s
     end

@@ -113,6 +113,21 @@ module Grainet
     end
   end
 
+  # Thin wrapper over `JS.global[:JSON]`. `generate` always feeds the
+  # value through `JS.wrap` so nested Array<Hash> structures serialize
+  # correctly (avoiding the `JS.object(non_hash)` pitfall). `parse`
+  # always runs `to_ruby` so callers get a frozen Ruby value, not a
+  # raw JS::Object.
+  module JSON
+    def self.parse(string)
+      JS.global[:JSON].call(:parse, string.to_s).to_ruby
+    end
+
+    def self.generate(value)
+      JS.global[:JSON].call(:stringify, JS.wrap(value)).to_s
+    end
+  end
+
   # DOM-specific helpers. Calling these on a JS::Object that is not an
   # EventTarget will throw at runtime — that's the expected trade-off
   # for keeping the spec API natural (`refs.x.dispatch(...)`).

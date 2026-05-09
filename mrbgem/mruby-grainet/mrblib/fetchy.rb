@@ -148,7 +148,7 @@ class Fetchy
     init_h[:method] = opts[:method] if opts[:method]
 
     if opts[:json]
-      init_h[:body] = JS.global[:JSON].call(:stringify, JS.object(opts[:json])).to_s
+      init_h[:body] = Grainet::JSON.generate(opts[:json])
       unless headers.keys.any? { |k| k.to_s.downcase == "content-type" }
         headers["Content-Type"] = "application/json"
       end

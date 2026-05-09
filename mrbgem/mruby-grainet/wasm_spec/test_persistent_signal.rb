@@ -49,7 +49,7 @@ Spec.describe "Widget#persistent_signal" do
 
   Spec.assert "restores stored value from localStorage" do
     JS.global[:localStorage].call(:setItem, "ps-stored",
-      JS.global[:JSON].call(:stringify, JS.wrap([{ "id" => 9, "title" => "x" }])))
+      Grainet::JSON.generate([{ "id" => 9, "title" => "x" }]))
 
     klass = Class.new(Grainet::Widget) do
       define_method(:setup) do
