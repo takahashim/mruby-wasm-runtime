@@ -117,8 +117,14 @@ js_eval_handle(int src_handle) {
   memcpy(buf + pre + len, FIBER_POSTAMBLE, post);
   buf[pre + len + post] = '\0';
 
+  /* Pop transient allocations off the arena after eval returns —
+   * persistent state assigned to constants/ivars survives via mark
+   * phase. */
+  int arena_idx = mrb_gc_arena_save(mrb);
   mrb_load_string(mrb, buf);
   mrb_free(mrb, buf);
+  mrb_gc_arena_restore(mrb, arena_idx);
+
   if (mrb->exc) {
     mrb_print_error(mrb);
     mrb->exc = NULL;
@@ -146,6 +152,16 @@ js_invoke_proc(int callback_id, int args_handle) {
 
   mrb_value proc = mrb_hash_get(mrb, g_callback_table, mrb_fixnum_value(callback_id));
   if (mrb_nil_p(proc)) return 0;
+
+  /* Save the GC arena index. wrap_handle() and any Ruby execution
+   * inside the yielded block push allocations into the arena to keep
+   * them alive across C calls. Without restoring, every per-frame
+   * callback (rAF, MutationObserver, keyboard…) would leak its
+   * argument JS::Objects forever — they'd be permanently rooted by
+   * the arena even after the Ruby block returned. Restore at the end
+   * pops them off; live ones still reachable via Ruby ivars / etc.
+   * remain held through normal mark-phase. */
+  int arena_idx = mrb_gc_arena_save(mrb);
 
   /* Discover the number of args by reading args_handle.length */
   int length_h = js_get(args_handle, "length", 6);
@@ -181,5 +197,6 @@ js_invoke_proc(int callback_id, int args_handle) {
   } MRB_END_EXC(&c_jmp);
 
   if (args) mrb_free(mrb, args);
+  mrb_gc_arena_restore(mrb, arena_idx);
   return 0;
 }
