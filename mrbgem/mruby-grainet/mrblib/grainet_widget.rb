@@ -495,6 +495,31 @@ module Grainet
 
     include Bindable
 
+    class << self
+      # Class-level error boundary declaration. The block runs in the
+      # widget instance's context (instance_exec), so `@ivars` resolve
+      # to the instance, and is auto-installed at the START of the
+      # provides phase — early enough to catch errors in `provides`
+      # itself and in any descendant's setup.
+      #
+      # Subclasses inherit a parent class's boundary unless they
+      # declare their own. Calling `on_error` in `provides`/`setup`
+      # overrides the class-level boundary for that instance.
+      def error_boundary(&block)
+        raise ArgumentError, "block required" unless block
+        @__error_boundary_block__ = block
+      end
+
+      # Walk the superclass chain via method dispatch (mruby's
+      # Class#instance_variable_get isn't available, so we resolve
+      # inheritance through method calls instead).
+      def __error_boundary_block__
+        return @__error_boundary_block__ if @__error_boundary_block__
+        sc = superclass
+        sc.respond_to?(:__error_boundary_block__) ? sc.__error_boundary_block__ : nil
+      end
+    end
+
     attr_reader :root, :refs
 
     def initialize(root_element)
@@ -546,6 +571,38 @@ module Grainet
 
     def signal(initial)
       Signal.new(initial)
+    end
+
+    # Signal whose value is auto-persisted to localStorage[key] as JSON.
+    # Initial value: stored entry if present and parseable, otherwise
+    # `default:` (kwarg) or the block result.
+    #
+    # Parse / read errors fall back to default and emit a Grainet
+    # warning. Write errors (quota etc.) bubble through the effect, so
+    # an error_boundary above the widget can react.
+    def persistent_signal(key, default: nil, &block_default)
+      k = key.to_s
+      storage = JS.global[:localStorage]
+      initial = nil
+      loaded = false
+      if !storage.js_null?
+        begin
+          raw = storage.call(:getItem, k)
+          unless raw.js_null?
+            initial = JS.global[:JSON].call(:parse, raw.to_s).to_ruby
+            loaded = true
+          end
+        rescue JS::Error => e
+          Grainet.__warn__("persistent_signal(#{k.inspect}): load failed (#{e.class}: #{e.message}); using default")
+        end
+      end
+      initial = block_default ? block_default.call : default unless loaded
+      s = signal(initial)
+      effect(label: "persist:#{k}") do
+        json = JS.global[:JSON].call(:stringify, JS.wrap(s.value)).to_s
+        JS.global[:localStorage].call(:setItem, k, json)
+      end
+      s
     end
 
     def memo(&block)
@@ -609,6 +666,9 @@ module Grainet
     def __provide_phase__
       return if @_provided
       @_provided = true
+      if (boundary = self.class.__error_boundary_block__)
+        @_error_handler = ->(label, error) { instance_exec(label, error, &boundary) }
+      end
       begin
         provides
       rescue => e

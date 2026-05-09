@@ -415,6 +415,43 @@ effect の本体内で signal を `value=` した場合 (= 自分が依存して
 
 例外時はキャッチして `Grainet.logger` 経由 (未設定なら STDERR) で出力 (label 付き) し、他の effect の実行を阻害しない。
 
+### persistent_signal
+
+`localStorage` に自動同期する signal を作るヘルパ。`signal` + 手書き `effect` (load + JSON.stringify + setItem) のショートカット:
+
+```ruby
+@cards = persistent_signal("kanban-cards") { default_cards }
+# 同等の手書き:
+#   raw = JS.global[:localStorage].call(:getItem, "kanban-cards")
+#   initial = raw.js_null? ? default_cards : JS.global[:JSON].call(:parse, raw.to_s).to_ruby
+#   @cards = signal(initial)
+#   effect { JS.global[:localStorage].call(:setItem, "kanban-cards",
+#               JS.global[:JSON].call(:stringify, JS.wrap(@cards.value)).to_s) }
+```
+
+API:
+
+```ruby
+persistent_signal(key, default: nil) { default_value }
+```
+
+- `key`: localStorage のキー (String)
+- `default:` または block: 保存値が無い場合の初期値。両方与えた場合 block が優先
+- 戻り値: ふつうの `Signal` (Widget lifecycle に紐付く)
+
+挙動:
+
+| 状況 | 振る舞い |
+|---|---|
+| `localStorage[key]` 未設定 | block (or `default:`) を初期値として使う |
+| 既存値が valid な JSON | parse 結果を初期値として使う (`to_ruby` で深く Ruby 化) |
+| 既存値が invalid な JSON | default にフォールバックし `Grainet.__warn__` で通知 |
+| `localStorage` が無い環境 | default を使う。書き戻し effect は走るが setItem が例外を投げて error_boundary に流れる |
+
+シリアライズは `JS.wrap` 経由なので Array<Hash<String, scalar>> のようなネスト構造もそのまま扱える (内部で再帰 wrap)。Hash のキーは String 推奨 (`to_ruby` の出力規約と一致)。
+
+書き戻しは `effect` で走るので、初回 mount 時にも setItem が一度走る (default に揃える挙動)。
+
 ### batch
 
 ```ruby
@@ -1097,6 +1134,26 @@ end
 
 `setup` 内 `on_error` は「自 widget の effect 例外」「自 widget が後から作る子 widget の例外」(MO 経由の動的 mount 等) は捕える。**初期 mount 時の子孫 setup 例外**だけが取りこぼし対象。
 
+#### `error_boundary` クラスマクロ (推奨)
+
+`provides` 内で `on_error` を呼び忘れると子の setup 例外が漏れるのは罠なので、クラスレベルで宣言できるショートカットを用意:
+
+```ruby
+class App < Grainet::Widget
+  error_boundary do |label, error|
+    @error_message.value = "#{error.class}: #{error.message}"
+    true
+  end
+end
+```
+
+- ブロックは widget instance 文脈で `instance_exec` される (`@ivars` がインスタンスを指す)
+- `__provide_phase__` の冒頭で自動的に `on_error` 経由で登録されるので、自身の `provides` 例外と子孫の `setup` 例外を両方拾える
+- サブクラスは親クラスの宣言を継承する (super class chain を method dispatch で resolve)
+- インスタンスで `on_error` を呼ぶと後勝ちで上書きされる
+
+子の setup 例外が発火した時点で**自 widget の `__mount__` はまだ走っていない** (post-order なので) → ハンドラ内では `refs` が `nil`。DOM への直接書き込みではなく、`@error_message` のような signal を更新して `bind` 経由で表示するパターンを使う。`examples/grainet-kanban.html` の `KanbanBoard` がこの形。
+
 バブリング規則:
 
 1. 例外が発生 (effect 本体 / Widget#provides / #setup / cleanup / listener teardown のいずれか) すると、ソース widget の `on_error` がまず呼ばれる
@@ -1300,10 +1357,12 @@ end
 | `root` | RefElement (Widget のルート要素) |
 | `refs.x` / `refs[:x]` | RefElement (data-ref で指定された要素) |
 | `signal(initial)` | Signal を作成 |
+| `persistent_signal(key, default: nil) { ... }` | localStorage に自動同期する signal |
 | `memo { ... }` | Memo を作成 |
 | `effect(label: nil) { ... }` | Effect を作成 (Widget lifecycle に紐付き) |
 | `cleanup { ... }` | unmount 時に走る callback を登録 |
 | `on_error { |label, error| ... }` | error boundary handler を登録 (truthy 戻りで bubbling 停止) |
+| `error_boundary { |label, error| ... }` (class macro) | クラスレベルで error boundary を宣言 (provides/子 setup 例外も拾える) |
 | `bind ref, prop: signal, ...` | 一方向 DOM 反映 |
 | `bind ref, :prop do ... end` | block 形 |
 | `bind ref, class: { ... }` | class toggle |

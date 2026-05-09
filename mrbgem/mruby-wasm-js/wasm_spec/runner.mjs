@@ -35,6 +35,7 @@ globalThis.fetch = async (url) => {
 const { Window } = await import("happy-dom");
 const dom = new Window({ url: "https://test.local/" });
 globalThis.document = dom.document;
+globalThis.localStorage = dom.localStorage;
 
 const wasmUrl = process.env.MRUBY_WASM_PATH
   ? pathToFileURL(resolve(process.cwd(), process.env.MRUBY_WASM_PATH)).href

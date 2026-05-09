@@ -132,6 +132,128 @@ Spec.describe "Widget#on_error (error boundary)" do
     Spec.assert_equal "loose", err.message
   end
 
+  Spec.assert "class-level error_boundary catches a child setup error" do
+    doc = JS.global[:document]
+    body = doc[:body]
+    body[:innerHTML] = <<~HTML
+      <div data-widget="eb-cls-parent">
+        <div data-widget="eb-cls-child"></div>
+      </div>
+    HTML
+
+    captured_global = []
+    captured_local = []
+    Grainet.logger = ->(_severity, msg, err) { captured_global << [msg, err] }
+
+    parent = Class.new(Grainet::Widget) do
+      # Boundary fires during the post-order setup pass — before this
+      # widget's own __mount__ runs — so refs aren't ready. Test uses
+      # a closure capture instead of touching the DOM.
+      error_boundary do |label, err|
+        captured_local << [label, err.message]
+        true
+      end
+    end
+    Grainet.register "eb-cls-parent", parent
+
+    child = Class.new(Grainet::Widget) do
+      define_method(:setup) { raise "child setup boom" }
+    end
+    Grainet.register "eb-cls-child", child
+    Grainet.start
+
+    Spec.assert_equal 1, captured_local.length
+    label, msg = captured_local.first
+    Spec.assert_true label.to_s.end_with?("#setup")
+    Spec.assert_equal "child setup boom", msg
+    Spec.assert_equal 0, captured_global.length
+
+    Grainet.logger = nil
+    body[:innerHTML] = ""
+    JS.eval("new Promise(r => setTimeout(r, 0))").await
+  end
+
+  Spec.assert "class-level boundary block runs in instance context (@ivars resolve)" do
+    doc = JS.global[:document]
+    body = doc[:body]
+    body[:innerHTML] = '<div data-widget="eb-cls-ivar"><span data-ref="out"></span></div>'
+
+    klass = Class.new(Grainet::Widget) do
+      error_boundary do |_label, err|
+        @captured = err.message
+        refs.out.text = @captured
+        true
+      end
+      define_method(:setup) { raise "ivar test" }
+    end
+    Grainet.register "eb-cls-ivar", klass
+    Grainet.start
+
+    Spec.assert_equal "ivar test",
+      body.call(:querySelector, "[data-ref=out]")[:textContent].to_s
+
+    body[:innerHTML] = ""
+    JS.eval("new Promise(r => setTimeout(r, 0))").await
+  end
+
+  Spec.assert "instance on_error overrides class-level error_boundary" do
+    doc = JS.global[:document]
+    body = doc[:body]
+    body[:innerHTML] = '<div data-widget="eb-cls-override"><span data-ref="out"></span></div>'
+
+    klass = Class.new(Grainet::Widget) do
+      error_boundary do |_l, _e|
+        refs.out.text = "class-level"
+        true
+      end
+      define_method(:setup) do
+        on_error do |_l, e|
+          refs.out.text = "instance: #{e.message}"
+          true
+        end
+        s = signal(0)
+        @s = s
+        effect { raise "boom" if s.value > 0 }
+      end
+      define_method(:trigger) { @s.value = 1 }
+    end
+    Grainet.register "eb-cls-override", klass
+    Grainet.start
+
+    el = doc.call(:querySelector, "[data-widget='eb-cls-override']")
+    Grainet.find_for_element(el).trigger
+
+    Spec.assert_equal "instance: boom",
+      body.call(:querySelector, "[data-ref=out]")[:textContent].to_s
+
+    body[:innerHTML] = ""
+    JS.eval("new Promise(r => setTimeout(r, 0))").await
+  end
+
+  Spec.assert "subclass inherits parent class's error_boundary" do
+    doc = JS.global[:document]
+    body = doc[:body]
+    body[:innerHTML] = '<div data-widget="eb-cls-sub"><span data-ref="out"></span></div>'
+
+    base = Class.new(Grainet::Widget) do
+      error_boundary do |_l, e|
+        refs.out.text = "base: #{e.message}"
+        true
+      end
+    end
+    sub = Class.new(base) do
+      define_method(:setup) { raise "from sub" }
+    end
+    Grainet.register "eb-cls-sub", sub
+    Grainet.start
+
+    Spec.assert_equal "base: from sub",
+      body.call(:querySelector, "[data-ref=out]")[:textContent].to_s
+
+    body[:innerHTML] = ""
+    JS.eval("new Promise(r => setTimeout(r, 0))").await
+  end
+
   Spec.assert "raise inside handler is reported to global logger (no infinite loop)" do
     doc = JS.global[:document]
     body = doc[:body]

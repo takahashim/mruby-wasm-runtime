@@ -222,24 +222,25 @@ end
 class KanbanBoard < Grainet::Widget
   STORAGE_KEY = "grainet-kanban-cards"
 
-  def provides
-    @cards = signal(load_from_storage || default_cards)
-    @next_id = signal((@cards.value.map { |c| c["id"] }.max || 0) + 1)
-    @error_message = signal(nil)
-    provide :cards, @cards
+  # Class-level boundary auto-registers in the provides phase, so even
+  # errors in this widget's own provides body or in any descendant's
+  # setup are routed here.
+  error_boundary do |label, error|
+    @error_message.value = "#{label}\\n#{error.class}: #{error.message}"
+    true
+  end
 
-    # provides で on_error を登録するのが肝。setup フェーズは子→親の
-    # 順なので、親の setup で on_error を登録すると子の setup 例外を
-    # 拾えない。provides は親→子の順なのでここなら間に合う。
-    on_error do |label, error|
-      @error_message.value = "#{label}\\n#{error.class}: #{error.message}"
-      true
-    end
+  def provides
+    # Init error_message first so the boundary block can use it even
+    # if the lines below raise.
+    @error_message = signal(nil)
+    @cards = persistent_signal(STORAGE_KEY) { default_cards }
+    @next_id = signal((@cards.value.map { |c| c["id"] }.max || 0) + 1)
+    provide :cards, @cards
   end
 
   def setup
     wire_error_dialog
-    wire_persistence
     wire_card_events
   end
 
@@ -249,15 +250,6 @@ class KanbanBoard < Grainet::Widget
     bind refs.error_dialog, hidden: memo { @error_message.value.nil? }
     bind refs.error_text,   text:   memo { @error_message.value.to_s }
     refs.error_dismiss.on(:click) { @error_message.value = nil }
-  end
-
-  # Persist on every @cards change. JS.object converts the Ruby Array
-  # of Hashes to a JS array, then JSON.stringify serializes.
-  def wire_persistence
-    effect(label: "kanban persist") do
-      json = JS.global[:JSON].call(:stringify, JS.object(@cards.value)).to_s
-      JS.global[:localStorage].call(:setItem, STORAGE_KEY, json)
-    end
   end
 
   def wire_card_events
@@ -283,21 +275,6 @@ class KanbanBoard < Grainet::Widget
       id = event[:detail][:id].to_i
       @cards.update { |cards| cards.reject { |c| c["id"] == id } }
     end
-  end
-
-  # Tolerant load: a corrupted localStorage entry (invalid JSON, wrong
-  # shape) falls back to defaults so the demo still boots. Narrow the
-  # rescue to JS::Error so genuine programming bugs still surface via
-  # the on_error boundary registered in #provides.
-  def load_from_storage
-    raw = JS.global[:localStorage].call(:getItem, STORAGE_KEY)
-    return nil if raw.js_null?
-    parsed = JS.global[:JSON].call(:parse, raw.to_s).to_ruby
-    return nil unless parsed.is_a?(Array)
-    parsed
-  rescue JS::Error => e
-    puts "kanban: load_from_storage rescued #{e.class}: #{e.message}"
-    nil
   end
 
   def default_cards
