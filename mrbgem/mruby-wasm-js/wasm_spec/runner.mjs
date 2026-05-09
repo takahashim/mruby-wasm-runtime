@@ -106,6 +106,12 @@ async function runDir(dir, label) {
       console.error(`[runner] ${label}/${f} failed to load (parse/runtime error)`);
       process.exit(1);
     }
+    // Resume any fibers suspended on `await` before the next file
+    // runs, so its DOM mutations don't batch into the awaiting test's
+    // MutationObserver callback. Loop covers chained awaits.
+    for (let i = 0; i < 5; i++) {
+      await new Promise((r) => setTimeout(r, 0));
+    }
   }
 }
 
