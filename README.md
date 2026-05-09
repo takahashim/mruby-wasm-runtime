@@ -70,6 +70,7 @@ For fuller illustrations:
 - `examples/widget-form.html` — signup form with class binding, validation, and a bubbling custom event caught by an outer `activity-log` widget
 - `examples/widget-todo.html` — todo list driven by `bind_list` (key-based diffing): items are a `signal` of hashes; adds/removes patch the DOM in place rather than rebuilding it
 - `examples/widget-theme.html` — `provide` / `inject` theme propagation: an outer `theme-app` publishes a signal that descendant cards and badges read by key, with no prop-drilling
+- `examples/widget-search.html` — JSON-driven filter UI: loads `data/countries.json` via `MRubyWasm.fetch_json`, computes a filtered list as a `memo`, renders with `bind_list`. Demonstrates the fetch helper plus `JS::Object#to_ruby`
 
 To open the browser samples, run `make serve` and visit
 `http://localhost:8001/examples/demo.html`.
