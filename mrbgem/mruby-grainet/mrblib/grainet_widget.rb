@@ -176,10 +176,9 @@ module Grainet
     end
   end
 
-  # Refs-like proxy returned by `template(name) { |refs| ... }`. Lazily
-  # resolves data-refs via querySelector on the cloned subtree (no DFS,
-  # no data-widget boundary stop — the cloned content isn't mounted yet
-  # so scope rules don't apply).
+  # Lazy `data-ref` lookup over a cloned `<template>` subtree. Uses
+  # querySelector (not Refs#collect's DFS) because the clone isn't
+  # mounted yet, so the data-widget boundary stop doesn't apply.
   class TemplateRefs
     def initialize(root_js, widget)
       @root_js = root_js
@@ -208,14 +207,10 @@ module Grainet
     end
   end
 
-  # Wrapper around a cloned `<template>`'s root element. Provides
-  # `refs` (lazy `TemplateRefs` over the clone) and `to_js` for direct
-  # DOM access. Returned by `template(name)` and accepted by
-  # `bind_list` as the element-mode return value.
-  #
-  # The public constructor `Template.new(node)` lets callers wrap any
-  # JS::Object element they obtained from elsewhere (e.g. a third-party
-  # render call) so it can flow through `bind_list`.
+  # Wrapper around a DOM element with lazy `refs`. Returned by
+  # `template(name)`; the public constructor wraps an arbitrary
+  # JS::Object so external (non-template) elements can flow through
+  # `bind_list` without raw-element handling.
   class Template
     def initialize(node, widget = nil)
       @node = node
@@ -231,9 +226,6 @@ module Grainet
       @node
     end
 
-    # Set an HTML attribute on the wrapped root element. Convenience
-    # for the common case of `data-id` / `data-foo` / etc. without
-    # dropping back to `t.to_js.call(:setAttribute, ...)`.
     def set_attribute(name, value)
       @node.call(:setAttribute, name.to_s, value.to_s)
     end
@@ -274,36 +266,9 @@ module Grainet
       nil
     end
 
-    # bind_list(ref, source, key:, template: nil) { |item, prev_or_t| ... }
-    #
-    # `key:` accepts either a String shortcut (`key: "id"` ≡
-    # `->(it) { it["id"] }`) or a `Proc` for derived/composite keys.
-    # Items are expected to be String-keyed Hashes (the Grainet
-    # convention; matches `to_ruby` output). Passing a `Symbol` raises
-    # with a hint to use the String form.
-    #
-    # Two operating modes:
-    #
-    # 1. **Managed template mode** (`template: "name"` given):
-    #    bind_list owns the clone/reuse of `<template data-template>`
-    #    internally. The block receives `(item, t)` where `t` is the
-    #    (cached or fresh) `Grainet::Template`. Mutate `t` in place;
-    #    the block's return value is ignored.
-    #
-    #      bind_list refs.list, @items, key: "id", template: "todo-row" do |it, t|
-    #        t.refs.title.text = it["title"]
-    #      end
-    #
-    # 2. **Block-controlled mode** (no `template:` kwarg): the block
-    #    receives `(item, prev)` and must return one of:
-    #      - HTML::Safe / String — string mode. Cached HTML is compared
-    #        for skip semantics.
-    #      - Grainet::Template  — template mode. Same node returned
-    #        across renders skips the DOM op.
-    #    Returning a raw JS::Object or other type raises a clear error.
-    #
-    # Mode is pinned per-key on first render. Switching modes on the
-    # same key forces a replaceChild.
+    # See docs/grainet-spec.md "bind_list" for the full surface
+    # (key shortcuts, managed-template mode, block return contract,
+    # mode pinning).
     def bind_list(ref, source, key:, template: nil, &item_proc)
       raise ArgumentError, "bind_list requires a block" unless item_proc
       key_fn = __coerce_bind_list_key__(key)
@@ -323,12 +288,9 @@ module Grainet
         new_set = {}
         new_keys.each { |k| new_set[k] = true }
 
-        # Pass 1 — for each item ask the block what to render. Compare
-        # against the cached output and only swap the DOM node if it
-        # actually changed. `case`/`when` here uses C-implemented
-        # `Module#===` so dispatch works even when `result` is a
-        # `JS::Object` (which can't be probed via `is_a?` from Ruby —
-        # method_missing forwards the call to JS and throws).
+        # `case`/`when` (C-level `Module#===`) is required here:
+        # `result.is_a?(...)` would forward to JS via method_missing
+        # when result is a `JS::Object` and throw.
         items.each_with_index do |item, idx|
           k = new_keys[idx]
           existing = by_key[k]
@@ -399,22 +361,7 @@ module Grainet
       nil
     end
 
-    # Clone a `<template data-template="NAME">` element from the
-    # document and return a `Grainet::Template` wrapping its first
-    # element child. If a block is given, the wrapped `refs` is
-    # yielded so callers can fill in `data-ref` slots:
-    #
-    #   <template data-template="todo-row">
-    #     <li data-widget="todo-item">
-    #       <span data-ref="title"></span>
-    #     </li>
-    #   </template>
-    #
-    #   t = template("todo-row") do |refs|
-    #     refs.title.text = item[:title]
-    #   end
-    #
-    # The returned Template can be passed to `bind_list` directly.
+    # See docs/grainet-spec.md "Template helper".
     def template(name, &block)
       Grainet.__clone_template__(name, self, &block)
     end
@@ -458,10 +405,9 @@ module Grainet
       end
     end
 
-    # bind_list key: accepts a String shortcut (Hash subscript) or a
-    # Proc. Symbol is rejected with a message pointing to the
-    # String-keyed items convention so users coming from Rails-style
-    # `:id` get a teaching error instead of silent nil keys.
+    # Symbol is rejected (not coerced) so users coming from Rails-style
+    # `:id` get an actionable error rather than silent nil keys against
+    # our String-keyed items convention.
     def __coerce_bind_list_key__(key)
       case key
       when Proc
@@ -486,11 +432,8 @@ module Grainet
       tpl[:content][:firstElementChild]
     end
 
-    # Apply a Template return: store both the wrapper (for `prev` on
-    # the next render) and its underlying node (for diff comparison).
-    # Comparison is by node identity, not Template identity, so the
-    # user can either return `prev` directly or build a fresh Template
-    # around the same node — both reuse without a DOM op.
+    # Diff is by underlying node identity (not Template identity) so
+    # `prev`-pass-through and `Template.new(same_node)` both reuse.
     def __bind_list_apply_template__(by_key, k, existing, template)
       node = template.to_js
       if existing && existing[:mode] == :template && existing[:node] == node
@@ -604,26 +547,7 @@ module Grainet
       @_cleanups << block
     end
 
-    # Register an error boundary handler for this widget and its
-    # descendants. The block is called with `(label, error)` whenever
-    # a Grainet-managed callback below this widget (effect bodies,
-    # child widget setup/provides/cleanup) raises. Return truthy to
-    # mark the error handled — bubbling stops and the global logger
-    # is not called. Return falsy to let the error continue up the
-    # parent chain.
-    #
-    #   def setup
-    #     on_error do |label, error|
-    #       refs.fallback.text = "#{error.class}: #{error.message}"
-    #       refs.fallback.hidden = false
-    #       true
-    #     end
-    #   end
-    #
-    # Only one handler per widget; calling on_error twice replaces the
-    # previous handler. Errors raised by the handler itself are routed
-    # to the global logger to prevent infinite recursion (they do not
-    # re-enter this widget's chain).
+    # See docs/grainet-spec.md "Error Boundary".
     def on_error(&block)
       raise ArgumentError, "block required" unless block
       @_error_handler = block

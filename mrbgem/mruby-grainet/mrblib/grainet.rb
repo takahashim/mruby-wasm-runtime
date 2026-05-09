@@ -40,15 +40,7 @@ module Grainet
       end
     end
 
-    # Internal: report a caught exception from a Grainet-managed
-    # callback (effect bodies, widget lifecycle, listener teardown).
-    #
-    # When `source:` is a Grainet::Widget, the error first walks up the
-    # parent widget chain, offering it to each ancestor's on_error
-    # handler. The first handler that returns truthy claims the error
-    # (no further bubbling, no logger call). If no handler claims it,
-    # falls back to Grainet.logger; otherwise STDERR with backtrace
-    # under dev_mode?.
+    # See docs/grainet-spec.md "Error Boundary" for the bubbling rules.
     def __error__(label, error, source: nil)
       current = source
       while current
@@ -379,12 +371,9 @@ module Grainet
   end
 
   # Side effect that re-runs whenever a tracked dependency changes.
+  # `source:` (the owning Widget, when created via Widget#effect) is
+  # consulted by `Grainet.__error__` for on_error bubbling.
   class Effect
-    # `source:` is the Grainet::Widget that owns this effect (set by
-    # Widget#effect). When the body raises, the error is offered to
-    # the source widget's on_error chain before falling back to the
-    # global logger. Standalone effects (Grainet::Effect.new without a
-    # widget) pass source: nil and skip the chain.
     def initialize(label: nil, source: nil, &block)
       raise ArgumentError, "block required" unless block
       @block = block
