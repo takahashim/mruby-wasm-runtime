@@ -1,6 +1,6 @@
-# mruby-widget
+# mruby-grainet
 
-Signal-first Widget System for mruby on WebAssembly.
+**Grainet** — signal-first widget system for mruby on WebAssembly.
 
 A small Ruby UI layer that connects existing HTML to Ruby state, events,
 and DOM updates — without templating, virtual DOM, or component DSLs.
@@ -15,7 +15,7 @@ and DOM updates — without templating, virtual DOM, or component DSLs.
 ```
 
 ```ruby
-class Counter < MRubyWasm::Widget
+class Counter < Grainet::Widget
   def setup
     @count = signal(0)
 
@@ -27,8 +27,9 @@ class Counter < MRubyWasm::Widget
   end
 end
 
-MRubyWasm.register_widget "counter", Counter
-MRubyWasm.start
+Grainet.register "counter", Counter
+Grainet.start
 ```
 
-See `docs/mruby-widget-2ed.md` in the repository root for the full spec.
+See `docs/grainet-spec.md` in the repository root for the full spec,
+and `docs/fetchy-spec.md` for the bundled HTTP client.

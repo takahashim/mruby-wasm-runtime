@@ -1,13 +1,14 @@
-# mruby-widget — Widget / Refs / RefElement / register_widget / start.
+# grainet_widget.rb — Grainet::Widget class + RefElement / Refs /
+# Bindable / Registry / Grainet module facade.
 #
-# Loaded after mrblib/mruby_wasm.rb (which provides reactive primitives,
-# Error, dom dispatch helper).
+# Loaded after grainet.rb (which defines module Grainet and the
+# reactive primitives Signal/Memo/Effect).
 
-module MRubyWasm
-  # RefElement wraps a JS DOM element together with a back-reference to
-  # the owning widget. This lets `el.on(:click)` register a listener that
-  # will be auto-removed on widget unmount, and `el.widget` resolve to a
-  # child Widget instance when the element is itself a `data-widget`
+module Grainet
+  # Wraps a JS DOM element together with a back-reference to the
+  # owning widget. Lets `el.on(:click)` register a listener that gets
+  # auto-removed on widget unmount, and `el.widget` resolve to a child
+  # Grainet::Widget instance when the element is itself a `data-widget`
   # root.
   #
   # Unrecognised methods fall through to the wrapped JS::Object so the
@@ -17,9 +18,6 @@ module MRubyWasm
     # `[ruby_name, js_dom_property, kind]`. `kind` controls cast:
     #   :string — getter returns String, setter does `v.to_s`
     #   :bool   — getter returns Ruby Boolean, setter does `!!v`
-    #
-    # PROPS doubles as the bind allow-list (bind only writes properties
-    # whose ruby_name is in this table).
     PROPS = [
       [:text,     :textContent, :string],
       [:html,     :innerHTML,   :string],
@@ -58,8 +56,6 @@ module MRubyWasm
       @js.dispatch(name, detail: detail, bubbles: bubbles)
     end
 
-    # ---- DOM property accessors (generated from PROPS) --------------
-
     PROPS.each do |name, js_key, kind|
       case kind
       when :string
@@ -77,15 +73,10 @@ module MRubyWasm
       end
     end
 
-    # Toggle a CSS class by name. `force` is the desired present-state
-    # (truthy → add, falsy → remove), to keep the call site declarative.
     def toggle_class(name, force)
       @js[:classList].call(:toggle, name.to_s, !!force)
     end
 
-    # Set or clear an inline style property. nil/false clears the
-    # property; any other value is stringified and written via
-    # setProperty (which accepts kebab-case names directly).
     def set_style(property, value)
       style = @js[:style]
       if value.nil? || value == false
@@ -95,11 +86,11 @@ module MRubyWasm
       end
     end
 
-    # The Widget instance attached to this element. Raises in dev mode if
-    # the element is not itself a `data-widget` root.
+    # The Widget instance attached to this element. Raises if the
+    # element is not itself a `data-widget` root.
     def widget_instance
-      MRubyWasm.__widget_for_element__(@js) ||
-        raise(MRubyWasm::Error,
+      Grainet.find_for_element(@js) ||
+        raise(Grainet::Error,
               "Missing widget on ref: #{@name || "(unknown)"} in #{@widget ? @widget.class.name : "(no widget)"}")
     end
 
@@ -110,8 +101,6 @@ module MRubyWasm
       @js
     end
 
-    # Forward unknown calls to the underlying JS::Object so the element
-    # remains usable as a plain JS handle (e.g. `refs.list.appendChild(...)`).
     def method_missing(sym, *args, &block)
       @js.__send__(sym, *args, &block)
     end
@@ -135,7 +124,7 @@ module MRubyWasm
       key = name.to_s
       el = @cache[key]
       return el if el
-      raise MRubyWasm::Error, "Missing ref: #{key} in #{@widget.class.name}"
+      raise Grainet::Error, "Missing ref: #{key} in #{@widget.class.name}"
     end
 
     def method_missing(sym, *args)
@@ -175,7 +164,6 @@ module MRubyWasm
           end
         end
         widget_attr = node.call(:getAttribute, "data-widget")
-        # Don't descend into nested widget subtrees.
         next if !widget_attr.js_null?
         kids = node[:children]
         kn = kids[:length].to_i
@@ -188,31 +176,23 @@ module MRubyWasm
     end
   end
 
-  # Bindable — DOM-binding DSL (`bind` / `model`) as a reusable mixin.
-  #
-  # Pulled out of Widget so future host classes (e.g. Component, or
-  # element-scoped helpers) can opt in without inheriting the full
-  # Widget lifecycle. The host class is required to provide:
-  #
-  #   - `effect(label:, &block)` — register an effect that auto-disposes
-  #     with the host's lifecycle.
-  #
-  # `coerce_ref` wraps a raw JS::Object as a RefElement bound to the
-  # host (so listeners registered via `model` are tracked on the host).
+  # DOM-binding DSL (`bind` / `model` / `bind_list`) as a reusable
+  # mixin. Pulled out of Widget so future host classes can opt in
+  # without inheriting the full Widget lifecycle. The host class is
+  # required to provide:
+  #   - `effect(label:, &block)` — register an effect that
+  #     auto-disposes with the host's lifecycle.
   module Bindable
     # property -> { event: ..., normalize: ->(value) { ... } }
-    # DOM read/write goes through the RefElement accessor pair
-    # (`#{prop}` / `#{prop}=`), so adding a model property is a one-line
-    # entry once the matching RefElement::PROPS row exists.
     MODEL_PROPS = {
       value:   { event: :input,  normalize: ->(v) { v.to_s } },
       checked: { event: :change, normalize: ->(v) { !!v } },
     }.freeze
 
     # bind(ref, prop: signal_or_memo)             # single property
-    # bind(ref, class: { "is-active" => @on })    # multi-toggle CSS classes
-    # bind(ref, style: { "color" => @color })     # multi-property inline styles
-    # bind(ref, :prop) { ...computed... }         # block form for one property
+    # bind(ref, class: { "is-active" => @on })    # multi-toggle classes
+    # bind(ref, style: { "color" => @color })     # multi inline styles
+    # bind(ref, :prop) { ...computed... }         # block form
     def bind(ref, prop_or_kwargs = nil, **kwargs, &block)
       el = coerce_ref(ref)
       if block
@@ -232,41 +212,18 @@ module MRubyWasm
     end
 
     # bind_list(ref, source, key:) { |item| HTML.tag(...) }
-    #
-    # Render a reactive list of items into `ref` with diff-based DOM
-    # updates. Each item becomes one direct child element of `ref`.
-    #
-    #   - `source`  : Signal/Memo whose `.value` is an Array
-    #   - `key:`    : Proc returning a stable key for an item
-    #                 (used to match items across renders)
-    #   - block     : called with each item, returns HTML::Safe whose
-    #                 root element becomes that item's DOM node
-    #
-    # Update semantics on signal change:
-    #   - same key, same rendered HTML → DOM node preserved untouched
-    #     (focus / scroll / nested widget state intact)
-    #   - same key, different HTML     → that one node replaced
-    #   - new key                       → element created and inserted
-    #   - missing key                   → element removed (MO unmounts
-    #                                       any nested widgets)
-    #   - reordered keys                → existing nodes moved via
-    #                                       insertBefore (also keeps state)
     def bind_list(ref, source, key:, &item_proc)
       raise ArgumentError, "bind_list requires a block" unless item_proc
       el = coerce_ref(ref)
       label = "bind_list(#{el.name || "?"})"
-
-      # Closure-captured per-bind state. Hash key → { node: JS::Object,
-      # html: rendered string }. Survives across effect re-runs; freed
-      # when the host widget unmounts and the effect is disposed.
       by_key = {}
 
       effect(label: label) do
         items = source.value || []
         new_keys = items.map { |item| key.call(item) }
 
-        if MRubyWasm.dev_mode? && new_keys.uniq.length != new_keys.length
-          MRubyWasm.__warn__("bind_list duplicate keys in #{label}: #{new_keys.inspect}")
+        if Grainet.dev_mode? && new_keys.uniq.length != new_keys.length
+          Grainet.__warn__("bind_list duplicate keys in #{label}: #{new_keys.inspect}")
         end
 
         new_set = {}
@@ -290,9 +247,7 @@ module MRubyWasm
           end
         end
 
-        # Pass 2 — drop nodes whose keys are no longer present. The
-        # MutationObserver on the surrounding tree will unmount any
-        # nested widgets these nodes hosted.
+        # Pass 2 — drop nodes whose keys are no longer present.
         gone = []
         by_key.each_key { |k| gone << k unless new_set[k] }
         gone.each do |k|
@@ -301,14 +256,12 @@ module MRubyWasm
           n.call(:remove) unless n.js_null?
         end
 
-        # Pass 3 — position each node at its desired index. For nodes
-        # already in place, insertBefore is a no-op; for moved nodes,
-        # it relocates without re-rendering.
+        # Pass 3 — position each node at its desired index.
         parent_js = el.to_js
         children = parent_js[:children]
         new_keys.each_with_index do |k, i|
           node = by_key[k][:node]
-          ref_node = children[i]   # null when i == children.length
+          ref_node = children[i]
           parent_js.call(:insertBefore, node, ref_node) unless ref_node == node
         end
       end
@@ -320,10 +273,10 @@ module MRubyWasm
       el = coerce_ref(ref)
       prop = property.to_sym
       config = MODEL_PROPS[prop] ||
-        raise(MRubyWasm::Error, "Unsupported model property: #{prop}")
+        raise(Grainet::Error, "Unsupported model property: #{prop}")
       label = "model(#{el.name || "?"}, :#{prop})"
 
-      # signal -> DOM (skip if equal, to keep input cursor / focus state)
+      # signal -> DOM (skip if equal, to keep input cursor / focus)
       effect(label: label) do
         target = config[:normalize].call(signal.value)
         el.__send__("#{prop}=", target) if el.__send__(prop) != target
@@ -345,7 +298,7 @@ module MRubyWasm
     def bind_one(el, prop, &compute)
       prop_sym = prop.to_sym
       unless RefElement::BIND_PROPS.include?(prop_sym)
-        raise MRubyWasm::Error, "Unknown bind property: #{prop_sym}"
+        raise Grainet::Error, "Unknown bind property: #{prop_sym}"
       end
       label = "bind(#{el.name || "?"}, :#{prop_sym})"
       effect(label: label) do
@@ -375,11 +328,7 @@ module MRubyWasm
       end
     end
 
-    # Build a single DOM Element from an HTML fragment string. Uses a
-    # `<template>` to parse without execution; returns the first
-    # element child (any leading whitespace / text nodes are skipped).
-    # If the fragment produces zero elements the result is null and the
-    # caller will see a JS null handle on the next operation.
+    # Build a single DOM Element from an HTML fragment string.
     def __bind_list_node__(html_str)
       doc = JS.global[:document]
       tpl = doc.call(:createElement, "template")
@@ -388,32 +337,20 @@ module MRubyWasm
     end
   end
 
-  # Widget — base class users subclass.
-  #
-  #   class Counter < MRubyWasm::Widget
-  #     def setup
-  #       @count = signal(0)
-  #       refs.increment.on(:click) { @count.update { |n| n + 1 } }
-  #       bind refs.count, text: @count
-  #     end
-  #   end
-  #
-  # The `setup` hook runs after the Widget is mounted on its DOM root.
-  # All listener / effect / bind / model / cleanup registrations done
-  # there are tracked and released on unmount.
+  # The user-inheritable base. Users write `class Counter < Grainet::Widget`.
   class Widget
-    include Bindable
-
     # Sentinel for inject's default-not-supplied case. We can't use nil
     # because nil itself is a valid provided value.
     NOT_FOUND = Object.new.freeze
+
+    include Bindable
 
     attr_reader :root, :refs
 
     def initialize(root_element)
       @root = RefElement.new(root_element, self, name: "(root)")
       @refs = nil
-      @_listeners = []   # [[target_js, event_str, cb_js], ...]
+      @_listeners = []
       @_effects = []
       @_memos = []
       @_cleanups = []
@@ -425,32 +362,23 @@ module MRubyWasm
       @_unmounted = false
     end
 
-    # Override in subclasses to publish values to descendants. Runs in
-    # pre-order (parent first) before any descendant's `setup`, so
-    # values stored here are visible to `inject` calls in children.
+    # Override to publish values to descendants. Runs in pre-order
+    # (parent first) before any descendant's `setup`.
     def provides
     end
 
-    # Override in subclasses for the main lifecycle. Runs in post-order
-    # (children first), so `refs.x.widget.method` works for nested
-    # widgets when reading them from a parent's setup.
+    # Override for the main lifecycle. Runs in post-order (children
+    # first), so `refs.x.widget.method` works for nested widgets when
+    # reading them from a parent's setup.
     def setup
     end
 
-    # ---- Provide / Inject ---------------------------------------------
+    # ---- Provide / Inject ------------------------------------------
 
-    # Publish a value under `key` to this widget's descendants. Intended
-    # to be called from `provides`. The value is opaque — typically a
-    # Signal/Memo, but any object works.
     def provide(key, value)
       @_provides[key] = value
     end
 
-    # Look up the nearest ancestor's provided value for `key`. Returns:
-    #   - the provided value if found,
-    #   - `default` if given and not found,
-    #   - the result of `block` if given and not found,
-    # otherwise raises MRubyWasm::Error.
     def inject(key, default = NOT_FOUND, &block)
       current = self
       while current
@@ -460,27 +388,23 @@ module MRubyWasm
       end
       return block.call if block
       return default unless default.equal?(NOT_FOUND)
-      raise MRubyWasm::Error, "inject: no provider for #{key.inspect} in #{self.class.name}"
+      raise Grainet::Error, "inject: no provider for #{key.inspect} in #{self.class.name}"
     end
 
-    # ---- Reactive helpers ---------------------------------------------
+    # ---- Reactive helpers ------------------------------------------
 
     def signal(initial)
-      MRubyWasm::Reactive::Signal.new(initial)
+      Signal.new(initial)
     end
 
     def memo(&block)
-      m = MRubyWasm::Reactive::Memo.new(&block)
-      # Memos capture deps and own subscribers; nothing to track on the
-      # widget directly — they're cleaned up implicitly when their
-      # subscribers (effects) are disposed. We keep an explicit list so
-      # we can dispose memos with no subscribers on unmount too.
+      m = Memo.new(&block)
       @_memos << m
       m
     end
 
     def effect(label: nil, &block)
-      e = MRubyWasm::Reactive::Effect.new(label: label, &block)
+      e = Effect.new(label: label, &block)
       @_effects << e
       e
     end
@@ -490,7 +414,7 @@ module MRubyWasm
       @_cleanups << block
     end
 
-    # ---- Internal API used by Registry --------------------------------
+    # ---- Internal API used by Registry -----------------------------
 
     def __track_listener__(target_js, event_str, callback_js)
       @_listeners << [target_js, event_str, callback_js]
@@ -509,9 +433,6 @@ module MRubyWasm
       @_parent
     end
 
-    # Lookup hook used by `inject`. Returns the provided value if this
-    # widget has the key, otherwise the NOT_FOUND sentinel. We can't
-    # just return @_provides[key] because nil is a valid stored value.
     def __provided_for__(key)
       @_provides.key?(key) ? @_provides[key] : NOT_FOUND
     end
@@ -524,7 +445,7 @@ module MRubyWasm
       begin
         provides
       rescue => e
-        STDERR.puts "[MRubyWasm] Error in #{self.class.name}#provides"
+        STDERR.puts "[Grainet] Error in #{self.class.name}#provides"
         STDERR.puts "  #{e.class}: #{e.message}"
       end
     end
@@ -535,7 +456,7 @@ module MRubyWasm
       begin
         setup
       rescue => e
-        STDERR.puts "[MRubyWasm] Error in #{self.class.name}#setup"
+        STDERR.puts "[Grainet] Error in #{self.class.name}#setup"
         STDERR.puts "  #{e.class}: #{e.message}"
         e.backtrace.each { |line| STDERR.puts "    #{line}" } if e.backtrace
       end
@@ -545,16 +466,10 @@ module MRubyWasm
     def __unmount__
       return if @_unmounted
       @_unmounted = true
-      # Order per the spec: parent's cleanup runs while children are
-      # still alive, then children unmount top-down. Each step is
-      # wrapped in safe_release so an exception in one step doesn't
-      # leak listeners / effects / callbacks from later steps.
       @_cleanups.reverse_each { |c| safe_release("cleanup")          { c.call } }
       @_effects.each          { |e| safe_release("effect dispose")   { e.dispose } }
       @_memos.each            { |m| safe_release("memo dispose")     { m.dispose } }
       @_listeners.each do |target_js, event_str, cb_js|
-        # removeEventListener can throw if the element was GC'd on the
-        # JS side; we still want the callback handle released either way.
         safe_release("removeEventListener") { target_js.call(:removeEventListener, event_str, cb_js) }
         safe_release("release_callback")    { JS.release_callback(cb_js) }
       end
@@ -566,25 +481,25 @@ module MRubyWasm
     def safe_release(label)
       yield
     rescue StandardError => e
-      STDERR.puts "[MRubyWasm] Error in #{self.class.name} #{label}"
+      STDERR.puts "[Grainet] Error in #{self.class.name} #{label}"
       STDERR.puts "  #{e.class}: #{e.message}"
     end
   end
 
-  # Registry — owns the live state of widgets in the DOM:
+  # Owns the live state of widgets in the DOM:
   #   - registered classes by name
   #   - mounted instances by id
   #   - the MutationObserver that drives dynamic mount/unmount
   #
-  # A single Registry instance lives on the MRubyWasm module
-  # (`MRubyWasm.registry`); the module-level `register_widget` / `start`
+  # A single Registry instance lives on the Grainet module
+  # (`Grainet.registry`); the module-level `register` / `start`
   # methods are thin delegators.
   class Registry
-    WIDGET_ID_ATTR = "data-mrubywasm-widget-id"
+    WIDGET_ID_ATTR = "data-widget-id"
 
     def initialize
-      @widget_classes = {}     # "counter" => Counter
-      @widgets = {}            # widget_id (Integer) => Widget
+      @widget_classes = {}
+      @widgets = {}
       @next_widget_id = 0
       @observer = nil
       @observer_callback = nil
@@ -594,15 +509,21 @@ module MRubyWasm
       @widget_classes[name.to_s] = klass
     end
 
-    # Look up a Widget instance by its DOM root element.
     def widget_for_element(js_element)
       attr = js_element.call(:getAttribute, WIDGET_ID_ATTR)
       return nil if attr.js_null?
       @widgets[attr.to_s.to_i]
     end
 
-    # Mount all data-widget elements under `root_js` in post-order, then
-    # set up a MutationObserver on document.body for dynamic mount/unmount.
+    # Mount all data-widget elements under `root_js` in two passes:
+    #
+    #   1. Pre-order: instantiate, register, link parent, run
+    #      `provides`. After this all providers in this subtree are
+    #      populated, so any `inject` called in pass 2 finds them.
+    #
+    #   2. Post-order: run `setup`. Children before parents, so
+    #      `refs.x.widget.method` from a parent's setup sees its
+    #      children fully initialised.
     def start(root_js = nil)
       root_js ||= JS.global[:document][:body]
       mount_subtree(root_js)
@@ -610,23 +531,11 @@ module MRubyWasm
       nil
     end
 
-    # Mount all unmounted data-widget elements under `root_js` in two
-    # passes:
-    #
-    #   1. Pre-order: instantiate each widget, register it, link it to
-    #      its parent, and run its `provides` hook. After this pass all
-    #      providers in this subtree are populated, so any `inject`
-    #      called in pass 2 will find what it needs.
-    #
-    #   2. Post-order: run `setup` on each widget. Children are set up
-    #      before parents, so `refs.x.widget.method` from a parent's
-    #      setup sees its children fully initialised.
     def mount_subtree(root_js)
       return if root_js.js_null? || root_js.typeof != "object"
       collected = []
       collect_widgets(root_js, collected)
 
-      # Pass 1: instantiate + provide phase (pre-order).
       instances = []
       collected.each do |el_js|
         instance = instantiate_widget(el_js)
@@ -635,17 +544,13 @@ module MRubyWasm
         instance.__provide_phase__
       end
 
-      # Pass 2: setup (post-order — children first).
       instances.reverse_each(&:__mount__)
     end
 
-    # Unmount all widgets in `root_js`'s subtree (including root_js
-    # itself if it's a widget). Top-down: parent first, then children.
     def unmount_subtree(root_js)
       return if root_js.js_null? || root_js.typeof != "object"
       collected = []
       collect_widgets(root_js, collected)
-      # collected is parent-first DFS — perfect for top-down destroy.
       collected.each do |el_js|
         wid = el_js.call(:getAttribute, WIDGET_ID_ATTR)
         next if wid.js_null?
@@ -653,11 +558,6 @@ module MRubyWasm
         instance = @widgets.delete(id)
         next unless instance
         instance.__unmount__
-        # The instance.__unmount__ will recurse into its tracked
-        # children; we still strip the attribute so any future re-mount
-        # sees a fresh element. (Children were also collected here, so
-        # walking the rest of `collected` will short-circuit when they
-        # find no entry in @widgets.)
         begin
           el_js.call(:removeAttribute, WIDGET_ID_ATTR)
         rescue StandardError
@@ -668,14 +568,11 @@ module MRubyWasm
 
     private
 
-    # Pre-order DFS, collecting [data-widget] elements (including root if
-    # it has the attribute itself).
     def collect_widgets(root_js, out)
       stack = [root_js]
       until stack.empty?
         node = stack.pop
         next if node.js_null?
-        # Skip non-element nodes (text/comment etc.).
         next if node[:nodeType].to_i != 1
         if node.call(:hasAttribute, "data-widget").js_bool
           out << node
@@ -683,7 +580,6 @@ module MRubyWasm
         kids = node[:children]
         next if kids.js_null?
         kn = kids[:length].to_i
-        # Push in reverse so DFS visits children left-to-right.
         ki = kn - 1
         while ki >= 0
           stack << kids[ki]
@@ -692,12 +588,6 @@ module MRubyWasm
       end
     end
 
-    # Instantiate a widget for one DOM element if not already mounted.
-    # Registers the instance + parent link, but does NOT call setup
-    # (mount_subtree's two-pass logic does that after the pre-order
-    # provides phase). Returns the instance, or nil if the element is
-    # already mounted / has no registered class / lacks a data-widget
-    # attribute.
     def instantiate_widget(el_js)
       existing_attr = el_js.call(:getAttribute, WIDGET_ID_ATTR)
       return nil if !existing_attr.js_null?
@@ -705,7 +595,7 @@ module MRubyWasm
       return nil if name.js_null?
       klass = @widget_classes[name.to_s]
       unless klass
-        STDERR.puts "[MRubyWasm] No widget registered for name: #{name.to_s.inspect}"
+        STDERR.puts "[Grainet] No widget registered for name: #{name.to_s.inspect}"
         return nil
       end
       @next_widget_id += 1
@@ -736,7 +626,6 @@ module MRubyWasm
       target = doc[:body]
       return if target.js_null?
       callback = JS.callback do |mutations|
-        # `mutations` is a MutationRecord array (Object).
         n = mutations[:length].to_i
         i = 0
         while i < n
@@ -760,25 +649,23 @@ module MRubyWasm
           i += 1
         end
       end
-      obs = MRubyWasm.__window__[:MutationObserver].new(callback)
+      obs = Grainet.__window__[:MutationObserver].new(callback)
       obs.call(:observe, target, JS.object(childList: true, subtree: true))
       @observer = obs
-      # Hold the callback alive by stashing it on the registry so it
-      # isn't GC'd while the observer is live.
       @observer_callback = callback
     end
   end
 
-  # ---- Module-level façade ---------------------------------------------
+  # ---- Module-level façade ---------------------------------------
   #
-  # Thin delegators to the singleton Registry, plus the test reset hook.
-  # Most user code only ever touches these.
+  # Thin delegators to the singleton Registry. Most user code only
+  # ever touches these: `Grainet.register`, `Grainet.start`.
   class << self
     def registry
       @registry ||= Registry.new
     end
 
-    def register_widget(name, klass)
+    def register(name, klass)
       registry.register(name, klass)
     end
 
@@ -786,7 +673,7 @@ module MRubyWasm
       registry.start(root_js)
     end
 
-    def __widget_for_element__(js_element)
+    def find_for_element(js_element)
       registry.widget_for_element(js_element)
     end
   end

@@ -4,7 +4,7 @@ Spec.describe "bind_list" do
     body = doc[:body]
     body[:innerHTML] = '<div data-widget="bl-init"><ul data-ref="list"></ul></div>'
 
-    klass = Class.new(MRubyWasm::Widget) do
+    klass = Class.new(Grainet::Widget) do
       attr_reader :items
       define_method(:setup) do
         @items = signal([{id: 1, t: "a"}, {id: 2, t: "b"}, {id: 3, t: "c"}])
@@ -13,8 +13,8 @@ Spec.describe "bind_list" do
         end
       end
     end
-    MRubyWasm.register_widget "bl-init", klass
-    MRubyWasm.start
+    Grainet.register "bl-init", klass
+    Grainet.start
 
     list = doc.call(:querySelector, "[data-ref='list']")
     Spec.assert_equal 3, list[:children][:length].to_i
@@ -30,7 +30,7 @@ Spec.describe "bind_list" do
     body = doc[:body]
     body[:innerHTML] = '<div data-widget="bl-append"><ul data-ref="list"></ul></div>'
 
-    klass = Class.new(MRubyWasm::Widget) do
+    klass = Class.new(Grainet::Widget) do
       attr_reader :items
       define_method(:setup) do
         @items = signal([{id: 1, t: "a"}, {id: 2, t: "b"}])
@@ -39,11 +39,11 @@ Spec.describe "bind_list" do
         end
       end
     end
-    MRubyWasm.register_widget "bl-append", klass
-    MRubyWasm.start
+    Grainet.register "bl-append", klass
+    Grainet.start
 
     el = doc.call(:querySelector, "[data-widget='bl-append']")
-    inst = MRubyWasm.__widget_for_element__(el)
+    inst = Grainet.find_for_element(el)
     list = doc.call(:querySelector, "[data-ref='list']")
 
     node_a = list[:children][0]
@@ -64,7 +64,7 @@ Spec.describe "bind_list" do
     body = doc[:body]
     body[:innerHTML] = '<div data-widget="bl-remove"><ul data-ref="list"></ul></div>'
 
-    klass = Class.new(MRubyWasm::Widget) do
+    klass = Class.new(Grainet::Widget) do
       attr_reader :items
       define_method(:setup) do
         @items = signal([{id: 1, t: "a"}, {id: 2, t: "b"}, {id: 3, t: "c"}])
@@ -73,11 +73,11 @@ Spec.describe "bind_list" do
         end
       end
     end
-    MRubyWasm.register_widget "bl-remove", klass
-    MRubyWasm.start
+    Grainet.register "bl-remove", klass
+    Grainet.start
 
     el = doc.call(:querySelector, "[data-widget='bl-remove']")
-    inst = MRubyWasm.__widget_for_element__(el)
+    inst = Grainet.find_for_element(el)
     list = doc.call(:querySelector, "[data-ref='list']")
 
     node_a = list[:children][0]
@@ -98,7 +98,7 @@ Spec.describe "bind_list" do
     body = doc[:body]
     body[:innerHTML] = '<div data-widget="bl-update"><ul data-ref="list"></ul></div>'
 
-    klass = Class.new(MRubyWasm::Widget) do
+    klass = Class.new(Grainet::Widget) do
       attr_reader :items
       define_method(:setup) do
         @items = signal([{id: 1, t: "a"}, {id: 2, t: "b"}])
@@ -107,11 +107,11 @@ Spec.describe "bind_list" do
         end
       end
     end
-    MRubyWasm.register_widget "bl-update", klass
-    MRubyWasm.start
+    Grainet.register "bl-update", klass
+    Grainet.start
 
     el = doc.call(:querySelector, "[data-widget='bl-update']")
-    inst = MRubyWasm.__widget_for_element__(el)
+    inst = Grainet.find_for_element(el)
     list = doc.call(:querySelector, "[data-ref='list']")
 
     node_a = list[:children][0]
@@ -138,7 +138,7 @@ Spec.describe "bind_list" do
     body = doc[:body]
     body[:innerHTML] = '<div data-widget="bl-reorder"><ul data-ref="list"></ul></div>'
 
-    klass = Class.new(MRubyWasm::Widget) do
+    klass = Class.new(Grainet::Widget) do
       attr_reader :items
       define_method(:setup) do
         @items = signal([{id: 1, t: "a"}, {id: 2, t: "b"}, {id: 3, t: "c"}])
@@ -147,11 +147,11 @@ Spec.describe "bind_list" do
         end
       end
     end
-    MRubyWasm.register_widget "bl-reorder", klass
-    MRubyWasm.start
+    Grainet.register "bl-reorder", klass
+    Grainet.start
 
     el = doc.call(:querySelector, "[data-widget='bl-reorder']")
-    inst = MRubyWasm.__widget_for_element__(el)
+    inst = Grainet.find_for_element(el)
     list = doc.call(:querySelector, "[data-ref='list']")
 
     node_a = list[:children][0]
@@ -176,12 +176,12 @@ Spec.describe "bind_list" do
     body[:innerHTML] = '<div data-widget="bl-host"><ul data-ref="list"></ul></div>'
 
     cleaned = []
-    leaf_klass = Class.new(MRubyWasm::Widget) do
+    leaf_klass = Class.new(Grainet::Widget) do
       define_method(:setup) do
         cleanup { cleaned << refs.label.text }
       end
     end
-    host_klass = Class.new(MRubyWasm::Widget) do
+    host_klass = Class.new(Grainet::Widget) do
       attr_reader :items
       define_method(:setup) do
         @items = signal([{id: 1, t: "alpha"}, {id: 2, t: "beta"}])
@@ -192,13 +192,13 @@ Spec.describe "bind_list" do
         end
       end
     end
-    MRubyWasm.register_widget "bl-leaf", leaf_klass
-    MRubyWasm.register_widget "bl-host", host_klass
-    MRubyWasm.start
+    Grainet.register "bl-leaf", leaf_klass
+    Grainet.register "bl-host", host_klass
+    Grainet.start
     JS.eval("new Promise(r => setTimeout(r, 0))").await
 
     el = doc.call(:querySelector, "[data-widget='bl-host']")
-    inst = MRubyWasm.__widget_for_element__(el)
+    inst = Grainet.find_for_element(el)
 
     # Drop the first item; its leaf widget should run cleanup.
     inst.items.update { |arr| arr.reject { |it| it[:id] == 1 } }
@@ -215,9 +215,9 @@ Spec.describe "bind_list" do
     body[:innerHTML] = '<div data-widget="bl-dup"><ul data-ref="list"></ul></div>'
 
     msgs = []
-    MRubyWasm.warn_listener = ->(m) { msgs << m }
+    Grainet.warn_listener = ->(m) { msgs << m }
     begin
-      klass = Class.new(MRubyWasm::Widget) do
+      klass = Class.new(Grainet::Widget) do
         define_method(:setup) do
           items = signal([{id: 1, t: "a"}, {id: 1, t: "b"}])
           bind_list refs.list, items, key: ->(it) { it[:id] } do |it|
@@ -225,10 +225,10 @@ Spec.describe "bind_list" do
           end
         end
       end
-      MRubyWasm.register_widget "bl-dup", klass
-      MRubyWasm.start
+      Grainet.register "bl-dup", klass
+      Grainet.start
     ensure
-      MRubyWasm.warn_listener = nil
+      Grainet.warn_listener = nil
     end
 
     Spec.assert_true msgs.any? { |m| m.include?("duplicate keys") }

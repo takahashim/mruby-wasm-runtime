@@ -66,11 +66,11 @@ For fuller illustrations:
 - `examples/run-node.mjs` — Node smoke covering Promise chains, `await`, `addEventListener`-style callbacks
 - `examples/browser.html` — minimal browser boot smoke
 - `examples/demo.html` — interactive page with a live clock, name greeter, and click counter (~30 lines of Ruby driving the DOM)
-- `examples/widget-counter.html` — `MRubyWasm::Widget` counter using `signal` + `bind`
-- `examples/widget-form.html` — signup form with class binding, validation, and a bubbling custom event caught by an outer `activity-log` widget
-- `examples/widget-todo.html` — todo list driven by `bind_list` (key-based diffing): items are a `signal` of hashes; adds/removes patch the DOM in place rather than rebuilding it
-- `examples/widget-theme.html` — `provide` / `inject` theme propagation: an outer `theme-app` publishes a signal that descendant cards and badges read by key, with no prop-drilling
-- `examples/widget-search.html` — JSON-driven filter UI: loads `data/countries.json` via `MRubyWasm.fetch_json`, computes a filtered list as a `memo`, renders with `bind_list`. Demonstrates the fetch helper plus `JS::Object#to_ruby`
+- `examples/grainet-counter.html` — `Grainet::Widget` counter using `signal` + `bind`
+- `examples/grainet-form.html` — signup form with class binding, validation, and a bubbling custom event caught by an outer `activity-log` widget
+- `examples/grainet-todo.html` — todo list driven by `bind_list` (key-based diffing): items are a `signal` of hashes; adds/removes patch the DOM in place rather than rebuilding it
+- `examples/grainet-theme.html` — `provide` / `inject` theme propagation: an outer `theme-app` publishes a signal that descendant cards and badges read by key, with no prop-drilling
+- `examples/grainet-search.html` — JSON-driven filter UI: loads `data/countries.json` via `Fetchy.json`, computes a filtered list as a `memo`, renders with `bind_list`. Demonstrates the bundled HTTP client plus `JS::Object#to_ruby`
 
 To open the browser samples, run `make serve` and visit
 `http://localhost:8001/examples/demo.html`.

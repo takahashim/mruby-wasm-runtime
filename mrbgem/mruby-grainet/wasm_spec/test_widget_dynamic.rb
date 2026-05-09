@@ -5,11 +5,11 @@ Spec.describe "Dynamic mount/unmount via MutationObserver" do
     body[:innerHTML] = '<div id="container"></div>'
 
     mounted = 0
-    klass = Class.new(MRubyWasm::Widget) do
+    klass = Class.new(Grainet::Widget) do
       define_method(:setup) { mounted += 1 }
     end
-    MRubyWasm.register_widget "dyn-mount", klass
-    MRubyWasm.start
+    Grainet.register "dyn-mount", klass
+    Grainet.start
 
     container = doc.call(:querySelector, "#container")
     new_el = doc.call(:createElement, "div")
@@ -28,13 +28,13 @@ Spec.describe "Dynamic mount/unmount via MutationObserver" do
     body[:innerHTML] = '<div data-widget="dyn-unmount"></div>'
 
     cleaned = 0
-    klass = Class.new(MRubyWasm::Widget) do
+    klass = Class.new(Grainet::Widget) do
       define_method(:setup) do
         cleanup { cleaned += 1 }
       end
     end
-    MRubyWasm.register_widget "dyn-unmount", klass
-    MRubyWasm.start
+    Grainet.register "dyn-unmount", klass
+    Grainet.start
 
     el = doc.call(:querySelector, "[data-widget='dyn-unmount']")
     el.call(:remove)

@@ -8,7 +8,7 @@ Spec.describe "bind class:" do
       </div>
     HTML
 
-    klass = Class.new(MRubyWasm::Widget) do
+    klass = Class.new(Grainet::Widget) do
       attr_reader :invalid, :dirty
       define_method(:setup) do
         @invalid = signal(false)
@@ -16,11 +16,11 @@ Spec.describe "bind class:" do
         bind refs.field, class: { "is-invalid" => @invalid, "is-dirty" => @dirty }
       end
     end
-    MRubyWasm.register_widget "bind-class", klass
-    MRubyWasm.start
+    Grainet.register "bind-class", klass
+    Grainet.start
 
     el = doc.call(:querySelector, "[data-widget='bind-class']")
-    inst = MRubyWasm.__widget_for_element__(el)
+    inst = Grainet.find_for_element(el)
     field = doc.call(:querySelector, "[data-ref='field']")
 
     cls = -> { field[:className].to_s }
@@ -51,7 +51,7 @@ Spec.describe "bind class:" do
     body[:innerHTML] = '<div data-widget="bind-class-bad"><span data-ref="x"></span></div>'
 
     captured = nil
-    klass = Class.new(MRubyWasm::Widget) do
+    klass = Class.new(Grainet::Widget) do
       define_method(:setup) do
         sig = signal("foo")
         begin
@@ -62,11 +62,11 @@ Spec.describe "bind class:" do
       end
       define_method(:captured_message) { @captured }
     end
-    MRubyWasm.register_widget "bind-class-bad", klass
-    MRubyWasm.start
+    Grainet.register "bind-class-bad", klass
+    Grainet.start
 
     el = doc.call(:querySelector, "[data-widget='bind-class-bad']")
-    inst = MRubyWasm.__widget_for_element__(el)
+    inst = Grainet.find_for_element(el)
     Spec.assert_true inst.captured_message.include?("class:")
 
     body[:innerHTML] = ""
@@ -83,7 +83,7 @@ Spec.describe "bind style:" do
       </div>
     HTML
 
-    klass = Class.new(MRubyWasm::Widget) do
+    klass = Class.new(Grainet::Widget) do
       attr_reader :color, :size
       define_method(:setup) do
         @color = signal("red")
@@ -91,11 +91,11 @@ Spec.describe "bind style:" do
         bind refs.box, style: { "color" => @color, "font-size" => @size }
       end
     end
-    MRubyWasm.register_widget "bind-style", klass
-    MRubyWasm.start
+    Grainet.register "bind-style", klass
+    Grainet.start
 
     el = doc.call(:querySelector, "[data-widget='bind-style']")
-    inst = MRubyWasm.__widget_for_element__(el)
+    inst = Grainet.find_for_element(el)
     box = doc.call(:querySelector, "[data-ref='box']")
     read = ->(prop) { box[:style].call(:getPropertyValue, prop).to_s }
 

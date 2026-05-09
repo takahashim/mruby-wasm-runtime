@@ -24,12 +24,12 @@ globalThis.fetch = async (url) => {
   });
 };
 
-// --- DOM shim (happy-dom) for widget specs -------------------------------
+// --- DOM shim (happy-dom) for Grainet widget specs -----------------------
 // happy-dom is a devDependency of the repo root package.json.
 //
 // We only expose `document` on the host globalThis. CustomEvent /
 // MutationObserver / Event are read from `document.defaultView` (the
-// happy-dom Window instance) by the Ruby widget layer, so we avoid
+// happy-dom Window instance) by the Ruby Grainet layer, so we avoid
 // shadowing Node's built-in Event constructor and breaking the existing
 // EventTarget tests.
 const { Window } = await import("happy-dom");
@@ -82,7 +82,7 @@ assert(!vm.fs.has("/data"), "fs.has returns false for directories");
 
 // --- Load spec_helper + all test_*.rb -------------------------------------
 const testDir = here;
-const widgetSpecDir = resolve(here, "../../mruby-widget/wasm_spec");
+const grainetSpecDir = resolve(here, "../../mruby-grainet/wasm_spec");
 const helper = "spec_helper.rb";
 
 console.log(`[runner] loading ${helper}`);
@@ -110,7 +110,7 @@ async function runDir(dir, label) {
 }
 
 await runDir(testDir, "mruby-wasm-js");
-await runDir(widgetSpecDir, "mruby-widget");
+await runDir(grainetSpecDir, "mruby-grainet");
 
 // Wait so any pending Promises (await tests, real-async setTimeout
 // inside tests) have time to settle before we print the summary.

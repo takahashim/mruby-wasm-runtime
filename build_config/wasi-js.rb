@@ -77,7 +77,7 @@ MRuby::CrossBuild.new(build_name) do |conf|
   conf.gem core: "mruby-random"
 
   conf.gem File.expand_path("../mrbgem/mruby-wasm-js", __dir__)
-  conf.gem File.expand_path("../mrbgem/mruby-widget", __dir__)
+  conf.gem File.expand_path("../mrbgem/mruby-grainet", __dir__)
   # Ruby surface for WASI primitives that mruby core doesn't ship.
   conf.gem File.expand_path("../mrbgem/mruby-wasi-dir", __dir__)
   conf.gem File.expand_path("../mrbgem/mruby-wasi-env", __dir__)

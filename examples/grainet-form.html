@@ -101,7 +101,7 @@
       try {
         const vm = await createVM({ wasm: "../build/mruby-js.wasm" });
         vm.eval(`
-class SignupForm < MRubyWasm::Widget
+class SignupForm < Grainet::Widget
   def setup
     @email = signal("")
     @password = signal("")
@@ -170,7 +170,7 @@ class SignupForm < MRubyWasm::Widget
   end
 end
 
-class ActivityLog < MRubyWasm::Widget
+class ActivityLog < Grainet::Widget
   def setup
     @count = signal(0)
     @last_email = signal("")
@@ -194,9 +194,9 @@ class ActivityLog < MRubyWasm::Widget
   end
 end
 
-MRubyWasm.register_widget "signup-form",  SignupForm
-MRubyWasm.register_widget "activity-log", ActivityLog
-MRubyWasm.start
+Grainet.register "signup-form",  SignupForm
+Grainet.register "activity-log", ActivityLog
+Grainet.start
 puts "form demo mounted"
 `);
         boot.textContent = "ready — fill the form to see live validation";

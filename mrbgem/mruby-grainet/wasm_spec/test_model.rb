@@ -8,18 +8,18 @@ Spec.describe "model (two-way binding)" do
       </div>
     HTML
 
-    klass = Class.new(MRubyWasm::Widget) do
+    klass = Class.new(Grainet::Widget) do
       attr_reader :email
       define_method(:setup) do
         @email = signal("init@example.com")
         model refs.email, @email
       end
     end
-    MRubyWasm.register_widget "model-text", klass
-    MRubyWasm.start
+    Grainet.register "model-text", klass
+    Grainet.start
 
     el = doc.call(:querySelector, "[data-widget='model-text']")
-    inst = MRubyWasm.__widget_for_element__(el)
+    inst = Grainet.find_for_element(el)
     input = doc.call(:querySelector, "input[data-ref='email']")
 
     # signal -> DOM (initial)
@@ -47,18 +47,18 @@ Spec.describe "model (two-way binding)" do
       </div>
     HTML
 
-    klass = Class.new(MRubyWasm::Widget) do
+    klass = Class.new(Grainet::Widget) do
       attr_reader :flag
       define_method(:setup) do
         @flag = signal(false)
         model refs.cb, @flag, property: :checked
       end
     end
-    MRubyWasm.register_widget "model-cb", klass
-    MRubyWasm.start
+    Grainet.register "model-cb", klass
+    Grainet.start
 
     el = doc.call(:querySelector, "[data-widget='model-cb']")
-    inst = MRubyWasm.__widget_for_element__(el)
+    inst = Grainet.find_for_element(el)
     cb = doc.call(:querySelector, "[data-ref='cb']")
 
     Spec.assert_equal false, cb[:checked].to_s == "true"

@@ -59,7 +59,7 @@
         const vm = await createVM({ wasm: "../build/mruby-js.wasm" });
 
         vm.eval(`
-class Counter < MRubyWasm::Widget
+class Counter < Grainet::Widget
   def setup
     @count = signal(0)
 
@@ -82,8 +82,8 @@ class Counter < MRubyWasm::Widget
   end
 end
 
-MRubyWasm.register_widget "counter", Counter
-MRubyWasm.start
+Grainet.register "counter", Counter
+Grainet.start
 puts "counter widget mounted"
 `);
         status.textContent = "ready";

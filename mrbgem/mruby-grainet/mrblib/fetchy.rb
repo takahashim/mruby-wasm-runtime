@@ -1,11 +1,11 @@
 # Fetchy — small Ky-style HTTP client over `window.fetch`.
 #
-# Independent of the MRubyWasm widget layer. Depends only on:
+# Independent of the Grainet widget layer. Depends only on:
 #
 #   - mruby-wasm-js: `JS.global`, `JS.callback`, `JS.object`,
 #                     `JS.__run_in_fiber__`, `JS::Object#await`
 #   - JS::Object#to_ruby and #js_bool — provided by
-#     MRubyWasm::JsValueExtensions in this gem; trivial to inline if
+#     Grainet::JsValueExtensions in this gem; trivial to inline if
 #     Fetchy is ever extracted into its own gem.
 #
 # Class methods for one-shot calls; instances carry shared base URL /

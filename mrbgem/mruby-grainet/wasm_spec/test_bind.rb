@@ -8,18 +8,18 @@ Spec.describe "bind" do
       </div>
     HTML
 
-    klass = Class.new(MRubyWasm::Widget) do
+    klass = Class.new(Grainet::Widget) do
       attr_reader :name
       define_method(:setup) do
         @name = signal("Alice")
         bind refs.out, text: @name
       end
     end
-    MRubyWasm.register_widget "bind-text", klass
-    MRubyWasm.start
+    Grainet.register "bind-text", klass
+    Grainet.start
 
     el = doc.call(:querySelector, "[data-widget='bind-text']")
-    inst = MRubyWasm.__widget_for_element__(el)
+    inst = Grainet.find_for_element(el)
     out = doc.call(:querySelector, "span[data-ref='out']")
     Spec.assert_equal "Alice", out[:textContent].to_s
     inst.name.value = "Bob"
@@ -37,7 +37,7 @@ Spec.describe "bind" do
       </div>
     HTML
 
-    klass = Class.new(MRubyWasm::Widget) do
+    klass = Class.new(Grainet::Widget) do
       attr_reader :n
       define_method(:setup) do
         @n = signal(0)
@@ -50,11 +50,11 @@ Spec.describe "bind" do
         end
       end
     end
-    MRubyWasm.register_widget "bind-block", klass
-    MRubyWasm.start
+    Grainet.register "bind-block", klass
+    Grainet.start
 
     el = doc.call(:querySelector, "[data-widget='bind-block']")
-    inst = MRubyWasm.__widget_for_element__(el)
+    inst = Grainet.find_for_element(el)
     p_el = doc.call(:querySelector, "p[data-ref='msg']")
     Spec.assert_equal "zero", p_el[:textContent].to_s
     inst.n.value = 5
@@ -76,7 +76,7 @@ Spec.describe "bind" do
       </div>
     HTML
 
-    klass = Class.new(MRubyWasm::Widget) do
+    klass = Class.new(Grainet::Widget) do
       attr_reader :err_hidden, :busy, :ok
       define_method(:setup) do
         @err_hidden = signal(false)
@@ -87,11 +87,11 @@ Spec.describe "bind" do
         bind refs.cb, checked: @ok
       end
     end
-    MRubyWasm.register_widget "bind-bools", klass
-    MRubyWasm.start
+    Grainet.register "bind-bools", klass
+    Grainet.start
 
     el = doc.call(:querySelector, "[data-widget='bind-bools']")
-    inst = MRubyWasm.__widget_for_element__(el)
+    inst = Grainet.find_for_element(el)
     err = doc.call(:querySelector, "[data-ref='err']")
     submit = doc.call(:querySelector, "[data-ref='submit']")
     cb = doc.call(:querySelector, "[data-ref='cb']")

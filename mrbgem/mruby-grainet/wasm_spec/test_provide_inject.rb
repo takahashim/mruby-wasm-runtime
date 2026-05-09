@@ -10,14 +10,14 @@ Spec.describe "provide / inject" do
       </div>
     HTML
 
-    parent_klass = Class.new(MRubyWasm::Widget) do
+    parent_klass = Class.new(Grainet::Widget) do
       attr_reader :theme
       define_method(:provides) do
         @theme = signal("light")
         provide :theme, @theme
       end
     end
-    leaf_klass = Class.new(MRubyWasm::Widget) do
+    leaf_klass = Class.new(Grainet::Widget) do
       define_method(:setup) do
         theme = inject(:theme)
         bind refs.label, :text do
@@ -26,16 +26,16 @@ Spec.describe "provide / inject" do
       end
     end
 
-    MRubyWasm.register_widget "pi-app", parent_klass
-    MRubyWasm.register_widget "pi-leaf", leaf_klass
-    MRubyWasm.start
+    Grainet.register "pi-app", parent_klass
+    Grainet.register "pi-leaf", leaf_klass
+    Grainet.start
 
     label = doc.call(:querySelector, "[data-ref='label']")
     Spec.assert_equal "light", label[:textContent].to_s
 
     # Mutating the provided signal updates the descendant via inject
     parent_el = doc.call(:querySelector, "[data-widget='pi-app']")
-    parent_inst = MRubyWasm.__widget_for_element__(parent_el)
+    parent_inst = Grainet.find_for_element(parent_el)
     parent_inst.theme.value = "dark"
     Spec.assert_equal "dark", label[:textContent].to_s
 
@@ -55,24 +55,24 @@ Spec.describe "provide / inject" do
       </div>
     HTML
 
-    outer_klass = Class.new(MRubyWasm::Widget) do
+    outer_klass = Class.new(Grainet::Widget) do
       define_method(:provides) { provide :name, "outer" }
     end
-    inner_klass = Class.new(MRubyWasm::Widget) do
+    inner_klass = Class.new(Grainet::Widget) do
       define_method(:provides) { provide :name, "inner" }
     end
-    grand_klass = Class.new(MRubyWasm::Widget) do
+    grand_klass = Class.new(Grainet::Widget) do
       attr_reader :seen
       define_method(:setup) { @seen = inject(:name) }
     end
 
-    MRubyWasm.register_widget "pi-outer", outer_klass
-    MRubyWasm.register_widget "pi-inner", inner_klass
-    MRubyWasm.register_widget "pi-grand", grand_klass
-    MRubyWasm.start
+    Grainet.register "pi-outer", outer_klass
+    Grainet.register "pi-inner", inner_klass
+    Grainet.register "pi-grand", grand_klass
+    Grainet.start
 
     grand_el = doc.call(:querySelector, "[data-widget='pi-grand']")
-    grand_inst = MRubyWasm.__widget_for_element__(grand_el)
+    grand_inst = Grainet.find_for_element(grand_el)
     Spec.assert_equal "inner", grand_inst.seen
 
     body[:innerHTML] = ""
@@ -84,21 +84,21 @@ Spec.describe "provide / inject" do
     body[:innerHTML] = '<div data-widget="pi-orphan"><span data-ref="x"></span></div>'
 
     captured = nil
-    klass = Class.new(MRubyWasm::Widget) do
+    klass = Class.new(Grainet::Widget) do
       define_method(:setup) do
         begin
           inject(:missing)
-        rescue MRubyWasm::Error => e
+        rescue Grainet::Error => e
           @err = e.message
         end
       end
       define_method(:err) { @err }
     end
-    MRubyWasm.register_widget "pi-orphan", klass
-    MRubyWasm.start
+    Grainet.register "pi-orphan", klass
+    Grainet.start
 
     el = doc.call(:querySelector, "[data-widget='pi-orphan']")
-    inst = MRubyWasm.__widget_for_element__(el)
+    inst = Grainet.find_for_element(el)
     Spec.assert_true inst.err.include?("missing")
     Spec.assert_true inst.err.include?("inject")
 
@@ -110,14 +110,14 @@ Spec.describe "provide / inject" do
     body = doc[:body]
     body[:innerHTML] = '<div data-widget="pi-default"></div>'
 
-    klass = Class.new(MRubyWasm::Widget) do
+    klass = Class.new(Grainet::Widget) do
       attr_reader :v
       define_method(:setup) { @v = inject(:flag, "fallback") }
     end
-    MRubyWasm.register_widget "pi-default", klass
-    MRubyWasm.start
+    Grainet.register "pi-default", klass
+    Grainet.start
 
-    inst = MRubyWasm.__widget_for_element__(
+    inst = Grainet.find_for_element(
       doc.call(:querySelector, "[data-widget='pi-default']"))
     Spec.assert_equal "fallback", inst.v
 
@@ -130,7 +130,7 @@ Spec.describe "provide / inject" do
     body[:innerHTML] = '<div data-widget="pi-block"></div>'
 
     factory_calls = 0
-    klass = Class.new(MRubyWasm::Widget) do
+    klass = Class.new(Grainet::Widget) do
       attr_reader :v
       define_method(:setup) do
         @v = inject(:thing) do
@@ -139,10 +139,10 @@ Spec.describe "provide / inject" do
         end
       end
     end
-    MRubyWasm.register_widget "pi-block", klass
-    MRubyWasm.start
+    Grainet.register "pi-block", klass
+    Grainet.start
 
-    inst = MRubyWasm.__widget_for_element__(
+    inst = Grainet.find_for_element(
       doc.call(:querySelector, "[data-widget='pi-block']"))
     Spec.assert_equal "made-fresh", inst.v
     Spec.assert_equal 1, factory_calls
@@ -162,23 +162,23 @@ Spec.describe "provide / inject" do
     HTML
 
     log = []
-    parent_klass = Class.new(MRubyWasm::Widget) do
+    parent_klass = Class.new(Grainet::Widget) do
       define_method(:provides) { log << :parent_provides }
       define_method(:setup)    { log << :parent_setup }
     end
-    child_klass = Class.new(MRubyWasm::Widget) do
+    child_klass = Class.new(Grainet::Widget) do
       define_method(:provides) { log << :child_provides }
       define_method(:setup)    { log << :child_setup }
     end
-    grand_klass = Class.new(MRubyWasm::Widget) do
+    grand_klass = Class.new(Grainet::Widget) do
       define_method(:provides) { log << :grand_provides }
       define_method(:setup)    { log << :grand_setup }
     end
 
-    MRubyWasm.register_widget "pi-order-parent", parent_klass
-    MRubyWasm.register_widget "pi-order-child",  child_klass
-    MRubyWasm.register_widget "pi-order-grand",  grand_klass
-    MRubyWasm.start
+    Grainet.register "pi-order-parent", parent_klass
+    Grainet.register "pi-order-child",  child_klass
+    Grainet.register "pi-order-grand",  grand_klass
+    Grainet.start
 
     Spec.assert_equal(
       [:parent_provides, :child_provides, :grand_provides,
@@ -194,19 +194,19 @@ Spec.describe "provide / inject" do
     body = doc[:body]
     body[:innerHTML] = '<div data-widget="pi-dyn-host"><div id="slot"></div></div>'
 
-    host_klass = Class.new(MRubyWasm::Widget) do
+    host_klass = Class.new(Grainet::Widget) do
       define_method(:provides) { provide :token, "host-token" }
     end
     captured = nil
-    inserted_klass = Class.new(MRubyWasm::Widget) do
+    inserted_klass = Class.new(Grainet::Widget) do
       define_method(:setup) do
         captured = inject(:token)
       end
     end
 
-    MRubyWasm.register_widget "pi-dyn-host", host_klass
-    MRubyWasm.register_widget "pi-dyn-inserted", inserted_klass
-    MRubyWasm.start
+    Grainet.register "pi-dyn-host", host_klass
+    Grainet.register "pi-dyn-inserted", inserted_klass
+    Grainet.start
 
     slot = doc.call(:querySelector, "#slot")
     new_el = doc.call(:createElement, "div")

@@ -14,15 +14,15 @@ Spec.describe "Nested widgets" do
     parent_titles = []
     child_titles = []
 
-    parent_klass = Class.new(MRubyWasm::Widget) do
+    parent_klass = Class.new(Grainet::Widget) do
       define_method(:setup) { parent_titles << refs.title.text }
     end
-    child_klass = Class.new(MRubyWasm::Widget) do
+    child_klass = Class.new(Grainet::Widget) do
       define_method(:setup) { child_titles << refs.title.text }
     end
-    MRubyWasm.register_widget "parent-w", parent_klass
-    MRubyWasm.register_widget "child-w", child_klass
-    MRubyWasm.start
+    Grainet.register "parent-w", parent_klass
+    Grainet.register "child-w", child_klass
+    Grainet.start
 
     Spec.assert_equal ["parent title"], parent_titles
     Spec.assert_equal ["child title"], child_titles
@@ -40,19 +40,19 @@ Spec.describe "Nested widgets" do
     HTML
 
     order = []
-    child_klass = Class.new(MRubyWasm::Widget) do
+    child_klass = Class.new(Grainet::Widget) do
       define_method(:setup) { order << :child }
       define_method(:hello) { "hi" }
     end
-    parent_klass = Class.new(MRubyWasm::Widget) do
+    parent_klass = Class.new(Grainet::Widget) do
       define_method(:setup) do
         order << :parent
         order << refs.kid.widget.hello
       end
     end
-    MRubyWasm.register_widget "po-child", child_klass
-    MRubyWasm.register_widget "po-parent", parent_klass
-    MRubyWasm.start
+    Grainet.register "po-child", child_klass
+    Grainet.register "po-parent", parent_klass
+    Grainet.start
 
     Spec.assert_equal [:child, :parent, "hi"], order
 
@@ -71,19 +71,19 @@ Spec.describe "Nested widgets" do
     HTML
 
     received = []
-    child_klass = Class.new(MRubyWasm::Widget) do
+    child_klass = Class.new(Grainet::Widget) do
       define_method(:setup) do
         refs.btn.on(:click) { root.dispatch(:dismissed, detail: { id: 7 }, bubbles: true) }
       end
     end
-    parent_klass = Class.new(MRubyWasm::Widget) do
+    parent_klass = Class.new(Grainet::Widget) do
       define_method(:setup) do
         root.on(:dismissed) { |ev| received << ev[:detail][:id].to_i }
       end
     end
-    MRubyWasm.register_widget "bubble-parent", parent_klass
-    MRubyWasm.register_widget "bubble-child", child_klass
-    MRubyWasm.start
+    Grainet.register "bubble-parent", parent_klass
+    Grainet.register "bubble-child", child_klass
+    Grainet.start
 
     doc.call(:querySelector, "button[data-ref='btn']").call(:click)
     Spec.assert_equal [7], received
@@ -103,17 +103,17 @@ Spec.describe "Nested widgets" do
     HTML
 
     log = []
-    child_klass = Class.new(MRubyWasm::Widget) do
+    child_klass = Class.new(Grainet::Widget) do
       define_method(:setup) { cleanup { log << :child_cleanup } }
     end
-    parent_klass = Class.new(MRubyWasm::Widget) do
+    parent_klass = Class.new(Grainet::Widget) do
       define_method(:setup) do
         cleanup { log << :parent_cleanup }
       end
     end
-    MRubyWasm.register_widget "td-parent", parent_klass
-    MRubyWasm.register_widget "td-child", child_klass
-    MRubyWasm.start
+    Grainet.register "td-parent", parent_klass
+    Grainet.register "td-child", child_klass
+    Grainet.start
 
     el = doc.call(:querySelector, "[data-widget='td-parent']")
     el.call(:remove)

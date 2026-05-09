@@ -85,7 +85,7 @@
       try {
         const vm = await createVM({ wasm: "../build/mruby-js.wasm" });
         vm.eval(`
-class ThemeApp < MRubyWasm::Widget
+class ThemeApp < Grainet::Widget
   # provides runs in pre-order — before any descendant's setup. By the
   # time a child calls inject(:theme), this signal is already in scope.
   def provides
@@ -104,7 +104,7 @@ class ThemeApp < MRubyWasm::Widget
   end
 end
 
-class ThemeCard < MRubyWasm::Widget
+class ThemeCard < Grainet::Widget
   def setup
     @theme = inject(:theme)
 
@@ -114,7 +114,7 @@ class ThemeCard < MRubyWasm::Widget
   end
 end
 
-class ThemeBadge < MRubyWasm::Widget
+class ThemeBadge < Grainet::Widget
   def setup
     @theme = inject(:theme)
 
@@ -124,10 +124,10 @@ class ThemeBadge < MRubyWasm::Widget
   end
 end
 
-MRubyWasm.register_widget "theme-app",   ThemeApp
-MRubyWasm.register_widget "theme-card",  ThemeCard
-MRubyWasm.register_widget "theme-badge", ThemeBadge
-MRubyWasm.start
+Grainet.register "theme-app",   ThemeApp
+Grainet.register "theme-card",  ThemeCard
+Grainet.register "theme-badge", ThemeBadge
+Grainet.start
 puts "theme demo mounted"
 `);
         boot.textContent = "ready — click 'Toggle theme'";

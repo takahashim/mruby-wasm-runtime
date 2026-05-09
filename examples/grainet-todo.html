@@ -83,7 +83,7 @@
 # Each <li> is its own widget. lifecycle scoped to the row: when
 # bind_list removes the <li>, the MutationObserver unmounts this and
 # the click handler / cleanup is released.
-class TodoItem < MRubyWasm::Widget
+class TodoItem < Grainet::Widget
   def setup
     refs.dismiss.on(:click) do
       # bubbles: true lets the event cross the data-widget boundary up
@@ -94,7 +94,7 @@ class TodoItem < MRubyWasm::Widget
   end
 end
 
-class TodoList < MRubyWasm::Widget
+class TodoList < Grainet::Widget
   def setup
     @next_id = signal(3)
     @items   = signal([
@@ -150,9 +150,9 @@ class TodoList < MRubyWasm::Widget
   end
 end
 
-MRubyWasm.register_widget "todo-list", TodoList
-MRubyWasm.register_widget "todo-item", TodoItem
-MRubyWasm.start
+Grainet.register "todo-list", TodoList
+Grainet.register "todo-item", TodoItem
+Grainet.start
 puts "todo demo (bind_list) mounted"
 `);
         boot.textContent = "ready — type and press Enter / click Add";

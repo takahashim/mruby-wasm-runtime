@@ -84,7 +84,7 @@ Spec.describe "JS::Object#to_ruby" do
 
   Spec.assert "frozen result still works with Signal#update (gets a new dup)" do
     js = JS.eval('([1, 2, 3])')
-    s = MRubyWasm::Reactive::Signal.new(js.to_ruby)   # frozen Array
+    s = Grainet::Signal.new(js.to_ruby)   # frozen Array
 
     # update receives a frozen view, but `+ [4]` returns a new array,
     # so the update flow is unaffected.

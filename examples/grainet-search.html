@@ -63,7 +63,7 @@
   <body>
     <h1>JSON 絞り込みデモ</h1>
     <p class="lede">
-      <code>MRubyWasm.fetch_json</code> で
+      <code>Fetchy.json</code> で
       <code>./data/countries.json</code> を読み、検索ボックスとリージョン
       フィルタの組み合わせを <code>memo</code> で計算、
       <code>bind_list</code> で差分描画する。
@@ -93,7 +93,7 @@
       try {
         const vm = await createVM({ wasm: "../build/mruby-js.wasm" });
         vm.eval(`
-class CountryPicker < MRubyWasm::Widget
+class CountryPicker < Grainet::Widget
   def setup
     @query   = signal("")
     @region  = signal("")
@@ -158,8 +158,8 @@ class CountryPicker < MRubyWasm::Widget
   end
 end
 
-MRubyWasm.register_widget "country-picker", CountryPicker
-MRubyWasm.start
+Grainet.register "country-picker", CountryPicker
+Grainet.start
 puts "search demo mounted"
 `);
         boot.textContent = "ready — try typing or filtering by region";
