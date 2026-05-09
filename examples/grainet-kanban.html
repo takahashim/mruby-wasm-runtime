@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>mruby-widget — Kanban demo (DnD + localStorage)</title>
+    <style>
+      :root {
+        --bg: #fafafa; --panel: #fff; --border: #e5e5e5;
+        --accent: #b94f3f; --muted: #888; --text: #222;
+        --err-bg: #fdecea; --err-border: #c4452f;
+      }
+      * { box-sizing: border-box; }
+      body {
+        font-family: system-ui, -apple-system, sans-serif;
+        max-width: 960px; margin: 0 auto; padding: 2em 1em;
+        line-height: 1.55; color: var(--text); background: var(--bg);
+      }
+      h1 { margin: 0 0 0.3em 0; }
+      .lede { color: var(--muted); margin-top: 0; }
+      .error-dialog {
+        background: var(--err-bg); border: 1px solid var(--err-border);
+        border-radius: 8px; padding: 0.8em 1em; margin: 1em 0;
+        display: flex; flex-direction: column; gap: 0.5em;
+      }
+      .error-dialog strong { color: var(--err-border); }
+      .error-dialog pre {
+        margin: 0; font-size: 0.85em; white-space: pre-wrap;
+        background: var(--panel); padding: 0.5em 0.7em; border-radius: 6px;
+        border: 1px solid var(--border);
+      }
+      .error-dialog button {
+        align-self: flex-end; font-size: 0.9em; padding: 0.3em 0.8em;
+        border-radius: 6px; border: 1px solid var(--err-border);
+        background: white; color: var(--err-border); cursor: pointer;
+      }
+      .board {
+        display: grid; grid-template-columns: repeat(3, 1fr); gap: 1em;
+        margin-top: 1em;
+      }
+      .column {
+        background: var(--panel); padding: 1em; border-radius: 10px;
+        border: 1px solid var(--border);
+        display: flex; flex-direction: column; gap: 0.6em;
+        min-height: 12em;
+      }
+      .column.drag-over { border-color: var(--accent); background: #fff5f3; }
+      .column h2 {
+        margin: 0; font-size: 1em; display: flex; gap: 0.4em;
+        align-items: baseline;
+      }
+      .column h2 .count {
+        color: var(--muted); font-size: 0.8em; font-weight: normal;
+      }
+      ul.cards {
+        list-style: none; padding: 0; margin: 0; flex: 1;
+        display: flex; flex-direction: column; gap: 0.4em;
+      }
+      ul.cards li {
+        display: flex; align-items: center; gap: 0.5em;
+        padding: 0.5em 0.7em; border-radius: 6px;
+        background: var(--bg); border: 1px solid var(--border);
+        cursor: grab;
+      }
+      ul.cards li:active { cursor: grabbing; opacity: 0.6; }
+      ul.cards li span { flex: 1; }
+      .dismiss {
+        background: transparent; border: 1px solid transparent;
+        color: var(--muted); font-size: 1.1em; line-height: 1;
+        padding: 0.1em 0.4em; cursor: pointer;
+      }
+      .dismiss:hover { color: var(--accent); border-color: var(--border); }
+      .add-form { display: flex; gap: 0.4em; }
+      .add-form input[type="text"] {
+        flex: 1; font-size: 0.95em; padding: 0.4em 0.6em;
+        border: 1px solid var(--border); border-radius: 6px;
+      }
+      .add-form button {
+        font-size: 0.9em; padding: 0.4em 0.8em; border-radius: 6px;
+        border: 1px solid var(--accent); background: var(--accent);
+        color: white; cursor: pointer;
+      }
+      .add-form button:hover { opacity: 0.88; }
+      #boot { color: var(--muted); font-size: 0.85em; margin-top: 2em; }
+    </style>
+  </head>
+  <body>
+    <h1>mruby-widget — Kanban demo</h1>
+    <p class="lede">
+      3 列の Kanban。カードを drag-and-drop で列間移動でき、
+      内容は <code>localStorage</code> に自動保存される。子 widget の
+      例外は <code>on_error</code> 経由でダイアログに表示。
+      <code>provide</code> / <code>inject</code> で <code>@cards</code>
+      signal を共有し、各列は <code>memo</code> で自分の status を filter
+      した view を <code>bind_list</code> でレンダリング。
+    </p>
+
+    <div data-widget="kanban-board">
+      <!-- on_error ハンドラがメッセージを @error_message に流し込み、
+           ここに表示される。Dismiss でクリア。 -->
+      <div data-ref="error_dialog" class="error-dialog" hidden>
+        <strong>Something went wrong</strong>
+        <pre data-ref="error_text"></pre>
+        <button data-ref="error_dismiss" type="button">Dismiss</button>
+      </div>
+
+      <div class="board">
+        <div data-widget="kanban-column" data-status="todo" class="column">
+          <h2>Todo <span data-ref="count" class="count">0</span></h2>
+          <ul data-ref="list" class="cards"></ul>
+          <form data-ref="add_form" class="add-form" onsubmit="return false">
+            <input data-ref="add_input" type="text" placeholder="New card…">
+            <button data-ref="add_button" type="button">Add</button>
+          </form>
+        </div>
+        <div data-widget="kanban-column" data-status="doing" class="column">
+          <h2>Doing <span data-ref="count" class="count">0</span></h2>
+          <ul data-ref="list" class="cards"></ul>
+          <form data-ref="add_form" class="add-form" onsubmit="return false">
+            <input data-ref="add_input" type="text">
+            <button data-ref="add_button" type="button">Add</button>
+          </form>
+        </div>
+        <div data-widget="kanban-column" data-status="done" class="column">
+          <h2>Done <span data-ref="count" class="count">0</span></h2>
+          <ul data-ref="list" class="cards"></ul>
+          <form data-ref="add_form" class="add-form" onsubmit="return false">
+            <input data-ref="add_input" type="text">
+            <button data-ref="add_button" type="button">Add</button>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <template data-template="card-row">
+      <li data-widget="kanban-card" draggable="true">
+        <span data-ref="title"></span>
+        <button data-ref="delete" class="dismiss" type="button" aria-label="delete">×</button>
+      </li>
+    </template>
+
+    <p id="boot">booting…</p>
+
+    <script type="module">
+      import { createVM } from "../mrbgem/mruby-wasm-js/js/index.js";
+      const boot = document.getElementById("boot");
+      try {
+        const vm = await createVM({ wasm: "../build/mruby-js.wasm" });
+        vm.eval(`
+# Per-card widget. Mounted by MO when bind_list inserts the cloned
+# template into a column. Auto-cleanup of dragstart / click listeners
+# on unmount (e.g. when status changes and the card moves to another
+# column → removed from one bind_list, inserted in another).
+class KanbanCard < Grainet::Widget
+  def setup
+    root.on(:dragstart) do |event|
+      id = root.to_js.call(:getAttribute, "data-id").to_s
+      event[:dataTransfer].call(:setData, "text/plain", id)
+      event[:dataTransfer][:effectAllowed] = "move"
+    end
+
+    refs.delete.on(:click) do
+      id = root.to_js.call(:getAttribute, "data-id").to_s.to_i
+      root.dispatch("card:deleted", detail: { "id" => id }, bubbles: true)
+    end
+  end
+end
+
+class KanbanColumn < Grainet::Widget
+  def setup
+    @cards = inject(:cards)
+    status = root.to_js.call(:getAttribute, "data-status").to_s
+
+    @filtered = memo { @cards.value.select { |c| c["status"] == status } }
+    bind refs.count, text: memo { @filtered.value.length }
+
+    bind_list refs.list, @filtered, key: "id", template: "card-row" do |card, t|
+      t.set_attribute("data-id", card["id"])
+      t.refs.title.text = card["title"]
+    end
+
+    # Drop target: any abort-allowed dragover defaults to "no drop", so
+    # we must preventDefault explicitly to make the area droppable.
+    root.on(:dragover) do |event|
+      event.call(:preventDefault)
+      event[:dataTransfer][:dropEffect] = "move"
+      root.toggle_class("drag-over", true)
+    end
+    root.on(:dragleave) do |_event|
+      root.toggle_class("drag-over", false)
+    end
+    root.on(:drop) do |event|
+      event.call(:preventDefault)
+      root.toggle_class("drag-over", false)
+      id = event[:dataTransfer].call(:getData, "text/plain").to_s.to_i
+      root.dispatch("card:moved",
+                    detail: { "id" => id, "status" => status },
+                    bubbles: true)
+    end
+
+    if status == "todo"
+      refs.add_button.on(:click) { add_card }
+      refs.add_input.on(:keydown) do |event|
+        add_card if event[:key].to_s == "Enter"
+      end
+    else
+      refs.add_form.hidden = true
+    end
+  end
+
+  private
+
+  def add_card
+    text = refs.add_input.value.to_s.strip
+    return if text.empty?
+    root.dispatch("card:added",
+                  detail: { "title" => text, "status" => "todo" },
+                  bubbles: true)
+    refs.add_input.value = ""
+  end
+end
+
+class KanbanBoard < Grainet::Widget
+  STORAGE_KEY = "grainet-kanban-cards"
+
+  def provides
+    @cards = signal(load_from_storage || default_cards)
+    @next_id = signal((@cards.value.map { |c| c["id"] }.max || 0) + 1)
+    @error_message = signal(nil)
+    provide :cards, @cards
+
+    # provides で on_error を登録するのが肝。setup フェーズは子→親の
+    # 順なので、親の setup で on_error を登録すると子の setup 例外を
+    # 拾えない。provides は親→子の順なのでここなら間に合う。
+    on_error do |label, error|
+      @error_message.value = "#{label}\\n#{error.class}: #{error.message}"
+      true
+    end
+  end
+
+  def setup
+    wire_error_dialog
+    wire_persistence
+    wire_card_events
+  end
+
+  private
+
+  def wire_error_dialog
+    bind refs.error_dialog, hidden: memo { @error_message.value.nil? }
+    bind refs.error_text,   text:   memo { @error_message.value.to_s }
+    refs.error_dismiss.on(:click) { @error_message.value = nil }
+  end
+
+  # Persist on every @cards change. JS.object converts the Ruby Array
+  # of Hashes to a JS array, then JSON.stringify serializes.
+  def wire_persistence
+    effect(label: "kanban persist") do
+      json = JS.global[:JSON].call(:stringify, JS.object(@cards.value)).to_s
+      JS.global[:localStorage].call(:setItem, STORAGE_KEY, json)
+    end
+  end
+
+  def wire_card_events
+    root.on("card:added") do |event|
+      title = event[:detail][:title].to_s
+      status = event[:detail][:status].to_s
+      id = @next_id.value
+      @next_id.update { |n| n + 1 }
+      @cards.update do |cards|
+        cards + [{ "id" => id, "title" => title, "status" => status }]
+      end
+    end
+
+    root.on("card:moved") do |event|
+      id = event[:detail][:id].to_i
+      new_status = event[:detail][:status].to_s
+      @cards.update do |cards|
+        cards.map { |c| c["id"] == id ? c.merge("status" => new_status) : c }
+      end
+    end
+
+    root.on("card:deleted") do |event|
+      id = event[:detail][:id].to_i
+      @cards.update { |cards| cards.reject { |c| c["id"] == id } }
+    end
+  end
+
+  # Tolerant load: a corrupted localStorage entry (invalid JSON, wrong
+  # shape) falls back to defaults so the demo still boots. Narrow the
+  # rescue to JS::Error so genuine programming bugs still surface via
+  # the on_error boundary registered in #provides.
+  def load_from_storage
+    raw = JS.global[:localStorage].call(:getItem, STORAGE_KEY)
+    return nil if raw.js_null?
+    parsed = JS.global[:JSON].call(:parse, raw.to_s).to_ruby
+    return nil unless parsed.is_a?(Array)
+    parsed
+  rescue JS::Error => e
+    puts "kanban: load_from_storage rescued #{e.class}: #{e.message}"
+    nil
+  end
+
+  def default_cards
+    [
+      { "id" => 1, "title" => "Read the spec",          "status" => "todo"  },
+      { "id" => 2, "title" => "Try drag-and-drop",      "status" => "doing" },
+      { "id" => 3, "title" => "Refresh to test reload", "status" => "done"  },
+    ]
+  end
+end
+
+Grainet.register "kanban-board",  KanbanBoard
+Grainet.register "kanban-column", KanbanColumn
+Grainet.register "kanban-card",   KanbanCard
+Grainet.start
+puts "kanban demo mounted"
+`);
+        boot.textContent = "ready — drag cards between columns, refresh to test persistence";
+      } catch (err) {
+        console.error(err);
+        boot.textContent = "boot failed: " + err.message;
+      }
+    </script>
+  </body>
+</html>
