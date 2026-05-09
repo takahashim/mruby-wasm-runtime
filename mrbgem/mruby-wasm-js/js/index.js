@@ -11,6 +11,7 @@
 //   });
 //
 //   vm.eval('puts ENV["LOCALE"]');
+//   vm.evalScript('#ruby-source');   // eval textContent of <script id="ruby-source">
 //   vm.fs.set("/late.txt", bytes);
 //   vm.env["DEBUG"] = "1";
 //
@@ -327,6 +328,17 @@ export async function createVM(options = {}) {
     finally { handles.release(handle); }
   }
 
+  // Eval the textContent of a DOM element matched by `selector`.
+  // Pairs with `<script type="text/ruby">` blocks. Browser-only.
+  function evalScript(selector) {
+    if (typeof document === "undefined") {
+      throw new Error("evalScript: requires a DOM (document is undefined)");
+    }
+    const el = document.querySelector(selector);
+    if (!el) throw new Error(`evalScript: no element matches ${JSON.stringify(selector)}`);
+    return evalRuby(el.textContent);
+  }
+
   // Core VM surface plus, when we own the WASI side, the bundled VFS
   // state (fs / env / args / stdin). Keys are omitted entirely when
   // the caller passed their own `wasi` — that object controls fs/env/
@@ -335,6 +347,7 @@ export async function createVM(options = {}) {
   return {
     instance,
     eval: evalRuby,
+    evalScript,
     alloc: handles.alloc,
     get: handles.get,
     release: handles.release,

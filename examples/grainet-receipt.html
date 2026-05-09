@@ -222,7 +222,7 @@ puts "receipt demo mounted"
       const boot = document.getElementById("boot");
       try {
         const vm = await createVM({ wasm: "../build/mruby-js.wasm" });
-        vm.eval(document.getElementById("receipt-source").textContent);
+        vm.evalScript("#receipt-source");
         boot.textContent = "ready — qty / unit_price を編集して URL bar の #state を確認、別タブにコピペで復元";
       } catch (err) {
         console.error(err);
