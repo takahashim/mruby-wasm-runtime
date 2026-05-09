@@ -360,6 +360,7 @@ module Grainet
       @_provided = false
       @_mounted = false
       @_unmounted = false
+      @_error_handler = nil
     end
 
     # Override to publish values to descendants. Runs in pre-order
@@ -404,7 +405,7 @@ module Grainet
     end
 
     def effect(label: nil, &block)
-      e = Effect.new(label: label, &block)
+      e = Effect.new(label: label, source: self, &block)
       @_effects << e
       e
     end
@@ -412,6 +413,41 @@ module Grainet
     def cleanup(&block)
       raise ArgumentError, "block required" unless block
       @_cleanups << block
+    end
+
+    # Register an error boundary handler for this widget and its
+    # descendants. The block is called with `(label, error)` whenever
+    # a Grainet-managed callback below this widget (effect bodies,
+    # child widget setup/provides/cleanup) raises. Return truthy to
+    # mark the error handled — bubbling stops and the global logger
+    # is not called. Return falsy to let the error continue up the
+    # parent chain.
+    #
+    #   def setup
+    #     on_error do |label, error|
+    #       refs.fallback.text = "#{error.class}: #{error.message}"
+    #       refs.fallback.hidden = false
+    #       true
+    #     end
+    #   end
+    #
+    # Only one handler per widget; calling on_error twice replaces the
+    # previous handler. Errors raised by the handler itself are routed
+    # to the global logger to prevent infinite recursion (they do not
+    # re-enter this widget's chain).
+    def on_error(&block)
+      raise ArgumentError, "block required" unless block
+      @_error_handler = block
+    end
+
+    def __handle_error__(label, error)
+      return false unless @_error_handler
+      begin
+        !!@_error_handler.call(label, error)
+      rescue => e
+        Grainet.__error__("on_error handler in #{self.class.name}", e)
+        false
+      end
     end
 
     # ---- Internal API used by Registry -----------------------------
@@ -445,7 +481,7 @@ module Grainet
       begin
         provides
       rescue => e
-        Grainet.__error__("#{self.class.name}#provides", e)
+        Grainet.__error__("#{self.class.name}#provides", e, source: self)
       end
     end
 
@@ -455,7 +491,7 @@ module Grainet
       begin
         setup
       rescue => e
-        Grainet.__error__("#{self.class.name}#setup", e)
+        Grainet.__error__("#{self.class.name}#setup", e, source: self)
       end
       @_mounted = true
     end
@@ -478,7 +514,7 @@ module Grainet
     def safe_release(label)
       yield
     rescue StandardError => e
-      Grainet.__error__("#{self.class.name} #{label}", e)
+      Grainet.__error__("#{self.class.name} #{label}", e, source: self)
     end
   end
 

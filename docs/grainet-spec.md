@@ -859,6 +859,45 @@ mount は失敗してもプロセスは継続。
 
 例外は捕捉され、他の effect の実行を阻害しない。
 
+### Error Boundary (`on_error`)
+
+任意の Widget で `on_error` を登録すると、その widget・子孫 widget で発生した例外をフックして fallback UI を出したり、`Grainet.logger` の届く範囲を制限できる。
+
+```ruby
+class App < Grainet::Widget
+  def setup
+    on_error do |label, error|
+      refs.fallback.text = "Something broke: #{error.message}"
+      refs.fallback.hidden = false
+      true   # handled — bubbling 停止、Grainet.logger は呼ばれない
+    end
+  end
+end
+```
+
+バブリング規則:
+
+1. 例外が発生 (effect 本体 / Widget#provides / #setup / cleanup / listener teardown のいずれか) すると、ソース widget の `on_error` がまず呼ばれる
+2. ハンドラの戻り値が真なら処理完了 (バブリング停止)
+3. 偽 or 未登録なら親 widget へ。親が真を返すまで、または root に達するまで上昇
+4. すべて未処理なら `Grainet.logger` (未設定なら `STDERR`) へフォールバック
+
+ハンドラ内で再 raise した場合: 無限ループ防止のため、ハンドラ自身の例外は親チェーンに乗らず直接 `Grainet.logger` へ送られる。元の例外は引き続き親チェーンを上昇する (ハンドラが偽を返したのと同じ扱い)。
+
+ハンドラは widget あたり 1 つ。`on_error` を 2 回呼ぶと後勝ちで上書き。
+
+カバー範囲:
+
+| 発生源 | バブリング |
+|---|---|
+| `effect` 本体での raise (Widget#effect / bind / model / bind_list 経由) | ✅ ソース widget からバブル |
+| `Widget#provides` での raise | ✅ 自 widget からバブル |
+| `Widget#setup` での raise | ✅ 自 widget からバブル |
+| `cleanup` ブロックでの raise (unmount 時) | ✅ 自 widget からバブル |
+| listener / effect dispose の raise (unmount 時) | ✅ 自 widget からバブル |
+| `Grainet::Effect.new` を直接使った standalone effect | ❌ ソース widget が無いので即 `Grainet.logger` へ |
+| `memo` 評価中の raise (`memo.value` 読み出し時) | ❌ `__error__` に乗らず呼び出し元へ伝播 (現状の制約) |
+
 ### update / mutate 誤用警告
 
 dev mode のとき `Grainet.__warn__` 経由で出力。`Grainet.logger` を設定するとプログラム的に捕捉できる (下記)。
@@ -1042,6 +1081,7 @@ end
 | `memo { ... }` | Memo を作成 |
 | `effect(label: nil) { ... }` | Effect を作成 (Widget lifecycle に紐付き) |
 | `cleanup { ... }` | unmount 時に走る callback を登録 |
+| `on_error { |label, error| ... }` | error boundary handler を登録 (truthy 戻りで bubbling 停止) |
 | `bind ref, prop: signal, ...` | 一方向 DOM 反映 |
 | `bind ref, :prop do ... end` | block 形 |
 | `bind ref, class: { ... }` | class toggle |

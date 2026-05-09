@@ -42,10 +42,19 @@ module Grainet
 
     # Internal: report a caught exception from a Grainet-managed
     # callback (effect bodies, widget lifecycle, listener teardown).
-    # Routed through Grainet.logger if set
-    # (`logger.call(:error, label, error)`), otherwise to STDERR;
-    # backtrace is included when dev_mode? is true.
-    def __error__(label, error)
+    #
+    # When `source:` is a Grainet::Widget, the error first walks up the
+    # parent widget chain, offering it to each ancestor's on_error
+    # handler. The first handler that returns truthy claims the error
+    # (no further bubbling, no logger call). If no handler claims it,
+    # falls back to Grainet.logger; otherwise STDERR with backtrace
+    # under dev_mode?.
+    def __error__(label, error, source: nil)
+      current = source
+      while current
+        return if current.__handle_error__(label, error)
+        current = current.__parent__
+      end
       if @logger
         @logger.call(:error, label, error)
         return
@@ -360,10 +369,16 @@ module Grainet
 
   # Side effect that re-runs whenever a tracked dependency changes.
   class Effect
-    def initialize(label: nil, &block)
+    # `source:` is the Grainet::Widget that owns this effect (set by
+    # Widget#effect). When the body raises, the error is offered to
+    # the source widget's on_error chain before falling back to the
+    # global logger. Standalone effects (Grainet::Effect.new without a
+    # widget) pass source: nil and skip the chain.
+    def initialize(label: nil, source: nil, &block)
       raise ArgumentError, "block required" unless block
       @block = block
       @label = label
+      @source = source
       @deps = []
       @disposed = false
       run
@@ -394,7 +409,7 @@ module Grainet
         @block.call
       end
     rescue => e
-      Grainet.__error__("effect#{@label ? " (#{@label})" : ""}", e)
+      Grainet.__error__("effect#{@label ? " (#{@label})" : ""}", e, source: @source)
     end
   end
 end
