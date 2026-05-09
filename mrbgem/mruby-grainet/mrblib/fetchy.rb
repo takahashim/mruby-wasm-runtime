@@ -57,8 +57,11 @@ class Fetchy
   # mutation but the `!` flags them as "internal coordination, not
   # something user code should call".
   class Request
-    def initialize(controller)
+    attr_reader :timeout_ms
+
+    def initialize(controller, timeout_ms: nil)
       @controller = controller
+      @timeout_ms = timeout_ms
       @aborted = false
       @timed_out = false
       @completed = false
@@ -125,24 +128,27 @@ class Fetchy
 
   def perform_request(path, opts, kind, &block)
     raise ArgumentError, "block required" unless block
-
     if opts[:json] && opts[:body]
       raise ArgumentError, "Fetchy: pass either :json or :body, not both"
     end
 
     url = build_url(path)
-
     controller = JS.global[:AbortController].new
-    request = Request.new(controller)
+    request = Request.new(controller, timeout_ms: opts[:timeout])
+    init_h = build_init_hash(opts, controller[:signal])
+    timer = wire_timeout(opts[:timeout], controller, request)
 
+    run_fetch_loop(url, init_h, kind, request, timer, &block)
+    request
+  end
+
+  def build_init_hash(opts, signal)
+    headers = @default_headers.merge(opts[:headers] || {})
     init_h = {}
     init_h[:method] = opts[:method] if opts[:method]
 
-    headers = @default_headers.merge(opts[:headers] || {})
-
     if opts[:json]
-      body_str = JS.global[:JSON].call(:stringify, JS.object(opts[:json])).to_s
-      init_h[:body] = body_str
+      init_h[:body] = JS.global[:JSON].call(:stringify, JS.object(opts[:json])).to_s
       unless headers.keys.any? { |k| k.to_s.downcase == "content-type" }
         headers["Content-Type"] = "application/json"
       end
@@ -151,63 +157,58 @@ class Fetchy
     end
 
     init_h[:headers] = headers unless headers.empty?
-    init_h[:signal] = controller[:signal]
+    init_h[:signal] = signal
+    init_h
+  end
 
-    timeout_ms = opts[:timeout]
-    timeout_id = nil
-    timeout_callback = nil
-    if timeout_ms
-      timeout_callback = JS.callback do
-        request.mark_timed_out!
-        controller.call(:abort)
-      end
-      timeout_id = JS.global.call(:setTimeout, timeout_callback, timeout_ms).to_i
+  # Returns [timeout_id, timeout_callback] for cleanup, or nil when
+  # no timeout was requested.
+  def wire_timeout(timeout_ms, controller, request)
+    return nil unless timeout_ms
+    callback = JS.callback do
+      request.mark_timed_out!
+      controller.call(:abort)
     end
+    id = JS.global.call(:setTimeout, callback, timeout_ms).to_i
+    [id, callback]
+  end
 
+  def run_fetch_loop(url, init_h, kind, request, timer, &block)
     JS.__run_in_fiber__ do
       begin
         response = JS.global.fetch(url, JS.object(init_h)).await
-
         unless response[:ok].js_bool
           raise HTTPError.new(response[:status].to_i, response[:statusText].to_s, url, response)
         end
-
         result =
           case kind
           when :json then response.json.await.to_ruby
           when :text then response.text.await.to_s
           end
-
         block.call(result, nil)
       rescue => e
-        block.call(nil, classify_error(e, request, timeout_ms))
+        block.call(nil, classify_error(e, request))
       ensure
         # All termination paths converge here: success / HTTPError /
         # network reject / user abort / timeout self-abort. Microtasks
         # drain before the next macrotask, so a still-pending timer
         # gets cancelled here before it can fire post-completion.
-        if timeout_id
+        if timer
+          timeout_id, timeout_callback = timer
           JS.global.call(:clearTimeout, timeout_id)
-          timeout_id = nil
+          JS.release_callback(timeout_callback)
         end
-        JS.release_callback(timeout_callback) if timeout_callback
         request.mark_completed!
       end
     end
-
-    request
   end
 
-  # Translate raw exceptions into the public error vocabulary.
-  #
-  # We don't sniff the JS error's `name` — `JS::Object#await` raises a
-  # plain `JS::Error` without attaching the underlying JS exception
-  # object, so the name is lost. Instead we use the request flags
-  # we set when triggering abort/timeout ourselves: those are
-  # authoritative and cover all paths (manual abort, timeout, plus any
-  # other error propagating through).
-  def classify_error(err, request, timeout_ms)
-    return TimeoutError.new("timeout after #{timeout_ms}ms") if request.timed_out?
+  # `JS::Object#await` raises a plain `JS::Error` without the underlying
+  # JS exception object, so `err.name == "AbortError"` isn't usable.
+  # The Request's own flags (set when WE trigger abort/timeout) are
+  # authoritative.
+  def classify_error(err, request)
+    return TimeoutError.new("timeout after #{request.timeout_ms}ms") if request.timed_out?
     return AbortError.new("aborted") if request.aborted?
     err
   end
