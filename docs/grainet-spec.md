@@ -484,19 +484,67 @@ model refs.cb, @accepted, property: :checked      # checkbox
 
 ---
 
+## items の規約 (キー型)
+
+`bind_list` に渡す items は **String キーの Hash** を推奨する。
+
+- 自前で書くデータ: `{"id" => 1, "title" => "..."}`
+- `Fetchy.json` 経由 (内部で `to_ruby` が走る): そのまま String キー
+
+理由:
+- `to_ruby` が String キーを返す (mruby の Symbol 漏れ回避と JSON の任意キー対応のため)
+- DOM 境界 (HTML 属性 `data-widget` 等) も String 主体
+- プロジェクト内で String に揃えると、API 経由で取ってきたデータを bind_list に流す時にキー変換が要らない
+
+別軸として、Grainet の **kwargs / `provide`/`inject` キー / event detail** は Symbol を使う (Ruby kwarg 構文と整合)。**境界線**は「ユーザがデータとして扱う Hash」 vs 「ライブラリのメソッド引数」。
+
+`bind_list` の `key:` は String キー規約に合わせて `key: "id"` のショートカットを受け付ける (詳細は次節)。Symbol 渡しは明示エラーで誘導する。
+
+---
+
 ## bind_list (key ベース差分のリスト描画)
 
 ```ruby
-bind_list refs.list, @items, key: ->(it) { it[:id] } do |it|
-  HTML(:li, it[:title], data_widget: "todo-item", data_id: it[:id].to_s)
+bind_list refs.list, @items, key: "id" do |it|
+  HTML(:li, it["title"], data_widget: "todo-item", data_id: it["id"])
 end
 ```
 
 - `@items`: Array を value とする Signal/Memo
-- `key:`: 必須。要素ごとの安定 ID を返す Proc
-- block: 各要素を `HTML::Safe` (= 1個のルート要素を含む HTML) として返す
+- `key:`: 必須。**`String`** (Hash subscript ショートカット) または **`Proc`**
+  - `key: "id"` ≡ `->(it) { it["id"] }`
+  - 派生キー / 複合キーは Proc: `key: ->(it) { "#{it["type"]}/#{it["id"]}" }`
+  - **`Symbol` 渡しはエラー** (Grainet items は String キー規約のため、`key: :id` は `ArgumentError` で String 形を案内する)
+- block: `(item)` または `(item, prev)` を受ける
 
-### 差分動作
+### block の戻り値
+
+| 戻り値 | 動作 |
+|---|---|
+| `HTML::Safe` / `String` | **string モード** — HTML 文字列。同じ key で文字列が同一なら DOM 操作をスキップ |
+| `Grainet::Template` | **template モード** — `template(name)` の戻り値、または `Grainet::Template.new(node)` で wrap した DOM 要素。同じ key で同じ underlying ノードが返ったら DOM 操作なし。違えば `replaceChild` |
+
+mode は同じ key について最初の render で固定。途中で string ↔ template を切り替えると毎回 `replaceChild` になる。
+
+**それ以外の戻り値は raise** :
+- 生の `JS::Object` 要素を返した場合 → `Grainet::Error: bind_list block returned a raw JS::Object. Wrap it via Grainet::Template.new(node), or use the template(name) helper.`
+- Hash / nil / Integer 等 → `Grainet::Error: bind_list block must return Grainet::Template, HTML::Safe, or String; got <ClassName>`
+
+### 2-arg block — 同じノードを再利用する書き方
+
+block を `|it, prev|` で受けると、同じ key の前回キャッシュ Template が `prev` に渡る (新規 key なら `nil`)。template ベースのリストで in-place 更新したい時の標準パターン:
+
+```ruby
+bind_list refs.list, @items, key: "id" do |it, prev|
+  t = prev || template("todo-row")
+  t.refs.title.text = it["title"]
+  t
+end
+```
+
+`prev` を返せば DOM は触られず、ネストした子 widget の identity も保たれる (effect / listener / cleanup が再 mount されない)。
+
+### 差分動作 (string モード)
 
 | 状況 | DOM への影響 |
 |---|---|
@@ -681,6 +729,79 @@ HTML.raw("<b>raw</b>")    # → HTML::Safe (escape せずそのまま信頼)
 `HTML.tag` の戻りは「**ちょうど1個のルート要素を含む HTML 文字列を持つ HTML::Safe**」。bind_list の block 戻り値もこの形式が前提 (内部で `<template>.innerHTML = ...; .content.firstElementChild` で要素1個を取り出す)。
 
 複数のトップレベル要素や、要素を含まない純テキストは bind_list では使えない。
+
+---
+
+## Template helper
+
+HTML5 の `<template data-template="NAME">...</template>` をページに置き、Ruby からはそれをクローンして `data-ref` で値を埋める。`HTML(...)` builder と併存する第二の選択肢で、**マークアップ構造を Ruby 文字列の中に埋め込まずに済む**のが利点。
+
+### 規約
+
+- `<template data-template="NAME">` をどこに置いてもよい (body 直下が普通、widget root の隣接位置など)。`<template>` は inert なので live DOM には影響しない
+- 中身は **ちょうど1個のルート要素**を持たせる。`firstElementChild` をクローン対象とするため、複数トップレベル要素や純テキストは未サポート
+- ルート要素やその子孫に `data-ref="..."` を付けると、`Template#refs` から `refs.NAME` でアクセスできる
+
+### `Grainet::Template` クラス
+
+`template(...)` の戻り値は `Grainet::Template`。シンプルな wrapper:
+
+| メソッド | 説明 |
+|---|---|
+| `refs` | `TemplateRefs` (lazy)。`refs.NAME` で `data-ref` 要素を `RefElement` として返す |
+| `set_attribute(name, value)` | root 要素に HTML 属性をセット (`data-id` 等)。`value` は内部で `to_s` されるので Integer 等そのまま渡せる |
+| `to_js` | wrap している `JS::Object` (DOM 要素)。set_attribute で足りない高度な DOM 操作はこれ経由 |
+| `Template.new(node, widget = nil)` | 任意の DOM 要素を wrap する公開コンストラクタ。外部ライブラリが返す要素を bind_list に流したい時の escape hatch |
+
+### Widget 内: `template(name) { |refs| ... }`
+
+```ruby
+class TodoList < Grainet::Widget
+  def setup
+    bind_list refs.list, @items, key: "id" do |it, prev|
+      t = prev || template("todo-row") do |refs|
+        # 初回 clone 時の初期化に便利
+      end
+      t.set_attribute("data-id", it["id"])
+      t.refs.title.text = it["title"]
+      t
+    end
+  end
+end
+```
+
+- 戻り値は `Grainet::Template`。bind_list の戻り値として直接渡せる
+- block を渡すと初回クローン直後に `refs` が yield される (任意の初期化用)
+- block を渡さなくても、戻り値の `t.refs.NAME` で同じ refs にアクセスできる (lazy)
+
+### widget 外: `Grainet.template(name, &block)`
+
+widget context が無い場所 (boot コードや独立スクリプト) からは module 関数で呼ぶ。`@widget` が nil なので、yielded refs に `on(:click)` を付けても自動 cleanup されない。
+
+### 外部ノードの wrap: `Grainet::Template.new(node)`
+
+template 由来でない DOM 要素 (チャートライブラリの戻り値、prototype clone、`document.createElement` 直叩き等) を bind_list に流したい場合は明示的に wrap:
+
+```ruby
+bind_list refs.charts, @series, key: "id" do |s|
+  Grainet::Template.new(ChartLib.render(s).to_js)
+end
+```
+
+bind_list は `Grainet::Template` のみ受け付ける。生の `JS::Object` を直接返すと**明示的なエラー**が出る (Wrap it... というメッセージ付き)。これは「DOM 要素のリストへの入り口は Template」という規約を強める設計判断。
+
+### エラー
+
+| ケース | 動作 |
+|---|---|
+| `<template data-template="NAME">` が見つからない | `Grainet::Error: Missing template: NAME` |
+| template の content が空 (`<template></template>`) | `Grainet::Error: Empty template: NAME` |
+| `refs.foo` で参照する `data-ref="foo"` がクローン内に無い | `Grainet::Error: Missing template ref: foo` |
+| bind_list が生 `JS::Object` 要素を受けた | `Grainet::Error: bind_list block returned a raw JS::Object. Wrap it via Grainet::Template.new(node), ...` |
+
+### refs スコープの注意
+
+`TemplateRefs` は `querySelector` で都度引く方式で、`Refs#collect` のような `data-widget` 境界停止は**しない** (クローンはまだ mount されていないので、scope 区切りに意味がない)。テンプレート内にネストした `data-widget` がある場合、その子孫の `data-ref` も外側の refs から取得できる。これは初回初期化時に便利な仕様。
 
 ---
 
@@ -1013,19 +1134,19 @@ end
 
 class TodoList < Grainet::Widget
   def setup
-    @items = signal([{id: 1, title: "Read the spec"}])
+    @items = signal([{"id" => 1, "title" => "Read the spec"}])
 
     refs.add.on(:click) { add_item }
     root.on(:item_dismissed) do |event|
       id = event[:target].call(:getAttribute, "data-id").to_s.to_i
-      @items.update { |arr| arr.reject { |it| it[:id] == id } }
+      @items.update { |arr| arr.reject { |it| it["id"] == id } }
     end
 
-    bind_list refs.list, @items, key: ->(it) { it[:id] } do |it|
+    bind_list refs.list, @items, key: "id" do |it|
       HTML(:li, [
-        HTML(:span, it[:title]),
+        HTML(:span, it["title"]),
         HTML(:button, "×", class: "dismiss", data_ref: "dismiss"),
-      ], data_widget: "todo-item", data_id: it[:id].to_s)
+      ], data_widget: "todo-item", data_id: it["id"].to_s)
     end
   end
 
@@ -1034,8 +1155,8 @@ class TodoList < Grainet::Widget
   def add_item
     text = refs.input.value.to_s
     return if text.empty?
-    next_id = (@items.value.map { |it| it[:id] }.max || 0) + 1
-    @items.update { |arr| arr + [{id: next_id, title: text}] }
+    next_id = (@items.value.map { |it| it["id"] }.max || 0) + 1
+    @items.update { |arr| arr + [{"id" => next_id, "title" => text}] }
     refs.input.value = ""
   end
 end
@@ -1086,8 +1207,10 @@ end
 | `bind ref, :prop do ... end` | block 形 |
 | `bind ref, class: { ... }` | class toggle |
 | `bind ref, style: { ... }` | inline style |
-| `bind_list ref, signal, key: -> { } do ... end` | key ベースのリスト差分 |
+| `bind_list ref, signal, key: "id" do |it| ... end` | key ベースのリスト差分 (key は String shortcut or Proc) |
+| `bind_list ref, signal, key: "id" do |it, prev| ... end` | template mode + ノード再利用 |
 | `model ref, signal, property: :value` | 双方向 DOM ↔ Signal |
+| `template(name)` / `template(name) { |refs| ... }` | `<template data-template>` をクローン (戻り値は `Grainet::Template`) |
 | `provide(key, value)` | provides 内で公開 |
 | `inject(key, default = NOT_FOUND, &block)` | 親から受け取る |
 
@@ -1115,6 +1238,7 @@ end
 | `Grainet.register(name, klass)` | Widget クラス登録 |
 | `Grainet.start(root_js = nil)` | mount 開始 + MutationObserver 起動 |
 | `Grainet.registry` | シングルトン Registry |
+| `Grainet.template(name)` / `Grainet.template(name) { |refs| ... }` | widget context 外から `<template data-template>` をクローン |
 | `Fetchy.json(url, **opts) { |data, err| }` | JSON 取得 + Ruby 変換 |
 | `Fetchy.text(url, **opts) { |text, err| }` | テキスト取得 |
 | `Fetchy.new(base:, headers:)` | shared defaults を持ったインスタンス生成 |

@@ -108,8 +108,9 @@ async function runDir(dir, label) {
     }
     // Resume any fibers suspended on `await` before the next file
     // runs, so its DOM mutations don't batch into the awaiting test's
-    // MutationObserver callback. Loop covers chained awaits.
-    for (let i = 0; i < 5; i++) {
+    // MutationObserver callback. Loop is generously sized to cover
+    // files with multiple chained awaits per test.
+    for (let i = 0; i < 30; i++) {
       await new Promise((r) => setTimeout(r, 0));
     }
   }

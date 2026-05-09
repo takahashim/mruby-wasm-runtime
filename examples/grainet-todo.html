@@ -54,12 +54,12 @@
   <body>
     <h1>mruby-widget — todo demo</h1>
     <p class="lede">
-      The todo list is rendered by <code>bind_list</code> from a single
-      <code>@items</code> signal — there is no manual DOM manipulation
-      below. Adding an item updates the signal; <code>bind_list</code>
-      diffs the new array against the previous one and inserts only the
-      new <code>&lt;li&gt;</code>. The MutationObserver picks that node
-      up and mounts a <code>todo-item</code> widget on it.
+      Row markup lives in a <code>&lt;template data-template="todo-row"&gt;</code>
+      element (below); <code>bind_list</code> clones it per item and
+      fills the title via <code>data-ref="title"</code>. Adding an item
+      updates the <code>@items</code> signal and a fresh row is cloned;
+      updates to existing items mutate the cached node in place
+      (preserving the row's <code>todo-item</code> widget identity).
     </p>
 
     <!-- The <ul> is empty in the seed HTML; bind_list owns its children. -->
@@ -71,6 +71,15 @@
       <ul data-ref="list" class="todos"></ul>
       <p class="status" data-ref="status"></p>
     </div>
+
+    <!-- Row markup lives here as inert template content. bind_list
+         clones it per item; setup_row fills in title + data-id. -->
+    <template data-template="todo-row">
+      <li data-widget="todo-item">
+        <span data-ref="title"></span>
+        <button class="dismiss" data-ref="dismiss" aria-label="delete">×</button>
+      </li>
+    </template>
 
     <p id="boot">booting…</p>
 
@@ -98,8 +107,8 @@ class TodoList < Grainet::Widget
   def setup
     @next_id = signal(3)
     @items   = signal([
-      { id: 1, title: "Read the spec" },
-      { id: 2, title: "Try class & style binding" },
+      { "id" => 1, "title" => "Read the spec" },
+      { "id" => 2, "title" => "Try class & style binding" },
     ])
 
     refs.add.on(:click) { add_item }
@@ -113,18 +122,18 @@ class TodoList < Grainet::Widget
     root.on(:item_dismissed) do |event|
       li = event[:target]
       id = li.call(:getAttribute, "data-id").to_s.to_i
-      @items.update { |arr| arr.reject { |it| it[:id] == id } }
+      @items.update { |arr| arr.reject { |it| it["id"] == id } }
     end
 
-    # The whole list rendering. Only the <li> for items whose id and
-    # title haven't changed since last render keeps its DOM node;
-    # everything else is a precise add / remove / replace.
-    bind_list refs.list, @items, key: ->(it) { it[:id] } do |it|
-      HTML(:li, [
-        HTML(:span, it[:title]),
-        HTML(:button, "×",
-          class: "dismiss", data_ref: "dismiss", aria_label: "delete"),
-      ], data_widget: "todo-item", data_id: it[:id].to_s)
+    # The whole list rendering. The <template data-template="todo-row">
+    # in the page holds the row markup; bind_list clones it per item
+    # and fills the title slot. Returning the same JS node when prev
+    # is set keeps the row's todo-item widget mounted across updates.
+    bind_list refs.list, @items, key: "id" do |it, prev|
+      t = prev || template("todo-row")
+      t.set_attribute("data-id", it["id"])
+      t.refs.title.text = it["title"]
+      t
     end
 
     bind refs.status, :text do
@@ -145,7 +154,7 @@ class TodoList < Grainet::Widget
     id = @next_id.value
     @next_id.update { |n| n + 1 }
     # Source-of-truth update — DOM follows.
-    @items.update { |arr| arr + [{ id: id, title: text }] }
+    @items.update { |arr| arr + [{ "id" => id, "title" => text }] }
     refs.input.value = ""
   end
 end

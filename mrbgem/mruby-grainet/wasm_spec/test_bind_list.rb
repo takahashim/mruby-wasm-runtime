@@ -234,4 +234,83 @@ Spec.describe "bind_list" do
     Spec.assert_true msgs.any? { |m| m.include?("duplicate keys") }
     body[:innerHTML] = ""
   end
+
+  Spec.assert "key: \"id\" String shortcut works against String-keyed Hashes" do
+    doc = JS.global[:document]
+    body = doc[:body]
+    body[:innerHTML] = '<div data-widget="bl-strkey"><ul data-ref="list"></ul></div>'
+
+    klass = Class.new(Grainet::Widget) do
+      attr_reader :items
+      define_method(:setup) do
+        @items = signal([{"id" => 1, "t" => "a"}, {"id" => 2, "t" => "b"}])
+        bind_list refs.list, @items, key: "id" do |it|
+          HTML(:li, it["t"])
+        end
+      end
+    end
+    Grainet.register "bl-strkey", klass
+    Grainet.start
+
+    list = doc.call(:querySelector, "[data-ref='list']")
+    Spec.assert_equal 2, list[:children][:length].to_i
+    Spec.assert_equal "a", list[:children][0][:textContent].to_s
+
+    body[:innerHTML] = ""
+  end
+
+  Spec.assert "key: :id Symbol raises ArgumentError with helpful hint" do
+    doc = JS.global[:document]
+    body = doc[:body]
+    body[:innerHTML] = '<div data-widget="bl-symkey"><ul data-ref="list"></ul></div>'
+
+    captured = []
+    Grainet.logger = ->(_severity, _label, err) { captured << err }
+
+    klass = Class.new(Grainet::Widget) do
+      define_method(:setup) do
+        items = signal([{"id" => 1}])
+        bind_list refs.list, items, key: :id do |it|
+          HTML(:li, it["id"].to_s)
+        end
+      end
+    end
+    Grainet.register "bl-symkey", klass
+    Grainet.start
+
+    Spec.assert_equal 1, captured.length
+    err = captured.first
+    Spec.assert_true err.is_a?(ArgumentError)
+    Spec.assert_true err.message.include?("Symbol")
+    Spec.assert_true err.message.include?("\"id\"")
+
+    Grainet.logger = nil
+    body[:innerHTML] = ""
+  end
+
+  Spec.assert "key: 42 (non-Proc/non-String) raises ArgumentError" do
+    doc = JS.global[:document]
+    body = doc[:body]
+    body[:innerHTML] = '<div data-widget="bl-intkey"><ul data-ref="list"></ul></div>'
+
+    captured = []
+    Grainet.logger = ->(_severity, _label, err) { captured << err }
+
+    klass = Class.new(Grainet::Widget) do
+      define_method(:setup) do
+        items = signal([{"id" => 1}])
+        bind_list refs.list, items, key: 42 do |it|
+          HTML(:li, "x")
+        end
+      end
+    end
+    Grainet.register "bl-intkey", klass
+    Grainet.start
+
+    Spec.assert_equal 1, captured.length
+    Spec.assert_true captured.first.is_a?(ArgumentError)
+
+    Grainet.logger = nil
+    body[:innerHTML] = ""
+  end
 end
