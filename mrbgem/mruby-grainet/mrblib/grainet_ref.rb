@@ -106,8 +106,10 @@ module Grainet
     end
 
     # `data-*` shortcut. `ref.data(:id)` ≡ `ref.attr("data-id")`.
+    # Symbol/String の underscore は hyphen に変換: `data(:user_id)` →
+    # `data-user-id` (HTML5 の dataset.userId と素直に対応するため)。
     def data(name, value = ATTR_NO_VALUE)
-      attr("data-#{name}", value)
+      attr("data-#{name.to_s.tr("_", "-")}", value)
     end
 
     def toggle_class(name, force)
@@ -300,7 +302,7 @@ module Grainet
     end
 
     def data(name, value = RefElement::ATTR_NO_VALUE)
-      attr("data-#{name}", value)
+      attr("data-#{name.to_s.tr("_", "-")}", value)
     end
   end
 end
