@@ -689,8 +689,11 @@ module Grainet
     #      children fully initialised.
     def start(root_js = nil)
       root_js ||= JS.global[:document][:body]
-      mount_subtree(root_js)
+      # install_observer must precede mount_subtree: if a widget's setup
+      # inserts nested data-widget nodes (e.g. bind_list with template:),
+      # MO needs to be watching to mount them on the next microtask.
       install_observer
+      mount_subtree(root_js)
       nil
     end
 
