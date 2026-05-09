@@ -75,6 +75,7 @@ MRuby::CrossBuild.new(build_name) do |conf|
   conf.gem core: "mruby-io"
   conf.gem core: "mruby-time"
   conf.gem core: "mruby-random"
+  conf.gem core: "mruby-sprintf"
 
   conf.gem File.expand_path("../mrbgem/mruby-wasm-js", __dir__)
   conf.gem File.expand_path("../mrbgem/mruby-grainet", __dir__)

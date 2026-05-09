@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Grainet — Breakout demo</title>
+    <style>
+      :root {
+        --bg: #fafafa; --panel: #fff; --border: #e5e5e5;
+        --accent: #b94f3f; --muted: #888; --text: #222;
+        --stage-bg: #1a1a1f;
+        --row0: #ffd166; --row1: #ef476f; --row2: #06d6a0; --row3: #118ab2;
+      }
+      * { box-sizing: border-box; }
+      body {
+        font-family: system-ui, -apple-system, sans-serif;
+        max-width: 600px; margin: 0 auto; padding: 2em 1em;
+        line-height: 1.55; color: var(--text); background: var(--bg);
+      }
+      h1 { margin: 0 0 0.3em 0; }
+      .lede { color: var(--muted); margin-top: 0; }
+      .hud {
+        font: 600 1.05em ui-monospace, monospace;
+        margin: 1em 0 0.4em 0;
+        display: flex; gap: 1.5em;
+      }
+      .hud .lives { color: var(--accent); letter-spacing: 0.1em; }
+      .stage {
+        position: relative; width: 480px; height: 360px;
+        background: var(--stage-bg); border-radius: 8px;
+        overflow: hidden; cursor: crosshair;
+        user-select: none;
+        border: 1px solid var(--border);
+      }
+      .paddle {
+        position: absolute; left: 0; bottom: 8px;
+        width: 80px; height: 12px;
+        background: var(--accent); border-radius: 6px;
+        will-change: transform;
+      }
+      .ball {
+        position: absolute; left: 0; top: 0;
+        width: 12px; height: 12px;
+        background: white; border-radius: 50%;
+        will-change: transform;
+        box-shadow: 0 0 8px rgba(255, 255, 255, 0.6);
+      }
+      .brick {
+        position: absolute; left: 0; top: 0;
+        width: 56px; height: 18px;
+        border-radius: 3px;
+        will-change: transform;
+      }
+      .brick.row-0 { background: var(--row0); }
+      .brick.row-1 { background: var(--row1); }
+      .brick.row-2 { background: var(--row2); }
+      .brick.row-3 { background: var(--row3); }
+      .banner {
+        position: absolute; inset: 0;
+        display: flex; align-items: center; justify-content: center;
+        background: rgba(0, 0, 0, 0.55); color: white;
+        font-size: 1.4em; font-weight: 600;
+        text-shadow: 0 2px 6px rgba(0,0,0,0.5);
+        pointer-events: none;
+      }
+      .banner[hidden] { display: none; }
+      .stats {
+        display: flex; gap: 1.2em;
+        font: 0.8em ui-monospace, monospace;
+        color: var(--muted);
+        margin: 0.5em 0;
+      }
+      .stats span b { color: var(--text); font-weight: 600; }
+      #boot { color: var(--muted); font-size: 0.85em; margin-top: 1em; }
+    </style>
+  </head>
+  <body>
+    <h1>Grainet — Breakout demo</h1>
+    <p class="lede">
+      マウスでパドルを動かし、クリックで開始 / 再開。
+      ボール / パドル / ブロックの位置はすべて signal、DOM は
+      <code>bind style:</code> と <code>bind_list</code> で自動追従。
+      フレームループは Widget の <code>each_frame</code> ヘルパで rAF
+      に乗せ、unmount で自動停止する。
+    </p>
+
+    <div data-widget="breakout">
+      <div class="hud">
+        <span>Score: <span data-ref="score">0</span></span>
+        <span>Lives: <span class="lives" data-ref="lives"></span></span>
+      </div>
+      <div class="stats">
+        <span>FPS: <b data-ref="fps">--</b></span>
+        <span>WASM mem: <b data-ref="wasm_mem">--</b></span>
+        <span>JS handles: <b data-ref="js_handles">--</b></span>
+        <span>Ruby callbacks: <b data-ref="rb_callbacks">--</b></span>
+      </div>
+      <div data-ref="stage" class="stage">
+        <div data-ref="paddle" class="paddle"></div>
+        <div data-ref="ball" class="ball"></div>
+        <div data-ref="bricks"></div>
+        <div data-ref="banner" class="banner" hidden>
+          <span data-ref="banner_text"></span>
+        </div>
+      </div>
+    </div>
+
+    <template data-template="brick">
+      <div class="brick"></div>
+    </template>
+
+    <p id="boot">booting…</p>
+
+    <script type="text/ruby" id="ruby-source">
+class Breakout < Grainet::Widget
+  WIDTH                = 480
+  HEIGHT               = 360
+  PADDLE_W             = 80
+  PADDLE_H             = 12
+  PADDLE_BOTTOM_OFFSET = 8
+  BALL_SIZE            = 12
+  BRICK_W              = 56
+  BRICK_H              = 18
+  BRICK_GAP            = 4
+  ROWS                 = 4
+  COLS                 = 8
+  BRICK_AREA_TOP       = 40
+  BALL_SPEED           = 3
+  MAX_VX               = 5.0
+
+  def setup
+    @paddle_x = signal((WIDTH - PADDLE_W) / 2)
+    @ball     = signal(reset_ball_pos)
+    @bricks   = signal(initial_bricks)
+    @score    = signal(0)
+    @lives    = signal(3)
+    @state    = signal(:ready)
+
+    # Stats sampled every ~500ms in the frame loop.
+    @fps           = signal(0)
+    @wasm_mem      = signal(0)
+    @js_handles    = signal(0)
+    @rb_callbacks  = signal(0)
+
+    @frames_since_stats = 0
+    @stats_window_start = 0.0
+
+    wire_view
+    wire_stats
+    wire_input
+
+    # Frame loop — auto-cancelled on unmount, errors routed to error_boundary.
+    each_frame do |ts|
+      sample_stats(ts)
+      tick if @state.value == :playing
+    end
+  end
+
+  private
+
+  # ---- view bindings -----------------------------------------------
+
+  def wire_view
+    visible_bricks = memo { @bricks.value.select { |br| br["alive"] } }
+
+    bind refs.paddle, style: {
+      "transform" => memo { "translateX(#{@paddle_x.value}px)" },
+    }
+
+    bind refs.ball, style: {
+      "transform" => memo {
+        b = @ball.value
+        "translate(#{b["x"]}px, #{b["y"]}px)"
+      },
+    }
+
+    bind_list refs.bricks, visible_bricks, key: "id", template: "brick" do |b, t|
+      t.to_js[:style][:transform] = "translate(#{b["x"]}px, #{b["y"]}px)"
+      t.to_js[:className] = "brick row-#{b["row"]}"
+    end
+
+    bind refs.score, text: memo { @score.value.to_s }
+    bind refs.lives, text: memo { "♥" * @lives.value }
+
+    bind refs.banner, hidden: memo { @state.value == :playing }
+    bind refs.banner_text, :text do
+      case @state.value
+      when :ready then "Click to start"
+      when :won   then "🎉 You win! Click to restart"
+      when :lost  then "💔 Game over. Click to restart"
+      else ""
+      end
+    end
+  end
+
+  # ---- stats overlay -----------------------------------------------
+
+  def wire_stats
+    bind refs.fps,           text: memo { "#{@fps.value}" }
+    bind refs.wasm_mem,      text: memo { format_bytes(@wasm_mem.value) }
+    bind refs.js_handles,    text: memo { @js_handles.value.to_s }
+    bind refs.rb_callbacks,  text: memo { @rb_callbacks.value.to_s }
+  end
+
+  # Update the stats signals every ~500ms. Faster polling makes the
+  # numbers flicker; slower hides spikes.
+  def sample_stats(ts)
+    @frames_since_stats += 1
+    if @stats_window_start == 0.0
+      @stats_window_start = ts.to_f
+      return
+    end
+    elapsed = ts.to_f - @stats_window_start
+    return if elapsed < 500.0
+
+    @fps.value = (@frames_since_stats * 1000.0 / elapsed).round
+    @frames_since_stats = 0
+    @stats_window_start = ts.to_f
+
+    vm = JS.global[:__breakout_vm]
+    return if vm.js_null?
+    @wasm_mem.value   = vm[:instance][:exports][:memory][:buffer][:byteLength].to_i
+    @js_handles.value = vm.call(:handleCount).to_i
+    @rb_callbacks.value = JS.stats[:callbacks].to_i
+  end
+
+  def format_bytes(bytes)
+    return "--" if bytes == 0
+    if bytes >= 1024 * 1024
+      sprintf("%.2f MB", bytes / 1048576.0)
+    else
+      sprintf("%.1f KB", bytes / 1024.0)
+    end
+  end
+
+  # ---- input handlers ----------------------------------------------
+
+  def wire_input
+    refs.stage.on(:mousemove) do |event|
+      rect = refs.stage.to_js.call(:getBoundingClientRect)
+      mx = event[:clientX].to_f - rect[:left].to_f
+      @paddle_x.value = clamp(mx - PADDLE_W / 2, 0, WIDTH - PADDLE_W).to_i
+    end
+
+    refs.stage.on(:click) do
+      case @state.value
+      when :ready          then @state.value = :playing
+      when :won, :lost     then full_reset
+      end
+    end
+  end
+
+  # ---- frame tick --------------------------------------------------
+
+  def tick
+    b = @ball.value.dup
+    b["x"] += b["vx"]
+    b["y"] += b["vy"]
+    bounce_walls(b)
+    bounce_paddle(b)
+    if (hit = first_brick_hit(b))
+      bounce_brick(b, hit)
+      destroy_brick(hit)
+      @score.update { |s| s + 10 }
+    end
+    if b["y"] >= HEIGHT
+      @lives.update { |n| n - 1 }
+      if @lives.value <= 0
+        @state.value = :lost
+      else
+        b = reset_ball_pos
+      end
+    end
+    @ball.value = b
+    @state.value = :won if @bricks.value.none? { |br| br["alive"] }
+  end
+
+  # ---- collisions --------------------------------------------------
+
+  def bounce_walls(b)
+    if b["x"] <= 0
+      b["x"] = 0
+      b["vx"] = -b["vx"]
+    elsif b["x"] >= WIDTH - BALL_SIZE
+      b["x"] = WIDTH - BALL_SIZE
+      b["vx"] = -b["vx"]
+    end
+    if b["y"] <= 0
+      b["y"] = 0
+      b["vy"] = -b["vy"]
+    end
+  end
+
+  def bounce_paddle(b)
+    return unless b["vy"] > 0
+    paddle_top = HEIGHT - PADDLE_H - PADDLE_BOTTOM_OFFSET
+    return unless b["y"] + BALL_SIZE >= paddle_top &&
+                  b["y"] + BALL_SIZE <= paddle_top + PADDLE_H + 2 &&
+                  b["x"] + BALL_SIZE >= @paddle_x.value &&
+                  b["x"] <= @paddle_x.value + PADDLE_W
+
+    # Paddle hit position changes the bounce angle, so the player has
+    # control over where the ball goes.
+    hit_offset = (b["x"] + BALL_SIZE / 2.0) - (@paddle_x.value + PADDLE_W / 2.0)
+    b["vx"] = clamp(hit_offset / 8.0, -MAX_VX, MAX_VX)
+    b["vy"] = -b["vy"].abs
+    b["y"] = paddle_top - BALL_SIZE
+  end
+
+  def first_brick_hit(b)
+    @bricks.value.each do |br|
+      next unless br["alive"]
+      if b["x"] + BALL_SIZE > br["x"] && b["x"] < br["x"] + BRICK_W &&
+         b["y"] + BALL_SIZE > br["y"] && b["y"] < br["y"] + BRICK_H
+        return br
+      end
+    end
+    nil
+  end
+
+  def bounce_brick(b, br)
+    # Bounce on whichever axis has the smaller overlap.
+    ox = [b["x"] + BALL_SIZE - br["x"], br["x"] + BRICK_W - b["x"]].min
+    oy = [b["y"] + BALL_SIZE - br["y"], br["y"] + BRICK_H - b["y"]].min
+    if ox < oy
+      b["vx"] = -b["vx"]
+    else
+      b["vy"] = -b["vy"]
+    end
+  end
+
+  def destroy_brick(br)
+    @bricks.update do |arr|
+      arr.map { |x| x["id"] == br["id"] ? x.merge("alive" => false) : x }
+    end
+  end
+
+  # ---- helpers -----------------------------------------------------
+
+  def initial_bricks
+    bricks = []
+    id = 0
+    ROWS.times do |row|
+      COLS.times do |col|
+        id += 1
+        x = col * (BRICK_W + BRICK_GAP) + BRICK_GAP
+        y = row * (BRICK_H + BRICK_GAP) + BRICK_AREA_TOP
+        bricks << { "id" => id, "x" => x, "y" => y, "row" => row, "alive" => true }
+      end
+    end
+    bricks
+  end
+
+  def reset_ball_pos
+    { "x" => (WIDTH - BALL_SIZE) / 2,
+      "y" => HEIGHT - 60,
+      "vx" => BALL_SPEED,
+      "vy" => -BALL_SPEED }
+  end
+
+  def full_reset
+    @bricks.value = initial_bricks
+    @score.value = 0
+    @lives.value = 3
+    @ball.value = reset_ball_pos
+    @paddle_x.value = (WIDTH - PADDLE_W) / 2
+    @state.value = :playing
+  end
+
+  def clamp(v, min, max)
+    v < min ? min : v > max ? max : v
+  end
+end
+
+Grainet.register "breakout", Breakout
+Grainet.start
+puts "breakout demo mounted"
+    </script>
+
+    <script type="module">
+      import { createVM } from "../mrbgem/mruby-wasm-js/js/index.js";
+      const boot = document.getElementById("boot");
+      try {
+        const vm = await createVM({ wasm: "../build/mruby-js.wasm" });
+        // Expose so the Ruby side can sample WASM linear memory size
+        // and JS-side handle count for the stats overlay.
+        globalThis.__breakout_vm = vm;
+        vm.evalScript("#ruby-source");
+        boot.textContent = "ready — click stage to start";
+      } catch (err) {
+        console.error(err);
+        boot.textContent = "boot failed: " + err.message;
+      }
+    </script>
+  </body>
+</html>

@@ -446,6 +446,30 @@ effect の本体内で signal を `value=` した場合 (= 自分が依存して
 
 例外時はキャッチして `Grainet.logger` 経由 (未設定なら STDERR) で出力 (label 付き) し、他の effect の実行を阻害しない。
 
+### each_frame
+
+`requestAnimationFrame` でブロックをフレーム毎に呼ぶ helper。**rAF + cleanup + error_boundary** の連携を 1 メソッドに集約しており、ゲームやアニメーション系 demo の boilerplate を吸収する:
+
+```ruby
+each_frame do |ts|       # ts: DOMHighResTimeStamp (ms float)、不要なら無視可
+  tick if @state.value == :playing
+end
+```
+
+挙動:
+
+| 観点 | 振る舞い |
+|---|---|
+| スケジュール | 内部で `requestAnimationFrame` を再帰スケジュール (1 つの `JS.callback` を再利用) |
+| Widget unmount | 自動で `cancelAnimationFrame` + `JS.release_callback` (cleanup ブロック経由) |
+| ブロック内 raise | `Grainet.__error__("each_frame", err, source: self)` で error_boundary に流れる |
+| 戻り値 | `nil` (`effect` と同じ; ハンドルは返さない) |
+| 多重呼び出し | 1 widget で複数回 `each_frame` を呼ぶと、それぞれ独立した rAF ループとして動く |
+
+`effect` との違い: `effect` は signal の依存変化で再実行されるが、`each_frame` は signal とは独立にフレーム駆動で連続実行される。**signal の値を変えた結果として** DOM を更新する用途は `effect` / `bind`、**フレームに同期して連続的に signal を更新する** 用途 (物理シム、ゲームループ) は `each_frame`。
+
+実例: `examples/grainet-breakout.html` のゲームループ。
+
 ### persistent_signal
 
 `localStorage` に自動同期する signal を作るヘルパ。`signal` + 手書き `effect` (load + JSON.stringify + setItem) のショートカット:
@@ -1231,6 +1255,7 @@ end
 | `Widget#setup` での raise | ✅ 自 widget からバブル |
 | `cleanup` ブロックでの raise (unmount 時) | ✅ 自 widget からバブル |
 | event listener (`RefElement#on`) ブロックでの raise | ✅ 自 widget からバブル (label: `listener (event)`) |
+| `each_frame` ブロックでの raise | ✅ 自 widget からバブル (label: `each_frame`) |
 | listener / effect dispose の raise (unmount 時) | ✅ 自 widget からバブル |
 | `Grainet::Effect.new` を直接使った standalone effect | ❌ ソース widget が無いので即 `Grainet.logger` へ |
 | `memo` 評価中の raise (`memo.value` 読み出し時) | ❌ `__error__` に乗らず呼び出し元へ伝播 (現状の制約) |
@@ -1419,6 +1444,7 @@ end
 | `persistent_signal(key, default: nil) { ... }` | localStorage に自動同期する signal |
 | `memo { ... }` | Memo を作成 |
 | `effect(label: nil) { ... }` | Effect を作成 (Widget lifecycle に紐付き) |
+| `each_frame { |ts| ... }` | rAF でフレーム毎にブロックを実行 (unmount で自動 cancel、error_boundary 連携) |
 | `cleanup { ... }` | unmount 時に走る callback を登録 |
 | `on_error { |label, error| ... }` | error boundary handler を登録 (truthy 戻りで bubbling 停止) |
 | `error_boundary { |label, error| ... }` (class macro) | クラスレベルで error boundary を宣言 (provides/子 setup 例外も拾える) |

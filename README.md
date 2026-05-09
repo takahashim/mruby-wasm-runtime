@@ -73,6 +73,7 @@ For fuller illustrations:
 - `examples/grainet-search.html` — JSON-driven filter UI: loads `data/countries.json` via `Fetchy.json`, computes a filtered list as a `memo`, renders with `bind_list`. Demonstrates the bundled HTTP client plus `JS::Object#to_ruby`
 - `examples/grainet-kanban.html` — 3-column Kanban with native HTML5 drag-and-drop, `localStorage` persistence, and an `on_error` boundary dialog. Combines `provide` / `inject` for the cards store, `memo` for per-column filters, `bind_list` with `template:` for rows, and bubbled custom events for add / move / delete
 - `examples/grainet-receipt.html` — invoice line-item calculator: each row's inputs are individual `signal`s wired by `model` inside the `bind_list` block, per-row `line_total` is a `memo`, and overall subtotal / tax / total form a memo chain. State is JSON-encoded into `location.hash` (via `history.replaceState`) for shareable URLs and reload-restore — without `localStorage`
+- `examples/grainet-breakout.html` — playable breakout game: paddle / ball / 32 bricks all live as `signal` state, DOM transforms follow via `bind style:` + `bind_list`. Frame loop runs through the new `Widget#each_frame` helper (`requestAnimationFrame` + auto-cleanup on unmount + error_boundary routing). Game logic (collisions, scoring) is plain Ruby; Grainet only handles state and rendering
 
 To open the browser samples, run `make serve` and visit
 `http://localhost:8001/examples/demo.html`.

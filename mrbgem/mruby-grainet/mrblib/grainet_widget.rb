@@ -145,6 +145,31 @@ module Grainet
       e
     end
 
+    # Run `block` once per animation frame. Auto-cancels on widget
+    # unmount; raises route through `error_boundary`. Block receives
+    # the rAF (`requestAnimationFrame`) timestamp (ms).
+    def each_frame(&block)
+      raise ArgumentError, "block required" unless block
+      running = true
+      raf_id = nil
+      cb = JS.callback do |ts|
+        next unless running
+        begin
+          block.call(ts)
+        rescue => e
+          Grainet.__error__("each_frame", e, source: self)
+        end
+        raf_id = JS.global.call(:requestAnimationFrame, cb) if running
+      end
+      raf_id = JS.global.call(:requestAnimationFrame, cb)
+      cleanup do
+        running = false
+        JS.global.call(:cancelAnimationFrame, raf_id) if raf_id
+        JS.release_callback(cb)
+      end
+      nil
+    end
+
     def cleanup(&block)
       raise ArgumentError, "block required" unless block
       @_cleanups << block
