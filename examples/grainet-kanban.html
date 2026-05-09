@@ -140,12 +140,7 @@
 
     <p id="boot">booting…</p>
 
-    <script type="module">
-      import { createVM } from "../mrbgem/mruby-wasm-js/js/index.js";
-      const boot = document.getElementById("boot");
-      try {
-        const vm = await createVM({ wasm: "../build/mruby-js.wasm" });
-        vm.eval(`
+    <script type="text/ruby" id="ruby-source">
 # Per-card widget. Mounted by MO when bind_list inserts the cloned
 # template into a column. Auto-cleanup of dragstart / click listeners
 # on unmount (e.g. when status changes and the card moves to another
@@ -226,7 +221,7 @@ class KanbanBoard < Grainet::Widget
   # errors in this widget's own provides body or in any descendant's
   # setup are routed here.
   error_boundary do |label, error|
-    @error_message.value = "#{label}\\n#{error.class}: #{error.message}"
+    @error_message.value = "#{label}\n#{error.class}: #{error.message}"
     true
   end
 
@@ -291,7 +286,14 @@ Grainet.register "kanban-column", KanbanColumn
 Grainet.register "kanban-card",   KanbanCard
 Grainet.start
 puts "kanban demo mounted"
-`);
+    </script>
+
+    <script type="module">
+      import { createVM } from "../mrbgem/mruby-wasm-js/js/index.js";
+      const boot = document.getElementById("boot");
+      try {
+        const vm = await createVM({ wasm: "../build/mruby-js.wasm" });
+        vm.evalScript("#ruby-source");
         boot.textContent = "ready — drag cards between columns, refresh to test persistence";
       } catch (err) {
         console.error(err);

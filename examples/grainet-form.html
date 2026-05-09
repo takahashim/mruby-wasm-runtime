@@ -95,12 +95,7 @@
 
     <p id="boot">booting…</p>
 
-    <script type="module">
-      import { createVM } from "../mrbgem/mruby-wasm-js/js/index.js";
-      const boot = document.getElementById("boot");
-      try {
-        const vm = await createVM({ wasm: "../build/mruby-js.wasm" });
-        vm.eval(`
+    <script type="text/ruby" id="ruby-source">
 class SignupForm < Grainet::Widget
   def setup
     @email = signal("")
@@ -188,7 +183,7 @@ class ActivityLog < Grainet::Widget
       if n.zero?
         "no submissions yet."
       else
-        "submission \##{n} accepted (last: #{@last_email.value})"
+        "submission ##{n} accepted (last: #{@last_email.value})"
       end
     end
   end
@@ -198,7 +193,14 @@ Grainet.register "signup-form",  SignupForm
 Grainet.register "activity-log", ActivityLog
 Grainet.start
 puts "form demo mounted"
-`);
+    </script>
+
+    <script type="module">
+      import { createVM } from "../mrbgem/mruby-wasm-js/js/index.js";
+      const boot = document.getElementById("boot");
+      try {
+        const vm = await createVM({ wasm: "../build/mruby-js.wasm" });
+        vm.evalScript("#ruby-source");
         boot.textContent = "ready — fill the form to see live validation";
       } catch (err) {
         console.error(err);

@@ -103,14 +103,7 @@
 
     <p id="status">booting…</p>
 
-    <script type="module">
-      import { createVM } from "../mrbgem/mruby-wasm-js/js/index.js";
-      const status = document.getElementById("status");
-
-      try {
-        const vm = await createVM({ wasm: "../build/mruby-js.wasm" });
-
-        vm.eval(`
+    <script type="text/ruby" id="ruby-source">
 # A small Ruby app running in your browser via mruby-wasm-js.
 # Showcases: DOM access, event handlers (block as JS callback),
 # setInterval, Promise#await, and Ruby-side state.
@@ -153,8 +146,15 @@ btn.on(:click) do
 end
 
 puts "ruby app booted"
-`);
+    </script>
 
+    <script type="module">
+      import { createVM } from "../mrbgem/mruby-wasm-js/js/index.js";
+      const status = document.getElementById("status");
+
+      try {
+        const vm = await createVM({ wasm: "../build/mruby-js.wasm" });
+        vm.evalScript("#ruby-source");
         status.textContent = "ready — try the greeter (and watch the clock)";
       } catch (err) {
         console.error(err);

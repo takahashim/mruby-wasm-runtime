@@ -79,12 +79,7 @@
 
     <p id="boot">booting…</p>
 
-    <script type="module">
-      import { createVM } from "../mrbgem/mruby-wasm-js/js/index.js";
-      const boot = document.getElementById("boot");
-      try {
-        const vm = await createVM({ wasm: "../build/mruby-js.wasm" });
-        vm.eval(`
+    <script type="text/ruby" id="ruby-source">
 class ThemeApp < Grainet::Widget
   # provides runs in pre-order — before any descendant's setup. By the
   # time a child calls inject(:theme), this signal is already in scope.
@@ -99,7 +94,7 @@ class ThemeApp < Grainet::Widget
     end
 
     bind refs.status, :text do
-      "current: \#{@theme.value}"
+      "current: #{@theme.value}"
     end
   end
 end
@@ -129,7 +124,14 @@ Grainet.register "theme-card",  ThemeCard
 Grainet.register "theme-badge", ThemeBadge
 Grainet.start
 puts "theme demo mounted"
-`);
+    </script>
+
+    <script type="module">
+      import { createVM } from "../mrbgem/mruby-wasm-js/js/index.js";
+      const boot = document.getElementById("boot");
+      try {
+        const vm = await createVM({ wasm: "../build/mruby-js.wasm" });
+        vm.evalScript("#ruby-source");
         boot.textContent = "ready — click 'Toggle theme'";
       } catch (err) {
         console.error(err);

@@ -15,19 +15,21 @@
       (Float, JS.object, nil?, Promise.then, addEventListener+once).
     </p>
     <pre id="status">starting...</pre>
+
+    <script type="text/ruby" id="ruby-source">
+doc = JS.global[:document]
+doc.title = 'Phase 2c OK'
+n = JS.eval('1.5 + 2.25').to_f
+puts "float = #{n}"
+JS.global[:Promise].resolve(7).then { |v| puts "promise resolved: #{v.to_i}" }
+    </script>
+
     <script type="module">
       import { createVM } from "../mrbgem/mruby-wasm-js/js/index.js";
       const status = document.getElementById("status");
       try {
         const vm = await createVM({ wasm: "../build/mruby-js.wasm" });
-        const SCRIPT = `
-          doc = JS.global[:document]
-          doc.title = 'Phase 2c OK'
-          n = JS.eval('1.5 + 2.25').to_f
-          puts "float = #{n}"
-          JS.global[:Promise].resolve(7).then { |v| puts "promise resolved: #{v.to_i}" }
-        `;
-        vm.eval(SCRIPT);
+        vm.evalScript("#ruby-source");
         status.textContent = "boot OK — check console + tab title";
       } catch (err) {
         console.error(err);

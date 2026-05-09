@@ -52,13 +52,7 @@
 
     <p id="status">booting…</p>
 
-    <script type="module">
-      import { createVM } from "../mrbgem/mruby-wasm-js/js/index.js";
-      const status = document.getElementById("status");
-      try {
-        const vm = await createVM({ wasm: "../build/mruby-js.wasm" });
-
-        vm.eval(`
+    <script type="text/ruby" id="ruby-source">
 class Counter < Grainet::Widget
   def setup
     @count = signal(0)
@@ -85,7 +79,14 @@ end
 Grainet.register "counter", Counter
 Grainet.start
 puts "counter widget mounted"
-`);
+    </script>
+
+    <script type="module">
+      import { createVM } from "../mrbgem/mruby-wasm-js/js/index.js";
+      const status = document.getElementById("status");
+      try {
+        const vm = await createVM({ wasm: "../build/mruby-js.wasm" });
+        vm.evalScript("#ruby-source");
         status.textContent = "ready";
       } catch (err) {
         console.error(err);

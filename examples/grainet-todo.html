@@ -83,12 +83,7 @@
 
     <p id="boot">booting…</p>
 
-    <script type="module">
-      import { createVM } from "../mrbgem/mruby-wasm-js/js/index.js";
-      const boot = document.getElementById("boot");
-      try {
-        const vm = await createVM({ wasm: "../build/mruby-js.wasm" });
-        vm.eval(`
+    <script type="text/ruby" id="ruby-source">
 # Each <li> is its own widget. lifecycle scoped to the row: when
 # bind_list removes the <li>, the MutationObserver unmounts this and
 # the click handler / cleanup is released.
@@ -138,7 +133,7 @@ class TodoList < Grainet::Widget
       case n
       when 0 then "all done!"
       when 1 then "1 item"
-      else        "\#{n} items"
+      else        "#{n} items"
       end
     end
   end
@@ -160,7 +155,14 @@ Grainet.register "todo-list", TodoList
 Grainet.register "todo-item", TodoItem
 Grainet.start
 puts "todo demo (bind_list) mounted"
-`);
+    </script>
+
+    <script type="module">
+      import { createVM } from "../mrbgem/mruby-wasm-js/js/index.js";
+      const boot = document.getElementById("boot");
+      try {
+        const vm = await createVM({ wasm: "../build/mruby-js.wasm" });
+        vm.evalScript("#ruby-source");
         boot.textContent = "ready — type and press Enter / click Add";
       } catch (err) {
         console.error(err);

@@ -87,12 +87,7 @@
 
     <p id="boot">booting…</p>
 
-    <script type="module">
-      import { createVM } from "../mrbgem/mruby-wasm-js/js/index.js";
-      const boot = document.getElementById("boot");
-      try {
-        const vm = await createVM({ wasm: "../build/mruby-js.wasm" });
-        vm.eval(`
+    <script type="text/ruby" id="ruby-source">
 class CountryPicker < Grainet::Widget
   def setup
     @query   = signal("")
@@ -124,11 +119,11 @@ class CountryPicker < Grainet::Widget
       if @loading.value
         "loading…"
       elsif @error.value
-        "error: \#{@error.value}"
+        "error: #{@error.value}"
       else
         n     = @filtered.value.length
         total = @items.value.length
-        n == total ? "\#{total} countries" : "\#{n} of \#{total}"
+        n == total ? "#{total} countries" : "#{n} of #{total}"
       end
     end
 
@@ -161,7 +156,14 @@ end
 Grainet.register "country-picker", CountryPicker
 Grainet.start
 puts "search demo mounted"
-`);
+    </script>
+
+    <script type="module">
+      import { createVM } from "../mrbgem/mruby-wasm-js/js/index.js";
+      const boot = document.getElementById("boot");
+      try {
+        const vm = await createVM({ wasm: "../build/mruby-js.wasm" });
+        vm.evalScript("#ruby-source");
         boot.textContent = "ready — try typing or filtering by region";
       } catch (err) {
         console.error(err);
