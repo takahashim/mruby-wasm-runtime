@@ -110,6 +110,17 @@ module Grainet
         end
       end
 
+      # Run block with tracking suppressed (pushes nil onto TRACKER so
+      # `current` reads as nil inside).
+      def untrack
+        TRACKER.push(nil)
+        begin
+          yield
+        ensure
+          TRACKER.pop
+        end
+      end
+
       def current
         TRACKER.last
       end
