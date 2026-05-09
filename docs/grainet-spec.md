@@ -670,6 +670,31 @@ end
 - block は `(item, t)` を受け取り、`t` を mutate するだけ。**戻り値は無視**される (戻り値忘れバグが構造的に起きない)
 - DOM は同一ノードのまま、テキスト/属性のみ更新 → ネストした子 widget の identity も保たれる
 
+#### per-row `model` で双方向 binding
+
+item を **「id + 子 Signal の Hash」** として持てば、block 内で `model` を貼って各 input を個別 Signal に直結できる:
+
+```ruby
+@items = signal([
+  { "id" => 1, "qty" => signal("2"), "unit_price" => signal("450") },
+])
+
+bind_list refs.rows, @items, key: "id", template: "line-row" do |it, t|
+  model t.refs.qty,        it["qty"]
+  model t.refs.unit_price, it["unit_price"]
+  bind  t.refs.line_total, text: memo {
+    it["qty"].value.to_i * it["unit_price"].value.to_i
+  }
+end
+```
+
+- 行の追加削除は `@items.update` で配列を入れ替える (key が一致する row は再利用、新規 key は新規 row)
+- 各 cell が独立した Signal なので、編集が他行を再 render しない (model のスコープが行内に閉じる)
+- 集約 memo (`memo { @items.value.sum { |it| it["qty"].value.to_i * ... } }`) は配列内の全 cell signal を traverse 中に依存登録される
+- 既知の制約: 行削除時、block 内で作った per-row `bind` の effect / memo は widget の lifecycle ストアに残り続ける (orphan)。orphan effect は依存 signal が変わらないので再走しないため機能影響なし、メモリも O(削除済み行数) で軽微。bind_list 単位の lifecycle 管理は将来の改善余地
+
+実例: `examples/grainet-receipt.html` (明細計算機)。
+
 ### 2-arg block (block-controlled) — 条件付きで再生成したい時
 
 `template:` kwarg を渡さず `(it, prev)` を受ける形式。`prev` は前回キャッシュ Template (新規 key なら nil)。**managed mode で済まない要件 (item の状態によって別 template に切り替える、外部ライブラリの戻り値を wrap する等) のための逃げ道**:
