@@ -470,6 +470,26 @@ end
 
 実例: `examples/grainet-breakout.html` のゲームループ。
 
+#### Canvas との組み合わせ
+
+Pixel-level な描画 (擬似 3D、パーティクル、heavy plotting) は signal-driven な `bind` / `bind_list` 経由ではなく、**`each_frame` の中から直接 Canvas 2D context に imperative に描く** のが現実的:
+
+```ruby
+def setup
+  @ctx = refs.canvas.to_js.call(:getContext, "2d")
+  each_frame do |_ts|
+    update_physics      # signal を更新
+    render              # @ctx に直接 fillRect / fillStyle = ...
+  end
+end
+```
+
+役割分担:
+- **Grainet 側**: state (signal)、HUD (bind)、入力 (`RefElement#on`)、ライフサイクル (cleanup, error_boundary)
+- **Canvas 側**: pixel 描画
+
+実例: `examples/grainet-racer.html` の擬似 3D レーシング。
+
 ### persistent_signal
 
 `localStorage` に自動同期する signal を作るヘルパ。`signal` + 手書き `effect` (load + JSON.stringify + setItem) のショートカット:
