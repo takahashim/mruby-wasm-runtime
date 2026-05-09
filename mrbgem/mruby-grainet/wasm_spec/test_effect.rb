@@ -46,9 +46,20 @@ Spec.describe "Grainet::Effect" do
   Spec.assert "exception in effect doesn't break notify chain" do
     a = Grainet::Signal.new(0)
     other = []
-    Grainet::Effect.new { raise "boom" if a.value > 0 }
-    Grainet::Effect.new { other << a.value }
-    a.value = 1
+    captured = []
+    Grainet.logger = ->(severity, message, error) { captured << [severity, message, error] }
+    begin
+      Grainet::Effect.new(label: "boomy") { raise "boom" if a.value > 0 }
+      Grainet::Effect.new { other << a.value }
+      a.value = 1
+    ensure
+      Grainet.logger = nil
+    end
     Spec.assert_equal [0, 1], other
+    Spec.assert_equal 1, captured.length
+    severity, message, err = captured.first
+    Spec.assert_equal :error, severity
+    Spec.assert_equal "effect (boomy)", message
+    Spec.assert_equal "boom", err.message
   end
 end

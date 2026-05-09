@@ -3,10 +3,8 @@
 # Independent of the Grainet widget layer. Depends only on:
 #
 #   - mruby-wasm-js: `JS.global`, `JS.callback`, `JS.object`,
-#                     `JS.__run_in_fiber__`, `JS::Object#await`
-#   - JS::Object#to_ruby and #js_bool — provided by
-#     Grainet::JsValueExtensions in this gem; trivial to inline if
-#     Fetchy is ever extracted into its own gem.
+#                     `JS.__run_in_fiber__`, `JS::Object#await`,
+#                     `JS::Object#to_ruby`, `JS::Object#js_bool`
 #
 # Class methods for one-shot calls; instances carry shared base URL /
 # headers. Returns a `Fetchy::Request` handle the caller can `.abort`,

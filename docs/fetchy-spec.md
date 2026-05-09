@@ -282,16 +282,14 @@ await が reject で raise した時、`request.timed_out?` か `request.aborted
 
 ## ライセンス・依存関係
 
-- License: MIT (mruby-widget gem に同梱)
-- 依存: `mruby-wasm-js` (`JS.global`, `JS.callback`, `JS.object`, `JS.__run_in_fiber__`, `JS::Object#await`)
-- ソフト依存: `Grainet::JsValueExtensions` (`JS::Object#to_ruby`, `#js_bool`)
+- License: MIT (mruby-grainet gem に同梱)
+- 依存: `mruby-wasm-js` (`JS.global`, `JS.callback`, `JS.object`, `JS.__run_in_fiber__`, `JS::Object#await`, `JS::Object#to_ruby`, `JS::Object#js_bool`)
 - 動作要件: `globalThis.fetch` と `globalThis.AbortController` が利用できる環境 (modern browser, Node 18+)
 
 ## 単体での利用可否
 
-mruby-widget gem を読み込めば `Fetchy` クラスは即利用可能。Widget システムを使わない用途 (CLI、サーバ側 wasm 等) でも、 `JS.global.fetch` が利用できる環境であれば fetchy.rb 単独で機能する。
+mruby-grainet gem を読み込めば `Fetchy` クラスは即利用可能。Widget システムを使わない用途 (CLI、サーバ側 wasm 等) でも、 `JS.global.fetch` が利用できる環境であれば fetchy.rb 単独で機能する。
 
 将来的に別 gem として独立させる場合、必要な作業は:
 1. `mrblib/fetchy.rb` を新 gem にコピー
-2. `JS::Object#to_ruby` / `#js_bool` を新 gem 内で再定義 (50行ほど)
-3. mruby-wasm-js への依存を新 gem の mrbgem.rake で宣言
+2. mruby-wasm-js への依存を新 gem の mrbgem.rake で宣言 (`to_ruby` / `js_bool` は mruby-wasm-js が提供)

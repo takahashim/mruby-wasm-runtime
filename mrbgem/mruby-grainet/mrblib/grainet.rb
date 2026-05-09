@@ -3,8 +3,8 @@
 # Defines:
 #   - module Grainet (top-level brand namespace)
 #   - Grainet::Error
-#   - Grainet.dev_mode / .warn_listener / .__warn__ / .__window__ / .batch
-#   - Grainet::JsValueExtensions / Grainet::DomExtensions (JS::Object mixins)
+#   - Grainet.dev_mode / .logger / .__warn__ / .__error__ / .__window__ / .batch
+#   - Grainet::DomExtensions (JS::Object DOM mixin)
 #   - Grainet::Reactive (private infrastructure: TRACKER, BATCH, helpers)
 #   - Grainet::Subscribers
 #   - Grainet::MutationGuard
@@ -19,25 +19,42 @@ module Grainet
   class Error < StandardError; end
 
   @dev_mode = true
-  @warn_listener = nil
+  @logger = nil
 
   class << self
-    attr_accessor :dev_mode, :warn_listener
+    attr_accessor :dev_mode, :logger
 
     def dev_mode?
       @dev_mode
     end
 
-    # Internal: emit a development-mode warning. Tests can hook by
-    # assigning `Grainet.warn_listener = ->(msg) { ... }`. With no
-    # listener installed, warnings go to STDERR.
+    # Internal: emit a development-mode warning. Routed through
+    # Grainet.logger if set (`logger.call(:warn, msg, nil)`),
+    # otherwise to STDERR.
     def __warn__(msg)
       return unless dev_mode?
-      if @warn_listener
-        @warn_listener.call(msg)
+      if @logger
+        @logger.call(:warn, msg, nil)
       else
         STDERR.puts "[Grainet] #{msg}"
       end
+    end
+
+    # Internal: report a caught exception from a Grainet-managed
+    # callback (effect bodies, widget lifecycle, listener teardown).
+    # Routed through Grainet.logger if set
+    # (`logger.call(:error, label, error)`), otherwise to STDERR;
+    # backtrace is included when dev_mode? is true.
+    def __error__(label, error)
+      if @logger
+        @logger.call(:error, label, error)
+        return
+      end
+      STDERR.puts "[Grainet] Error in #{label}"
+      STDERR.puts "  #{error.class}: #{error.message}"
+      return unless dev_mode?
+      bt = error.backtrace if error.respond_to?(:backtrace)
+      bt&.each { |line| STDERR.puts "    #{line}" }
     end
 
     # Resolve the DOM window. In a browser, `window === globalThis`,
@@ -51,82 +68,6 @@ module Grainet
       view = doc[:defaultView]
       return view if !view.js_null?
       JS.global
-    end
-  end
-
-  # Generic JS value helpers. Not DOM-specific — applicable to any
-  # JS::Object handle.
-  #
-  # Why `js_null?` instead of `nil?`: mruby's compiler optimizes
-  # `x.nil?` (and `if x.nil?`, `unless x.nil?`) to a type-tag test on
-  # the Ruby object — it bypasses the `#nil?` method override on
-  # JS::Object. A JS::Object wrapping a `null` JS value reports as
-  # not-nil under the optimization, which silently breaks
-  # `return if x.nil?` patterns. The `!x.nil?` form does call the
-  # override, but `unless x.nil?` and bare `if x.nil?` do not. Use
-  # `x.js_null?` for any JS handle nil-check.
-  module JsValueExtensions
-    def js_null?
-      JS._is_null(handle)
-    end
-
-    # Convert a JS boolean handle to a Ruby boolean. Use for properties
-    # known to hold JS `true`/`false` (e.g. `element.hidden`,
-    # `hasAttribute()`). For non-boolean handles the result is
-    # undefined, which is fine — callers only invoke this on boolean
-    # call sites.
-    def js_bool
-      to_s == "true"
-    end
-
-    # Recursively convert a JSON-shaped JS value to a plain Ruby value:
-    #
-    #   string  → String
-    #   number  → Integer (if integer-valued) else Float
-    #   boolean → true / false
-    #   null    → nil
-    #   array   → Array of converted elements
-    #   object  → Hash with String keys (recursively converted)
-    #
-    # Designed for `fetch().json()` results that are pure JSON. Values
-    # that aren't JSON-typed (Date, Map, Function, DOM Node, ...) are
-    # coerced via `to_s` as a fallback rather than raising.
-    #
-    # Result is **deep-frozen by default** (snapshot semantics). Pass
-    # `freeze: false` to opt out for one-off transformations.
-    def to_ruby(freeze: true)
-      return nil if js_null?
-      case typeof
-      when "string"
-        s = to_s
-        freeze ? s.freeze : s
-      when "number"
-        f = to_f
-        i = to_i
-        f == i.to_f ? i : f
-      when "boolean"
-        js_bool
-      when "object"
-        if instanceof?(JS.global[:Array])
-          arr = to_a.map { |x| x.to_ruby(freeze: freeze) }
-          freeze ? arr.freeze : arr
-        else
-          h = {}
-          keys = JS.global[:Object].call(:keys, self)
-          n = keys[:length].to_i
-          i = 0
-          while i < n
-            k = keys[i].to_s
-            k = k.freeze if freeze
-            h[k] = self[k].to_ruby(freeze: freeze)
-            i += 1
-          end
-          freeze ? h.freeze : h
-        end
-      else
-        s = to_s
-        freeze ? s.freeze : s
-      end
     end
   end
 
@@ -453,11 +394,9 @@ module Grainet
         @block.call
       end
     rescue => e
-      STDERR.puts "[Grainet] Error in effect#{@label ? " (#{@label})" : ""}"
-      STDERR.puts "  #{e.class}: #{e.message}"
+      Grainet.__error__("effect#{@label ? " (#{@label})" : ""}", e)
     end
   end
 end
 
-JS::Object.include(Grainet::JsValueExtensions)
 JS::Object.include(Grainet::DomExtensions)

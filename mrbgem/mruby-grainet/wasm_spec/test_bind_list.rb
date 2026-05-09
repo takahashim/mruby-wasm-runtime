@@ -215,7 +215,7 @@ Spec.describe "bind_list" do
     body[:innerHTML] = '<div data-widget="bl-dup"><ul data-ref="list"></ul></div>'
 
     msgs = []
-    Grainet.warn_listener = ->(m) { msgs << m }
+    Grainet.logger = ->(_severity, m, _err) { msgs << m }
     begin
       klass = Class.new(Grainet::Widget) do
         define_method(:setup) do
@@ -228,7 +228,7 @@ Spec.describe "bind_list" do
       Grainet.register "bl-dup", klass
       Grainet.start
     ensure
-      Grainet.warn_listener = nil
+      Grainet.logger = nil
     end
 
     Spec.assert_true msgs.any? { |m| m.include?("duplicate keys") }

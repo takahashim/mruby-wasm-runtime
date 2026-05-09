@@ -445,8 +445,7 @@ module Grainet
       begin
         provides
       rescue => e
-        STDERR.puts "[Grainet] Error in #{self.class.name}#provides"
-        STDERR.puts "  #{e.class}: #{e.message}"
+        Grainet.__error__("#{self.class.name}#provides", e)
       end
     end
 
@@ -456,9 +455,7 @@ module Grainet
       begin
         setup
       rescue => e
-        STDERR.puts "[Grainet] Error in #{self.class.name}#setup"
-        STDERR.puts "  #{e.class}: #{e.message}"
-        e.backtrace.each { |line| STDERR.puts "    #{line}" } if e.backtrace
+        Grainet.__error__("#{self.class.name}#setup", e)
       end
       @_mounted = true
     end
@@ -481,8 +478,7 @@ module Grainet
     def safe_release(label)
       yield
     rescue StandardError => e
-      STDERR.puts "[Grainet] Error in #{self.class.name} #{label}"
-      STDERR.puts "  #{e.class}: #{e.message}"
+      Grainet.__error__("#{self.class.name} #{label}", e)
     end
   end
 
@@ -595,7 +591,7 @@ module Grainet
       return nil if name.js_null?
       klass = @widget_classes[name.to_s]
       unless klass
-        STDERR.puts "[Grainet] No widget registered for name: #{name.to_s.inspect}"
+        Grainet.__warn__("No widget registered for name: #{name.to_s.inspect}")
         return nil
       end
       @next_widget_id += 1

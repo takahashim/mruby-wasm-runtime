@@ -30,11 +30,11 @@ Spec.describe "Grainet::Signal" do
   Spec.assert "update warns on returning same mutable object" do
     s = Grainet::Signal.new([1, 2])
     msgs = []
-    Grainet.warn_listener = ->(m) { msgs << m }
+    Grainet.logger = ->(_severity, m, _err) { msgs << m }
     begin
       s.update { |xs| xs }  # returning same object
     ensure
-      Grainet.warn_listener = nil
+      Grainet.logger = nil
     end
     Spec.assert_true msgs.any? { |m| m.include?("update returned the same mutable object") }
   end
@@ -42,14 +42,14 @@ Spec.describe "Grainet::Signal" do
   Spec.assert "update warns when block tries to mutate the frozen arg" do
     s = Grainet::Signal.new([1])
     msgs = []
-    Grainet.warn_listener = ->(m) { msgs << m }
+    Grainet.logger = ->(_severity, m, _err) { msgs << m }
     err = nil
     begin
       s.update { |xs| xs << 2; xs }
     rescue => e
       err = e
     ensure
-      Grainet.warn_listener = nil
+      Grainet.logger = nil
     end
     Spec.assert_true !err.nil?
     Spec.assert_true msgs.any? { |m| m.include?("Cannot mutate value inside update") }
@@ -72,11 +72,11 @@ Spec.describe "Grainet::Signal" do
   Spec.assert "mutate warns when block returns different mutable object" do
     s = Grainet::Signal.new([])
     msgs = []
-    Grainet.warn_listener = ->(m) { msgs << m }
+    Grainet.logger = ->(_severity, m, _err) { msgs << m }
     begin
       s.mutate { |xs| xs + [1] }  # returns new array, not mutated
     ensure
-      Grainet.warn_listener = nil
+      Grainet.logger = nil
     end
     Spec.assert_true msgs.any? { |m| m.include?("mutate ignores the block return value") }
   end

@@ -274,6 +274,64 @@ module JS
       JS._to_float(handle)
     end
 
+    # Convert a JS boolean handle to a Ruby boolean. Use for properties
+    # known to hold JS `true`/`false` (e.g. `element.hidden`,
+    # `hasAttribute()`). For non-boolean handles the result is undefined,
+    # which is fine — callers only invoke this on boolean call sites.
+    def js_bool
+      to_s == "true"
+    end
+
+    # Recursively convert a JSON-shaped JS value to a plain Ruby value:
+    #
+    #   string  → String
+    #   number  → Integer (if integer-valued) else Float
+    #   boolean → true / false
+    #   null    → nil
+    #   array   → Array of converted elements
+    #   object  → Hash with String keys (recursively converted)
+    #
+    # Designed for `fetch().json()` results that are pure JSON. Values
+    # that aren't JSON-typed (Date, Map, Function, DOM Node, ...) are
+    # coerced via `to_s` as a fallback rather than raising.
+    #
+    # Result is **deep-frozen by default** (snapshot semantics). Pass
+    # `freeze: false` to opt out for one-off transformations.
+    def to_ruby(freeze: true)
+      return nil if js_null?
+      case typeof
+      when "string"
+        s = to_s
+        freeze ? s.freeze : s
+      when "number"
+        f = to_f
+        i = to_i
+        f == i.to_f ? i : f
+      when "boolean"
+        js_bool
+      when "object"
+        if instanceof?(JS.global[:Array])
+          arr = to_a.map { |x| x.to_ruby(freeze: freeze) }
+          freeze ? arr.freeze : arr
+        else
+          h = {}
+          keys = JS.global[:Object].call(:keys, self)
+          n = keys[:length].to_i
+          i = 0
+          while i < n
+            k = keys[i].to_s
+            k = k.freeze if freeze
+            h[k] = self[k].to_ruby(freeze: freeze)
+            i += 1
+          end
+          freeze ? h.freeze : h
+        end
+      else
+        s = to_s
+        freeze ? s.freeze : s
+      end
+    end
+
     # Already a JS value — `to_js` is a no-op pass-through. Lets users
     # write `[hash, array, value].map(&:to_js)` uniformly without
     # special-casing already-wrapped values.
@@ -338,6 +396,18 @@ module JS
     # JS null / undefined detection. BasicObject has no nil?, so define
     # one that reflects the wrapped JS value (== null in JS lands here).
     def nil?
+      JS._is_null(handle)
+    end
+
+    # Why a separate `js_null?`: mruby's compiler optimizes `x.nil?`
+    # (and `if x.nil?`, `unless x.nil?`) to a type-tag test on the Ruby
+    # object — it bypasses the `#nil?` method override on JS::Object.
+    # A JS::Object wrapping a `null` JS value reports as not-nil under
+    # the optimization, which silently breaks `return if x.nil?`
+    # patterns. The `!x.nil?` form does call the override, but
+    # `unless x.nil?` and bare `if x.nil?` do not. Use `x.js_null?`
+    # for any JS handle nil-check that needs to survive the optimizer.
+    def js_null?
       JS._is_null(handle)
     end
 

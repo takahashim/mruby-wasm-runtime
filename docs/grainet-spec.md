@@ -392,13 +392,13 @@ mutate  : 現在値そのものを変える (Array/Hash 限定、戻り値は無
 | `mutate` ブロックが別の可変オブジェクトを返す | `mutate ignores the block return value. Use update if you want to return a new value.` |
 | `mutate` を Numeric/Symbol/Boolean/nil に対して実行 | `TypeError` (raise) |
 
-警告先は `Grainet.warn_listener` を設定すればフックできる (テストで使える):
+警告先は `Grainet.logger` を設定すればフックできる (テストで使える):
 
 ```ruby
-Grainet.warn_listener = ->(msg) { collected << msg }
+Grainet.logger = ->(severity, msg, _err) { collected << msg if severity == :warn }
 ```
 
-未設定なら `STDERR`。
+未設定なら `STDERR`。詳細は後述「dev_mode と logger」節を参照。
 
 ---
 
@@ -724,58 +724,15 @@ event[:target].call(:closest, "li")
 
 ### `JS::Object` 拡張
 
-`Grainet::JsValueExtensions` (汎用) と `Grainet::DomExtensions` (DOM 固有) が `JS::Object` に include される。
+汎用 JS 値ヘルパ (`js_null?` / `js_bool` / `to_ruby`) は **mruby-wasm-js 側**で `JS::Object` に直接定義されている。詳細は [mruby-wasm-js/docs/js-object.md](../mrbgem/mruby-wasm-js/docs/js-object.md) を参照。
 
-| メソッド | 提供 | 用途 |
-|---|---|---|
-| `js_null?` | JsValueExtensions | JS の `null`/`undefined` 判定 (mruby の `nil?` 最適化を回避) |
-| `js_bool` | JsValueExtensions | JS Boolean を Ruby Boolean に変換 |
-| `to_ruby` | JsValueExtensions | JSON ライクな JS 値を Ruby Hash/Array ツリーに再帰変換 |
-| `dispatch(name, detail:, bubbles:)` | DomExtensions | CustomEvent 発火 |
-
-#### `to_ruby` の変換ルール
-
-| JS 値 | Ruby 値 |
-|---|---|
-| string | String |
-| number (整数値) | Integer |
-| number (非整数) | Float |
-| boolean | true / false |
-| null / undefined | nil |
-| Array | Array of converted elements (再帰) |
-| Object (plain) | Hash with **String keys** (再帰) |
-| その他 (Date/Map/Function 等) | `to_s` フォールバック |
+Grainet はその上に DOM 固有の `Grainet::DomExtensions` を `JS::Object` に include して、`dispatch(name, detail:, bubbles:)` を追加する (CustomEvent 発火のシュガー)。
 
 ```ruby
-js = JS.eval('({name: "Alice", tags: ["x", "y"], age: 30})')
-js.to_ruby
-# → {"name" => "Alice", "tags" => ["x", "y"], "age" => 30}
+refs.row.dispatch("row:select", detail: { id: 42 }, bubbles: true)
 ```
 
-#### snapshot semantics と freeze
-
-戻り値は **deep-frozen がデフォルト**。`to_ruby` は「JS 側のオブジェクトの Ruby 側スナップショット」という意味であり、in-place 改変は意図しない使い方なので型レベルで防ぐ:
-
-```ruby
-data = js.to_ruby
-data << x          # → FrozenError
-data["k"] = "v"    # → FrozenError
-```
-
-「変換しつつ加工したい」場合は `freeze: false` で opt-out できる:
-
-```ruby
-data = js.to_ruby(freeze: false)
-data << {"name" => "Carol"}   # OK
-```
-
-frozen な値を Signal に格納しても `update`/`mutate` は通常通り動作する (`update` の中で `arr + [item]` のように新 Array を返せばよい)。`mutate` で in-place 変更したい場合のみ `freeze: false` 経由で受け取る必要がある。これは MutationGuard が `update` のブロック引数を frozen にする方針と一貫している。
-
-#### なぜ `js_null?` 専用メソッドが必要か
-
-mruby は `if x.nil?` / `unless x.nil?` を **コンパイル時に型タグチェックにインライン化**する。これは `JS::Object#nil?` の override を**バイパスする**ため、JS の `null` 値を持つ JS::Object も「nil ではない」と判定される。`!x.nil?` 形式 (NOT 演算子経由) なら override が呼ばれるが、bare `if x.nil?` は呼ばれない。
-
-回避策として、別名の `js_null?` を定義 (mruby は `js_null?` には最適化を適用しない)。Widget 内のすべての JS handle nil チェックは `x.js_null?` を使う。
+Widget 内部の JS handle nil チェックには bare `nil?` ではなく `js_null?` を使う (理由は上記リンク先)。
 
 ---
 
@@ -904,25 +861,46 @@ mount は失敗してもプロセスは継続。
 
 ### update / mutate 誤用警告
 
-dev mode のとき `Grainet.__warn__` 経由で出力。`Grainet.warn_listener` を設定するとプログラム的に捕捉できる。
+dev mode のとき `Grainet.__warn__` 経由で出力。`Grainet.logger` を設定するとプログラム的に捕捉できる (下記)。
 
 ---
 
-## dev_mode と warn_listener
+## dev_mode と logger
 
 ```ruby
 Grainet.dev_mode             # 既定 true
-Grainet.dev_mode = false     # 警告抑止
+Grainet.dev_mode = false     # 警告抑止 (error 出力は dev_mode に関わらず流れる)
 Grainet.dev_mode?            # → true/false
 
-Grainet.warn_listener = ->(msg) { ... }   # フック
-Grainet.warn_listener = nil               # 既定 (STDERR 出力)
+Grainet.logger = ->(severity, message, error) { ... }   # フック
+Grainet.logger = nil                                    # 既定 (STDERR 出力)
 ```
 
-警告対象 (現状):
+`logger` の引数:
 
-- update/mutate 誤用検知 (`MutationGuard::WARNINGS`)
-- bind_list の重複 key
+| 引数 | 内容 |
+|---|---|
+| `severity` | `:warn` または `:error` |
+| `message`  | warn: 警告文 / error: 発生サイトのラベル (例 `"effect (bind(submit, :disabled))"`, `"Counter#setup"`) |
+| `error`    | warn: `nil` / error: 捕捉された `Exception` |
+
+未設定時は `[Grainet] ...` のプレフィックスで `STDERR` に出力。`:error` のときは `dev_mode?` だと backtrace も付く。
+
+`severity` で振り分ければ Sentry のような外部サービスに `:error` だけ転送する、テスト中は両方を配列に集めて noise を抑える、といった使い分けができる:
+
+```ruby
+Grainet.logger = lambda do |severity, message, error|
+  case severity
+  when :warn  then dev_console.log("[grainet/warn] #{message}")
+  when :error then sentry.capture_exception(error, tags: { grainet_site: message })
+  end
+end
+```
+
+報告対象 (現状):
+
+- `:warn` — update/mutate 誤用検知 (`MutationGuard::WARNINGS`), bind_list の重複 key, 未登録 widget 名
+- `:error` — Effect 本体での raise, Widget#provides / #setup での raise, listener teardown / cleanup の失敗
 
 ---
 
@@ -1101,7 +1079,7 @@ end
 | `Fetchy.text(url, **opts) { |text, err| }` | テキスト取得 |
 | `Fetchy.new(base:, headers:)` | shared defaults を持ったインスタンス生成 |
 | `Grainet.dev_mode` / `dev_mode?` / `dev_mode=` | dev mode toggle |
-| `Grainet.warn_listener` / `warn_listener=` | 警告フック |
+| `Grainet.logger` / `logger=` | 警告 / 例外フック (`->(severity, message, error)`) |
 | `Grainet::Error` | この gem 由来の例外 |
 
 ### HTML
@@ -1144,7 +1122,7 @@ mruby は Ruby と同じく定数 `HTML` (Module) と method `HTML(...)` を別 
 
 mruby は `if x.nil?` を型タグチェックにインライン化し、`#nil?` override を無視する。JS::Object のように `null` 値を内部に持つ場合、`x.nil?` は false を返してしまう。
 
-**対策**: `JS::Object#js_null?` を別名で定義し、Widget 内部の JS handle nil チェックはすべて `x.js_null?` を使う。
+**対策**: mruby-wasm-js が別名の `JS::Object#js_null?` を提供している。Widget 内部の JS handle nil チェックはすべて `x.js_null?` を使う。詳細: [mruby-wasm-js/docs/js-object.md](../mrbgem/mruby-wasm-js/docs/js-object.md)
 
 ### `Regexp` 非搭載
 
