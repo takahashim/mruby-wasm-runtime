@@ -315,7 +315,10 @@ root.attr("data-id", 42)      # write (内部で to_s)
 root.attr("data-id", nil)     # removeAttribute
 root.data(:id)                # ≡ attr("data-id"), data-* のショートカット
 root.data(:id, 42)            # ≡ attr("data-id", 42)
+root.data(:user_id, 7)        # ≡ attr("data-user-id", 7) — _ → - 変換
 ```
+
+`data(name)` は Ruby 側 snake_case (`:user_id`) と HTML5 の data 属性 (`data-user-id`) / JS 側 `dataset.userId` を素直に橋渡しするため、`name` の underscore を hyphen に変換する。リテラル underscore を残したい稀ケースは `attr("data-foo_bar", ...)` で逃げる。
 
 `getAttribute` / `setAttribute` / `removeAttribute` の薄いラッパ。**read は String または `nil`** (未設定属性の `getAttribute` は JS 側 `null` → Ruby `nil`)。`Template#attr` も同じ shape を持つので、bind_list の per-row block でも一貫:
 
@@ -1224,9 +1227,12 @@ end
 ```ruby
 class App < Grainet::Widget
   def provides
-    # provides は親→子の順なので、子の setup 前に handler が立つ
+    @error_message = signal(nil)
+    # provides は親→子の順なので、子の setup 前に handler が立つ。
+    # この時点では `refs` がまだ nil なので、DOM 直書きではなく
+    # signal 更新 + bind 経由で表示する。
     on_error do |label, error|
-      refs.fallback.text = "..."
+      @error_message.value = "#{error.class}: #{error.message}"
       true
     end
   end
@@ -1399,7 +1405,7 @@ class TodoList < Grainet::Widget
 
     refs.add.on(:click) { add_item }
     root.on(:item_dismissed) do |event|
-      id = event[:target].call(:getAttribute, "data-id").to_s.to_i
+      id = ref(event[:target]).data(:id).to_i
       @items.update { |arr| arr.reject { |it| it["id"] == id } }
     end
 
