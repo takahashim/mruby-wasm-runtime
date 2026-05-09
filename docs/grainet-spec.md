@@ -1230,6 +1230,7 @@ end
 | `Widget#provides` での raise | ✅ 自 widget からバブル |
 | `Widget#setup` での raise | ✅ 自 widget からバブル |
 | `cleanup` ブロックでの raise (unmount 時) | ✅ 自 widget からバブル |
+| event listener (`RefElement#on`) ブロックでの raise | ✅ 自 widget からバブル (label: `listener (event)`) |
 | listener / effect dispose の raise (unmount 時) | ✅ 自 widget からバブル |
 | `Grainet::Effect.new` を直接使った standalone effect | ❌ ソース widget が無いので即 `Grainet.logger` へ |
 | `memo` 評価中の raise (`memo.value` 読み出し時) | ❌ `__error__` に乗らず呼び出し元へ伝播 (現状の制約) |

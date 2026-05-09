@@ -254,6 +254,42 @@ Spec.describe "Widget#on_error (error boundary)" do
     JS.eval("new Promise(r => setTimeout(r, 0))").await
   end
 
+  Spec.assert "listener block raise routes to error boundary" do
+    doc = JS.global[:document]
+    body = doc[:body]
+    body[:innerHTML] = '<div data-widget="eb-listener"><button data-ref="btn">go</button></div>'
+
+    captured_global = []
+    captured_local = []
+    Grainet.logger = ->(_severity, msg, err) { captured_global << [msg, err] }
+
+    klass = Class.new(Grainet::Widget) do
+      define_method(:setup) do
+        on_error do |label, err|
+          captured_local << [label, err.message]
+          true
+        end
+        refs.btn.on(:click) { raise "boom from click" }
+      end
+    end
+    Grainet.register "eb-listener", klass
+    Grainet.start
+
+    btn = doc.call(:querySelector, "[data-ref=btn]")
+    btn.call(:click)
+    JS.eval("new Promise(r => setTimeout(r, 0))").await
+
+    Spec.assert_equal 1, captured_local.length
+    label, msg = captured_local.first
+    Spec.assert_equal "listener (click)", label
+    Spec.assert_equal "boom from click", msg
+    Spec.assert_equal 0, captured_global.length
+
+    Grainet.logger = nil
+    body[:innerHTML] = ""
+    JS.eval("new Promise(r => setTimeout(r, 0))").await
+  end
+
   Spec.assert "raise inside handler is reported to global logger (no infinite loop)" do
     doc = JS.global[:document]
     body = doc[:body]

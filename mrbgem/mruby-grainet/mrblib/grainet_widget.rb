@@ -39,16 +39,27 @@ module Grainet
 
     # Register a DOM event listener. The callback is tracked on the
     # owning widget so it gets removed (and the JS::Object callback
-    # handle released) on unmount.
+    # handle released) on unmount. The block is wrapped so that a
+    # raise routes through `Grainet.__error__` (and bubbles up to the
+    # nearest `on_error` / `error_boundary`) rather than being printed
+    # by `mrb_print_error` and dropped.
     def on(event, options = nil, &block)
       raise ArgumentError, "block required" unless block
-      cb = JS.callback(&block)
-      if options
-        @js.call(:addEventListener, event.to_s, cb, options)
-      else
-        @js.call(:addEventListener, event.to_s, cb)
+      evt = event.to_s
+      widget = @widget
+      cb = JS.callback do |*args|
+        begin
+          block.call(*args)
+        rescue => e
+          Grainet.__error__("listener (#{evt})", e, source: widget)
+        end
       end
-      @widget.__track_listener__(@js, event.to_s, cb) if @widget
+      if options
+        @js.call(:addEventListener, evt, cb, options)
+      else
+        @js.call(:addEventListener, evt, cb)
+      end
+      @widget.__track_listener__(@js, evt, cb) if @widget
       cb
     end
 
