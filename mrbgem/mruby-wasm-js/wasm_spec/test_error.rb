@@ -13,6 +13,36 @@ Spec.describe "JS::Error propagation" do
     Spec.assert_equal "typed", err.exception_object[:message].to_s
   end
 
+  Spec.assert "Error#name forwards to JS error property" do
+    err = Spec.assert_raises(JS::Error) do
+      JS.eval("(()=>{ throw new TypeError('typed') })()")
+    end
+    Spec.assert_equal "TypeError", err.name.to_s
+  end
+
+  Spec.assert "Error#stack forwards to JS error property" do
+    err = Spec.assert_raises(JS::Error) do
+      JS.eval("(()=>{ throw new Error('boom') })()")
+    end
+    Spec.assert_true err.stack.to_s.include?("boom")
+  end
+
+  Spec.assert "Error#message stays on Ruby side (StandardError)" do
+    err = Spec.assert_raises(JS::Error) do
+      JS.eval("(()=>{ throw new Error('boom') })()")
+    end
+    # #message is defined on Exception — should NOT forward.
+    Spec.assert_equal String, err.message.class
+    Spec.assert_true err.message.include?("boom")
+  end
+
+  Spec.assert "Error#respond_to? returns true while exception_object set" do
+    err = Spec.assert_raises(JS::Error) do
+      JS.eval("(()=>{ throw new TypeError('x') })()")
+    end
+    Spec.assert_true err.respond_to?(:any_unknown_method)
+  end
+
   Spec.assert "Error#exception_object preserves custom attributes" do
     err = Spec.assert_raises(JS::Error) do
       JS.eval("(()=>{ const e = new Error('x'); e.code = 'OOPS'; throw e })()")

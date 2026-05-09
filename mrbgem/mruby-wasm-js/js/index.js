@@ -217,10 +217,23 @@ function createJsImports({ handles, errorSlot, getInstance }) {
       const wrapper = (...args) => {
         if (debug.trace) console.log(`[trace] wrapper id=${callbackId} fired with`, args);
         const argsHandle = handles.alloc(args);
-        try { getInstance().exports.js_invoke_proc(callbackId, argsHandle); }
-        finally { handles.release(argsHandle); }
+        try {
+          // js_invoke_proc returns a fresh handle for the block's return
+          // value (0 = undefined). We own it, so read + release.
+          const resultHandle = getInstance().exports.js_invoke_proc(callbackId, argsHandle);
+          if (resultHandle === 0) return undefined;
+          const result = handles.get(resultHandle);
+          handles.release(resultHandle);
+          return result;
+        } finally { handles.release(argsHandle); }
       };
       return handles.alloc(wrapper);
+    },
+    js_clone(h) {
+      // Fresh handle pointing at the same JS value — used so JS-bound
+      // copies don't share ownership with Ruby's original handle.
+      if (h === 0) return 0;
+      return handles.alloc(handles.get(h));
     },
   };
 }

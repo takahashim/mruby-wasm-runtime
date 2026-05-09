@@ -37,6 +37,54 @@ Spec.describe "block-as-callback / on / then" do
     Spec.assert_equal [7], log
   end
 
+  # Each await drains ~one microtask boundary; chains of N .thens need N flushes.
+  flush_microtasks = ->(n = 4) { n.times { JS.global[:Promise].resolve(0).await } }
+
+  Spec.assert "Promise.then chain propagates Integer return value" do
+    log = []
+    JS.global[:Promise].resolve(7)
+      .then { |v| v.to_i * 2 }
+      .then { |v2| log << v2.to_i }
+    flush_microtasks.call
+    Spec.assert_equal [14], log
+  end
+
+  Spec.assert "Promise.then chain propagates String return value" do
+    log = []
+    JS.global[:Promise].resolve("hi")
+      .then { |v| "#{v.to_s}!" }
+      .then { |v2| log << v2.to_s }
+    flush_microtasks.call
+    Spec.assert_equal ["hi!"], log
+  end
+
+  Spec.assert "Promise.then chain propagates JS::Object return value" do
+    log = []
+    JS.global[:Promise].resolve(JS.eval("({n: 5})"))
+      .then { |obj| obj[:n] }
+      .then { |n| log << n.to_i }
+    flush_microtasks.call
+    Spec.assert_equal [5], log
+  end
+
+  Spec.assert "Promise.then chain returning Hash auto-wraps to JS object" do
+    log = []
+    JS.global[:Promise].resolve(0)
+      .then { { value: 42 } }
+      .then { |obj| log << obj[:value].to_i }
+    flush_microtasks.call
+    Spec.assert_equal [42], log
+  end
+
+  Spec.assert "Promise.then chain with nil propagates as undefined" do
+    log = []
+    JS.global[:Promise].resolve(1)
+      .then { nil }
+      .then { |v| log << v.typeof }
+    flush_microtasks.call
+    Spec.assert_equal ["undefined"], log
+  end
+
   Spec.assert "JS.callback wraps block as JS function" do
     cb = JS.callback { 42 }
     Spec.assert_equal "function", cb.typeof

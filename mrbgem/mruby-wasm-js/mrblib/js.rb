@@ -16,10 +16,27 @@ module JS
   # here to expose the original JS Error object via #exception_object, attached
   # by raise_if_js_error in C. Lets users read .name / .stack / .cause:
   #   rescue JS::Error => e
-  #     puts e.exception_object[:name].to_s   # => "TypeError"
-  #     puts e.exception_object[:stack].to_s  # => "TypeError: ...\n  at ..."
+  #     puts e.name           # => "TypeError"
+  #     puts e.stack          # => "TypeError: ...\n  at ..."
+  #     puts e.exception_object[:cause]  # full bracket access still available
   class Error
     attr_reader :exception_object
+
+    # Forward unknown methods to *property* access on the JS Error.
+    # `e.name` / `e.stack` are property reads, not function calls — going
+    # through `eo.__send__(sym)` would call `errorObj[sym]()` and fail.
+    def method_missing(sym, *args, &block)
+      eo = @exception_object
+      return super if eo.nil?
+      if !args.empty? || block
+        raise ArgumentError, "JS::Error##{sym} forwards to JS property — args/block not supported"
+      end
+      eo[sym]
+    end
+
+    def respond_to_missing?(sym, include_private = false)
+      !@exception_object.nil? || super
+    end
   end
 
   # Ivars on the JS module itself (not its singleton class) — must
@@ -45,11 +62,20 @@ module JS
     # Returns a Object holding the JS wrapper. The Proc is registered in
     # the C-side callback table; release_callback frees it explicitly,
     # otherwise it lives for the lifetime of the VM.
+    #
+    # The callback id is stashed on the JS wrapper as `__mruby_cb_id__`
+    # (a synthetic internal property — visible to JS code that introspects
+    # `Object.keys(fn)`) so release_callback can recover it from the
+    # JS::Object alone. Bookkeeping must be keyed by id, not handle:
+    # JS handle slots are recycled on JS::Object GC, so a handle-keyed
+    # map would silently overwrite entries.
     def callback(&block)
       raise ArgumentError, "block required" unless block
       handle, id = _make_callback(block)
-      @callback_ids[handle] = id
-      Object.new(handle)
+      cb = Object.new(handle)
+      cb[:__mruby_cb_id__] = id
+      @callback_ids[id] = true
+      cb
     end
 
     # Snapshot of bridge resource usage. Useful for spotting leaks during
@@ -78,9 +104,12 @@ module JS
     # its (then, catch) pair).
     def release_callback(callback)
       return if callback.nil?
-      handle = callback.handle
-      id = @callback_ids.delete(handle)
-      _release_callback(id) if id
+      v = callback[:__mruby_cb_id__]
+      return if v.nil?
+      id = v.to_i
+      return if id == 0
+      @callback_ids.delete(id)
+      _release_callback(id)
     end
 
     # Convert a Ruby value into a Object (handle).

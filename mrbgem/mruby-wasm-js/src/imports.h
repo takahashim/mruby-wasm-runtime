@@ -41,6 +41,7 @@ IMPORT(js_inspect_len) int js_inspect_len(int handle);
 IMPORT(js_inspect_copy) void js_inspect_copy(int handle, char *buf, int buf_len);
 IMPORT(js_instanceof) int js_instanceof(int instance, int constructor);
 IMPORT(js_make_callback) int js_make_callback(int callback_id);
+IMPORT(js_clone) int js_clone(int handle);
 
 /* Last JS exception caught by adapter. 0 means no error pending; otherwise
  * a handle to the JS Error object (for property reads via js_get). */
@@ -67,6 +68,9 @@ extern const struct mrb_data_type js_object_type;
 
 mrb_value wrap_handle(mrb_state *mrb, int handle);
 void raise_if_js_error(mrb_state *mrb);
+/* Extract the JS handle from a JS::Object mrb_value. Returns 0 if v is
+ * not a JS::Object instance. */
+int js_object_handle_of(mrb_state *mrb, mrb_value v);
 
 /* ---------- Internal helpers (defined in callback.c) ---------- */
 

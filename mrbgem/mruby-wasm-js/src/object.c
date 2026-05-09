@@ -58,6 +58,15 @@ wrap_handle(mrb_state *mrb, int handle) {
   return mrb_obj_new(mrb, mrb_class_ptr(g_object_class_obj), 1, &handle_val);
 }
 
+/* Extract handle from a JS::Object mrb_value (kept here so other TUs
+ * don't need the js_object_t struct layout). */
+int
+js_object_handle_of(mrb_state *mrb, mrb_value v) {
+  if (mrb_obj_class(mrb, v) != mrb_class_ptr(g_object_class_obj)) return 0;
+  js_object_t *jo = (js_object_t *)mrb_data_get_ptr(mrb, v, &js_object_type);
+  return jo ? jo->handle : 0;
+}
+
 /* ---------- JS error → Ruby JS::Error raise ---------- */
 
 /* Read the JS Error object's `.message` property as an mrb String. */

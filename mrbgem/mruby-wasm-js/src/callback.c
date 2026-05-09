@@ -12,7 +12,9 @@
 #include <mruby/hash.h>
 #include <mruby/class.h>
 #include <mruby/proc.h>
+#include <mruby/string.h>
 #include <mruby/throw.h>
+#include <mruby/variable.h>
 
 /* Globals owned here (declarations live in imports.h) */
 mrb_state *g_mrb = NULL;
@@ -83,6 +85,41 @@ js_callback_define(mrb_state *mrb, struct RClass *js) {
   mrb_define_module_function(mrb, js, "_handle_count", mrb_js_handle_count, MRB_ARGS_NONE());
 }
 
+/* Convert a Ruby value to a *fresh* JS handle that JS owns and must
+ * release. The handle survives the caller's arena_restore — primitives
+ * use direct allocation (js_from_int / js_eval / ...), JS::Object uses
+ * js_clone so the JS-side copy is independent of the Ruby wrapper's GC.
+ *
+ * Primitives take a C fast path (hot-path for rAF / Promise chains).
+ * Hash/Array/Symbol/etc. delegate to `JS.try_convert` to reuse its
+ * recursive wrapping rather than reimplementing it in C; MRB_CATCH in
+ * the caller covers the rare event try_convert raises.
+ *
+ * Returns 0 (= JS undefined) for unconvertible values; Promise chains
+ * expect undefined for "no value", so we don't raise here. */
+static int
+mrb_to_fresh_js_handle(mrb_state *mrb, mrb_value v) {
+  if (mrb_nil_p(v)) return 0;
+  if (mrb_undef_p(v)) return 0;
+  if (mrb_integer_p(v)) return js_from_int((int)mrb_integer(v));
+  if (mrb_float_p(v)) return js_from_float(mrb_float(v));
+  if (mrb_string_p(v)) return js_from_string(RSTRING_PTR(v), (int)RSTRING_LEN(v));
+  if (mrb_true_p(v))  return js_eval("true", 4);
+  if (mrb_false_p(v)) return js_eval("false", 5);
+  /* JS::Object: clone the handle so JS owns its own reference,
+   * independent of the Ruby wrapper's lifecycle. */
+  int direct = js_object_handle_of(mrb, v);
+  if (direct) return js_clone(direct);
+  /* For Symbol / Hash / Array / arbitrary objects: delegate to
+   * `JS.try_convert` so we get the same recursive Hash→object,
+   * Array→array semantics as direct user-facing wrapping, then clone
+   * the resulting handle so it survives arena_restore. */
+  mrb_value js_module = mrb_obj_value(mrb_module_get(mrb, "JS"));
+  mrb_value wrapped = mrb_funcall(mrb, js_module, "try_convert", 1, v);
+  int wrapped_h = js_object_handle_of(mrb, wrapped);
+  return wrapped_h ? js_clone(wrapped_h) : 0;
+}
+
 /* ---------- WASM exports ---------- */
 
 /*
@@ -140,7 +177,11 @@ js_eval_handle(int src_handle) {
  * - callback_id: id assigned in mrb_js_make_callback
  * - args_handle: JS array of the actual call arguments
  *
- * Looks up the Ruby Proc, wraps each JS arg as a JS::Object, and yields.
+ * Looks up the Ruby Proc, wraps each JS arg as a JS::Object, yields.
+ *
+ * Returns a fresh JS handle wrapping the block's return value (0 for
+ * nil / undefined / on exception). The JS wrapper reads + releases it,
+ * so Promise#then chains see actual returned values.
  */
 __attribute__((export_name("js_invoke_proc")))
 int
@@ -178,6 +219,8 @@ js_invoke_proc(int callback_id, int args_handle) {
     }
   }
 
+  int result_handle = 0;
+
   /* Set up our own jmpbuf around the yield. Without this, an uncaught
    * Ruby exception inside the block would longjmp past the wasm export
    * boundary (`unreachable` in __wasm_setjmp_test) and crash the host. */
@@ -185,15 +228,19 @@ js_invoke_proc(int callback_id, int args_handle) {
   struct mrb_jmpbuf *prev_jmp = mrb->jmp;
   mrb->jmp = &c_jmp;
   MRB_TRY(&c_jmp) {
-    mrb_yield_argv(mrb, proc, n, args);
+    mrb_value result = mrb_yield_argv(mrb, proc, n, args);
+    /* Convert *before* arena_restore so JS::Object inputs to the
+     * conversion (and the wrapped result) are still rooted. */
+    result_handle = mrb_to_fresh_js_handle(mrb, result);
     mrb->jmp = prev_jmp;
   } MRB_CATCH(&c_jmp) {
     mrb->jmp = prev_jmp;
     mrb_print_error(mrb);
     mrb->exc = NULL;
+    result_handle = 0;
   } MRB_END_EXC(&c_jmp);
 
   if (args) mrb_free(mrb, args);
   mrb_gc_arena_restore(mrb, arena_idx);
-  return 0;
+  return result_handle;
 }
