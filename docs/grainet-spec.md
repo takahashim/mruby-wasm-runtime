@@ -59,7 +59,7 @@ Grainet.start
 
 ### `data-widget` 属性
 
-Widget の mount point。値は `register_widget` で登録した名前に対応。
+Widget の mount point。値は `Grainet.register` で登録した名前に対応。
 
 ```html
 <div data-widget="counter">...</div>
@@ -72,6 +72,16 @@ Widget 内で Ruby から参照する DOM 要素。`refs.<name>` でアクセス
 ```html
 <button data-ref="increment">+</button>
 ```
+
+#### 許容文字
+
+`data-ref` および `data-template` の値は **`[A-Za-z][A-Za-z0-9_-]*`** に限る (英数字 / アンダースコア / ハイフン、英字始まり)。理由:
+
+- Ruby 側は `refs.foo` の `method_missing` 経由でアクセスするため、有効な Symbol 名 (識別子規則) と整合する必要がある
+- `TemplateRefs` は内部で `querySelector("[data-ref=\"#{name}\"]")` を組み立てるため、引用符・角括弧・スペースなどを含む名前は CSS selector として誤動作する (XSS ではないがセレクタ injection リスク)
+- HTML 属性値としても、引用符などは escape が必要になり煩雑
+
+ハイフン区切り (`item-name`) を使う場合、Ruby 側のアクセスは `refs[:"item-name"]` または `refs["item-name"]` (角括弧経由) になる点に注意。`refs.item_name` のようにアンダースコアの方が呼び出し側と素直に揃う。
 
 ### Widget 境界
 
@@ -192,7 +202,7 @@ Grainet::Error: Missing ref: count in Counter
 
 同じ Widget 内で同じ `data-ref` 名の最初の要素のみがキャッシュされる。複数要素対応 (`refs_all.x`) は未実装。
 
-### `register_widget` / `start`
+### `Grainet.register` / `Grainet.start`
 
 ```ruby
 Grainet.register "counter", Counter
@@ -203,7 +213,7 @@ Grainet.start
 
 ### `Grainet.registry`
 
-シングルトン Registry インスタンス。`register_widget` / `start` / `__widget_for_element__` はこの registry への delegator。通常ユーザは触らない。
+シングルトン Registry インスタンス。`Grainet.register` / `Grainet.start` / `Grainet.find_for_element` はこの registry への delegator。通常ユーザは触らない。
 
 ---
 
@@ -257,6 +267,22 @@ refs.error.hidden = true
 refs.box.text     # → String
 refs.cb.checked   # → Ruby true/false
 ```
+
+#### `html=` / `bind html:` の XSS 注意
+
+`html=` / `bind ref, html: signal` は `innerHTML` への代入で、**渡された値を escape しない**。ユーザ入力や外部データを直接渡すと XSS 脆弱性になる:
+
+```ruby
+refs.preview.html = user_supplied_string   # ❌ 危険
+bind refs.preview, html: @user_input       # ❌ 危険
+```
+
+安全な使い方:
+- 静的なマークアップなら `HTML.tag` 等で組んだ `HTML::Safe` の `to_s` を渡す
+- ユーザ文字列なら `HTML.escape` を通す、または `text=` を使う (textContent は自動 escape)
+- 外部 HTML を信頼するなら `HTML.raw(str)` で意図を明示
+
+`HTML helper` 節に詳細あり。原則: **`html=` を使う箇所はすべて XSS 境界**として扱う。
 
 ### CSS class / style 操作
 
@@ -329,15 +355,27 @@ Widget 破棄時に解放されるリソース:
 
 ## リアクティビティ
 
+Grainet の reactive primitive は **同期 push** モデル。Solid と同じく、signal の変更通知は呼び出しスタック上で同期的に subscribers を走らせる (Vue の microtask flush ではない)。`Grainet.batch` で一時停止できる (内部 API)。
+
 ### Signal
 
 ```ruby
 @count = signal(0)
-@count.value             # 読み取り (effect 内なら依存追跡)
+@count.value             # 読み取り (effect/memo 内なら自動的に依存追跡)
 @count.value = 1         # 置き換え
 @count.update { |n| n + 1 }   # 現在値から新値を計算
-@items.mutate { |a| a << x }  # 破壊的変更
+@items.mutate { |a| a << x }  # 破壊的変更 (Array/Hash 限定)
 ```
+
+#### 通知スキップ条件
+
+| 操作 | 通知をスキップする条件 |
+|---|---|
+| `value=` | 旧値と新値が `==` で等しく、かつどちらも **primitive** (`Numeric` / `Symbol` / `true` / `false` / `nil` / `String`) の場合 |
+| `update` | 通知を**スキップしない** (常に notify) |
+| `mutate` | 通知を**スキップしない** |
+
+primitive 制限の理由: Hash / Array は `==` が値比較 (深い再帰) で重い、かつ参照同一性で「変えていない」を判定する方が自然なため。Hash/Array の中身が変わった可能性を伝える `update` / `mutate` は無条件で notify する。
 
 ### Memo
 
@@ -347,7 +385,7 @@ Widget 破棄時に解放されるリソース:
 @full_name.value = "X"    # NoMethodError (read-only)
 ```
 
-依存変化時に再計算し、結果が `==` で等しければ下流通知をスキップ。
+依存変化時に再計算し、**結果が `==` で等しければ下流通知をスキップ** (memo は値型ヒューリスティック無し、すべての値で `==` 比較)。`memo { @items.value.select { ... } }` のように Array を返す場合、計算結果が等価でも `Array#==` が deep compare するので注意。
 
 ### Effect
 
@@ -359,7 +397,23 @@ end
 
 ブロック内で読まれた signal/memo を依存として記録、変化時に再実行。Widget の lifecycle に紐付く (unmount で自動 dispose)。
 
-例外時はキャッチして STDERR に出力 (label 付き) し、他の effect の実行を阻害しない。
+#### 実行タイミング契約
+
+| イベント | タイミング |
+|---|---|
+| **初回実行** | `Effect.new` (= `effect { ... }`) の**呼び出し中に同期的に**1 回実行 |
+| **再実行** | 依存 signal の `value=` / `update` / `mutate` が呼ばれた**スタック上で同期的に** |
+| **通知の合流** | 同じ effect が複数の signal に依存していて 1 回の操作で複数 signal が変わる場合、`Reactive.notify` の dedup により**1 ターンで 1 回**実行 |
+| **dispose** | widget unmount で自動。`Grainet::Effect.new` で widget 外で作った場合は手動 `effect.dispose` |
+
+#### 再入の挙動
+
+effect の本体内で signal を `value=` した場合 (= 自分が依存している signal を、または別の signal を更新):
+- 別 signal を更新 → その signal の subscribers が同期的に notify。元の effect 自身がそれに subscribe していなければ無事。subscribe していれば**再入再実行が走る**。`Grainet.batch` で囲わない限り即時。
+- **無限ループ防止のガードは無い**。`effect { @x.value = @x.value + 1 }` を書くとそのまま発散する。Ruby の SystemStackError で止まる
+- 推奨パターン: effect 内では「読む」「副作用 (DOM 更新等)」のみ。signal を**書き換えるなら memo / 別 effect**で分離する
+
+例外時はキャッチして `Grainet.logger` 経由 (未設定なら STDERR) で出力 (label 付き) し、他の effect の実行を阻害しない。
 
 ### batch
 
@@ -411,9 +465,11 @@ bind refs.count, text: @count
 bind refs.submit, disabled: @submitting
 bind refs.error, hidden: @valid
 bind refs.input, value: @name
-bind refs.preview, html: @html
+bind refs.preview, html: @html         # ⚠️ innerHTML 直接代入、escape なし
 bind refs.checkbox, checked: @accepted
 ```
+
+`text:` は `textContent` (自動 escape) で安全。**`html:` は `innerHTML` で escape しない** ため、ユーザ入力や外部データを流す場合は事前に `HTML.escape` するか `HTML.tag` 等で `HTML::Safe` に組み立てた値を渡すこと。詳細は RefElement 節の「html= / bind html: の XSS 注意」。
 
 複数プロパティを1呼び出しでも書ける:
 
@@ -571,13 +627,24 @@ block の戻り値が必須 (`t` を返す)、戻り値忘れに注意。
 | 消えた key | `node.remove()`、MO 経由で子 widget が unmount |
 | 順序変更 (reorder) | `insertBefore` で **既存ノードを移動** (再生成しない、状態保持) |
 
-### 重複 key 検知
+### 重複 key — invalid
 
-dev mode で同じ `key` を持つ要素が複数あると警告:
+`key:` で抽出された値は **items 内で一意でなければならない**。重複した key は invalid な入力で、bind_list の差分アルゴリズムが per-key の "唯一の DOM ノード" を仮定しているため、重複があると by_key が**最後の同 key item に上書き**され、リストの DOM 上の見え方が items.length より短くなったり、識別子が指すノードが揺れる。
+
+契約:
+
+| モード | 重複 key の扱い |
+|---|---|
+| **dev mode** (`Grainet.dev_mode == true`、デフォルト) | `Grainet::Error` を raise (検出のため、failure-loud) |
+| **production** (`dev_mode = false`) | undefined behavior。実装上は **last-wins** (同 key の最後の item で上書き)、ただし依拠してはならない |
+
+メッセージ例:
 
 ```text
 bind_list duplicate keys in bind_list(list): [1, 1]
 ```
+
+※現バージョンでは dev mode は警告のみで raise しない実装が残っているが、**仕様上は raise が正**。アプリ側は重複 key が出ない設計を取ること (例: `id` 列の DB 主キー、`SecureRandom.uuid`、複合キーなら `"#{type}/#{id}"`)。
 
 ### 子 Widget との連携
 
@@ -1008,6 +1075,27 @@ class App < Grainet::Widget
   end
 end
 ```
+
+**重要: 子孫 widget の `setup` 例外を捕えたいなら `provides` で登録すること**。Grainet の mount 順序は:
+
+1. **`provides` フェーズ**: pre-order (親→子)
+2. **`setup` フェーズ**: post-order (子→親)
+
+つまり子の `setup` は親の `setup` より**先**に走る。親が `setup` で `on_error` を登録すると、その時点で既に子の `setup` 例外は走って終わっており、bubbling しても親のハンドラはまだ未登録。`provides` フェーズなら親の登録が先に走るので、子 setup 例外を捕える保証ができる:
+
+```ruby
+class App < Grainet::Widget
+  def provides
+    # provides は親→子の順なので、子の setup 前に handler が立つ
+    on_error do |label, error|
+      refs.fallback.text = "..."
+      true
+    end
+  end
+end
+```
+
+`setup` 内 `on_error` は「自 widget の effect 例外」「自 widget が後から作る子 widget の例外」(MO 経由の動的 mount 等) は捕える。**初期 mount 時の子孫 setup 例外**だけが取りこぼし対象。
 
 バブリング規則:
 
