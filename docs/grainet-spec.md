@@ -1548,4 +1548,4 @@ mruby の標準ビルドには Regexp が無いことがある。本 gem は Reg
 - wasi-sdk: 33.0
 - 動作要件: WebAssembly + Exception Handling 対応のホスト (Chrome 95+, Safari 15.2+, Firefox 102+, Node 18+)
 
-テストは `mrbgem/mruby-widget/wasm_spec/` 以下、happy-dom + mruby-wasm-js のランナーで実行 (`make test`)。現在 258 件のテストすべて通過。
+テストは `mrbgem/mruby-grainet/wasm_spec/` 以下、happy-dom + mruby-wasm-js のランナーで実行 (`make test`)。現在 258 件のテストすべて通過。

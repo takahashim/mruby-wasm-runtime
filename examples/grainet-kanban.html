@@ -2,7 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <title>mruby-widget — Kanban demo (DnD + localStorage)</title>
+    <title>Grainet — Kanban demo (DnD + localStorage)</title>
     <style>
       :root {
         --bg: #fafafa; --panel: #fff; --border: #e5e5e5;
@@ -17,22 +17,58 @@
       }
       h1 { margin: 0 0 0.3em 0; }
       .lede { color: var(--muted); margin-top: 0; }
-      .error-dialog {
-        background: var(--err-bg); border: 1px solid var(--err-border);
-        border-radius: 8px; padding: 0.8em 1em; margin: 1em 0;
-        display: flex; flex-direction: column; gap: 0.5em;
+
+      /* Modal-ish overlay shared by the system-error and user-notice
+         dialogs. `[hidden]` rule guarantees the bind hidden: actually
+         hides the element (otherwise `display: flex` from the rule
+         above would override the UA `display: none`). */
+      .overlay {
+        position: fixed; inset: 0;
+        background: rgba(20, 20, 20, 0.45);
+        display: flex; align-items: center; justify-content: center;
+        z-index: 100;
+        padding: 1em;
       }
-      .error-dialog strong { color: var(--err-border); }
-      .error-dialog pre {
-        margin: 0; font-size: 0.85em; white-space: pre-wrap;
-        background: var(--panel); padding: 0.5em 0.7em; border-radius: 6px;
+      .overlay[hidden] { display: none; }
+      .overlay .dialog {
+        background: var(--panel);
+        border-radius: 10px;
+        padding: 1.2em 1.5em;
+        max-width: 480px;
+        width: 100%;
+        box-shadow: 0 14px 40px rgba(0,0,0,0.25);
+        border-top: 4px solid var(--accent);
+      }
+      .overlay .dialog h3 {
+        margin: 0 0 0.6em 0;
+        font-size: 1.05em;
+      }
+      .overlay .dialog p {
+        margin: 0 0 1em 0;
+      }
+      .overlay .dialog pre {
+        margin: 0 0 1em 0;
+        white-space: pre-wrap;
+        font-size: 0.85em;
+        background: var(--bg);
+        padding: 0.6em 0.8em;
+        border-radius: 6px;
         border: 1px solid var(--border);
+        max-height: 200px; overflow: auto;
       }
-      .error-dialog button {
-        align-self: flex-end; font-size: 0.9em; padding: 0.3em 0.8em;
-        border-radius: 6px; border: 1px solid var(--err-border);
-        background: white; color: var(--err-border); cursor: pointer;
+      .overlay .dialog .actions {
+        display: flex; justify-content: flex-end; gap: 0.6em;
       }
+      .overlay .dialog button {
+        font-size: 0.9em; padding: 0.4em 0.9em;
+        border-radius: 6px; border: 1px solid var(--accent);
+        background: var(--accent); color: white; cursor: pointer;
+      }
+      .overlay .dialog button:hover { opacity: 0.88; }
+      .error-overlay .dialog { border-top-color: var(--err-border); }
+      .error-overlay .dialog h3 { color: var(--err-border); }
+      .notice-overlay .dialog { border-top-color: #d4a000; }
+      .notice-overlay .dialog h3 { color: #a07800; }
       .board {
         display: grid; grid-template-columns: repeat(3, 1fr); gap: 1em;
         margin-top: 1em;
@@ -70,6 +106,7 @@
       }
       .dismiss:hover { color: var(--accent); border-color: var(--border); }
       .add-form { display: flex; gap: 0.4em; }
+      .add-form[hidden] { display: none; }
       .add-form input[type="text"] {
         flex: 1; font-size: 0.95em; padding: 0.4em 0.6em;
         border: 1px solid var(--border); border-radius: 6px;
@@ -84,23 +121,43 @@
     </style>
   </head>
   <body>
-    <h1>mruby-widget — Kanban demo</h1>
+    <h1>Grainet — Kanban demo</h1>
     <p class="lede">
       3 列の Kanban。カードを drag-and-drop で列間移動でき、
-      内容は <code>localStorage</code> に自動保存される。子 widget の
-      例外は <code>on_error</code> 経由でダイアログに表示。
+      内容は <code>localStorage</code> に自動保存される。
       <code>provide</code> / <code>inject</code> で <code>@cards</code>
       signal を共有し、各列は <code>memo</code> で自分の status を filter
       した view を <code>bind_list</code> でレンダリング。
+      <strong>2 種のオーバーレイ</strong>を使い分け: 想定外例外は赤い
+      <em>error overlay</em> (<code>error_boundary</code> 経由)、
+      validation 等の予測される user message は黄色の
+      <em>notice overlay</em> (<code>@notice</code> signal を inject)。
     </p>
 
     <div data-widget="kanban-board">
-      <!-- on_error ハンドラがメッセージを @error_message に流し込み、
-           ここに表示される。Dismiss でクリア。 -->
-      <div data-ref="error_dialog" class="error-dialog" hidden>
-        <strong>Something went wrong</strong>
-        <pre data-ref="error_text"></pre>
-        <button data-ref="error_dismiss" type="button">Dismiss</button>
+      <!-- System error overlay: 想定外の例外を error_boundary 経由で表示。
+           赤系の枠で「これはバグ / 異常」と分かる見せ方。 -->
+      <div data-ref="error_overlay" class="overlay error-overlay" hidden>
+        <div class="dialog" role="alertdialog" aria-labelledby="error-title">
+          <h3 id="error-title">Something went wrong</h3>
+          <pre data-ref="error_text"></pre>
+          <div class="actions">
+            <button data-ref="error_dismiss" type="button">Dismiss</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- User notice overlay: validation 等の予測される user message。
+           黄系の枠で system error と区別。@notice signal を inject 経由で
+           子 widget が直接書き換える。 -->
+      <div data-ref="notice_overlay" class="overlay notice-overlay" hidden>
+        <div class="dialog" role="dialog" aria-labelledby="notice-title">
+          <h3 id="notice-title">Notice</h3>
+          <p data-ref="notice_text"></p>
+          <div class="actions">
+            <button data-ref="notice_dismiss" type="button">OK</button>
+          </div>
+        </div>
       </div>
 
       <div class="board">
@@ -163,6 +220,7 @@ end
 class KanbanColumn < Grainet::Widget
   def setup
     @cards = inject(:cards)
+    @notice = inject(:notice)
     status = root.data(:status)
 
     @filtered = memo { @cards.value.select { |c| c["status"] == status } }
@@ -206,7 +264,13 @@ class KanbanColumn < Grainet::Widget
 
   def add_card
     text = refs.add_input.value.to_s.strip
-    return if text.empty?
+    if text.empty?
+      # 予測された validation 失敗。例外ではなく @notice signal に流して
+      # 黄色の notice overlay に出す。error_boundary は使わない (= 想定外
+      # の例外専用に取っておく)。
+      @notice.value = "カードのタイトルを入力してください。"
+      return
+    end
     root.dispatch("card:added",
                   detail: { "title" => text, "status" => "todo" },
                   bubbles: true)
@@ -229,22 +293,37 @@ class KanbanBoard < Grainet::Widget
     # Init error_message first so the boundary block can use it even
     # if the lines below raise.
     @error_message = signal(nil)
+    # Application-level notice channel for predictable user-facing
+    # messages (validation 等)。例外経路 (@error_message) と分離。
+    @notice = signal(nil)
     @cards = persistent_signal(STORAGE_KEY) { default_cards }
+    # Defensive: if storage held a non-Array shape (corrupted entry,
+    # or an older version of this demo that serialized differently),
+    # reset to defaults instead of crashing every dependent expression.
+    @cards.value = default_cards unless @cards.value.is_a?(Array)
     @next_id = signal((@cards.value.map { |c| c["id"] }.max || 0) + 1)
     provide :cards, @cards
+    provide :notice, @notice
   end
 
   def setup
-    wire_error_dialog
+    wire_error_overlay
+    wire_notice_overlay
     wire_card_events
   end
 
   private
 
-  def wire_error_dialog
-    bind refs.error_dialog, hidden: memo { @error_message.value.nil? }
-    bind refs.error_text,   text:   memo { @error_message.value.to_s }
+  def wire_error_overlay
+    bind refs.error_overlay, hidden: memo { @error_message.value.nil? }
+    bind refs.error_text,    text:   memo { @error_message.value.to_s }
     refs.error_dismiss.on(:click) { @error_message.value = nil }
+  end
+
+  def wire_notice_overlay
+    bind refs.notice_overlay, hidden: memo { @notice.value.nil? }
+    bind refs.notice_text,    text:   memo { @notice.value.to_s }
+    refs.notice_dismiss.on(:click) { @notice.value = nil }
   end
 
   def wire_card_events
