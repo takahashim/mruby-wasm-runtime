@@ -106,6 +106,51 @@ Spec.describe "Grainet.template" do
     body[:innerHTML] = ""
     JS.eval("new Promise(r => setTimeout(r, 0))").await
   end
+
+  Spec.assert "invalid data-template name raises Grainet::Error" do
+    body = JS.global[:document][:body]
+    body[:innerHTML] = ""
+    err = nil
+    begin
+      Grainet.template('evil"]; .x')
+    rescue Grainet::Error => e
+      err = e
+    end
+    Spec.assert_true !err.nil?
+    Spec.assert_true err.message.include?("data-template")
+    Spec.assert_true err.message.include?("[A-Za-z][A-Za-z0-9_-]*")
+  end
+
+  Spec.assert "invalid data-ref name raises Grainet::Error" do
+    body = JS.global[:document][:body]
+    body[:innerHTML] = '<template data-template="row6"><div></div></template>'
+    err = nil
+    begin
+      t = Grainet.template("row6")
+      t.refs[':evil']
+    rescue Grainet::Error => e
+      err = e
+    end
+    Spec.assert_true !err.nil?
+    Spec.assert_true err.message.include?("data-ref")
+    body[:innerHTML] = ""
+    JS.eval("new Promise(r => setTimeout(r, 0))").await
+  end
+
+  Spec.assert "valid name shapes (letter / digit / underscore / hyphen) are accepted" do
+    body = JS.global[:document][:body]
+    body[:innerHTML] = <<~HTML
+      <template data-template="row_with-name7">
+        <div><span data-ref="x"></span><span data-ref="x_y-z9"></span></div>
+      </template>
+    HTML
+    t = Grainet.template("row_with-name7")
+    t.refs.x.text = "a"
+    t.refs[:"x_y-z9"].text = "b"
+    Spec.assert_equal "a", t.to_js.call(:querySelector, "[data-ref='x']")[:textContent].to_s
+    body[:innerHTML] = ""
+    JS.eval("new Promise(r => setTimeout(r, 0))").await
+  end
 end
 
 Spec.describe "bind_list with Template" do

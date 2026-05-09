@@ -88,4 +88,16 @@ Spec.describe "Widget mount + refs + events" do
 
     body[:innerHTML] = ""
   end
+
+  Spec.assert "Grainet.register rejects invalid widget names" do
+    err = nil
+    begin
+      Grainet.register('evil"]; .x', Class.new(Grainet::Widget))
+    rescue Grainet::Error => e
+      err = e
+    end
+    Spec.assert_true !err.nil?
+    Spec.assert_true err.message.include?("data-widget")
+    Spec.assert_true err.message.include?("[A-Za-z][A-Za-z0-9_-]*")
+  end
 end

@@ -18,6 +18,47 @@
 module Grainet
   class Error < StandardError; end
 
+  # Validated name for HTML data-* attribute values that Grainet uses
+  # as keys (data-widget / data-template / data-ref). The pattern
+  # `[A-Za-z][A-Za-z0-9_-]*` matches identifier-like tokens that
+  # round-trip safely through CSS attribute selectors (no quoting
+  # required) and method_missing access. Acts as a value object —
+  # downstream code receiving `AttrName` can skip re-validation.
+  class AttrName
+    attr_reader :kind
+
+    def initialize(str, kind:)
+      @str = str.to_s
+      @kind = kind
+      raise Error,
+            "Invalid #{@kind} name: #{@str.inspect}; must match [A-Za-z][A-Za-z0-9_-]*" unless valid?
+    end
+
+    def to_s
+      @str
+    end
+
+    private
+
+    def valid?
+      return false if @str.empty?
+      first = @str[0]
+      return false unless ascii_alpha?(first)
+      @str.each_char do |c|
+        return false unless ascii_alpha?(c) || ascii_digit?(c) || c == "_" || c == "-"
+      end
+      true
+    end
+
+    def ascii_alpha?(c)
+      (c >= "A" && c <= "Z") || (c >= "a" && c <= "z")
+    end
+
+    def ascii_digit?(c)
+      c >= "0" && c <= "9"
+    end
+  end
+
   @dev_mode = true
   @logger = nil
 

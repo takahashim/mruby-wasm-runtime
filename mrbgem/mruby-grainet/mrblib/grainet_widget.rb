@@ -190,7 +190,8 @@ module Grainet
       key = name.to_s
       el = @cache[key]
       return el if el
-      js = @root_js.call(:querySelector, "[data-ref=\"#{key}\"]")
+      validated = AttrName.new(key, kind: "data-ref")
+      js = @root_js.call(:querySelector, "[data-ref=\"#{validated}\"]")
       raise Grainet::Error, "Missing template ref: #{key}" if js.js_null?
       @cache[key] = RefElement.new(js, @widget, name: key)
     end
@@ -217,6 +218,7 @@ module Grainet
     # by `TemplateRefs` for listener auto-cleanup tracking when the
     # cloned content's RefElements register events.
     def self.from_document(name, widget = nil)
+      name = AttrName.new(name, kind: "data-template")
       tpl = JS.global[:document].call(:querySelector, "template[data-template=\"#{name}\"]")
       raise Error, "Missing template: #{name}" if tpl.js_null?
       frag = tpl[:content].call(:cloneNode, true)
@@ -297,7 +299,8 @@ module Grainet
         new_keys = items.map { |item| key_fn.call(item) }
 
         if Grainet.dev_mode? && new_keys.uniq.length != new_keys.length
-          Grainet.__warn__("bind_list duplicate keys in #{label}: #{new_keys.inspect}")
+          raise Grainet::Error,
+                "bind_list duplicate keys in #{label}: #{new_keys.inspect}"
         end
 
         new_set = {}
@@ -826,7 +829,7 @@ module Grainet
     end
 
     def register(name, klass)
-      registry.register(name, klass)
+      registry.register(AttrName.new(name, kind: "data-widget"), klass)
     end
 
     def start(root_js = nil)

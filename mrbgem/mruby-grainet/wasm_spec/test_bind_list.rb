@@ -209,19 +209,19 @@ Spec.describe "bind_list" do
     body[:innerHTML] = ""
   end
 
-  Spec.assert "duplicate keys emit a dev-mode warning" do
+  Spec.assert "duplicate keys raise Grainet::Error in dev mode" do
     doc = JS.global[:document]
     body = doc[:body]
     body[:innerHTML] = '<div data-widget="bl-dup"><ul data-ref="list"></ul></div>'
 
-    msgs = []
-    Grainet.logger = ->(_severity, m, _err) { msgs << m }
+    captured = []
+    Grainet.logger = ->(_severity, _label, err) { captured << err }
     begin
       klass = Class.new(Grainet::Widget) do
         define_method(:setup) do
-          items = signal([{id: 1, t: "a"}, {id: 1, t: "b"}])
-          bind_list refs.list, items, key: ->(it) { it[:id] } do |it|
-            HTML(:li, it[:t])
+          items = signal([{"id" => 1, "t" => "a"}, {"id" => 1, "t" => "b"}])
+          bind_list refs.list, items, key: "id" do |it|
+            HTML(:li, it["t"])
           end
         end
       end
@@ -231,7 +231,10 @@ Spec.describe "bind_list" do
       Grainet.logger = nil
     end
 
-    Spec.assert_true msgs.any? { |m| m.include?("duplicate keys") }
+    Spec.assert_equal 1, captured.length
+    err = captured.first
+    Spec.assert_true err.is_a?(Grainet::Error)
+    Spec.assert_true err.message.include?("duplicate keys")
     body[:innerHTML] = ""
   end
 

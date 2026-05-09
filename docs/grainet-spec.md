@@ -641,10 +641,10 @@ block の戻り値が必須 (`t` を返す)、戻り値忘れに注意。
 メッセージ例:
 
 ```text
-bind_list duplicate keys in bind_list(list): [1, 1]
+Grainet::Error: bind_list duplicate keys in bind_list(list): [1, 1]
 ```
 
-※現バージョンでは dev mode は警告のみで raise しない実装が残っているが、**仕様上は raise が正**。アプリ側は重複 key が出ない設計を取ること (例: `id` 列の DB 主キー、`SecureRandom.uuid`、複合キーなら `"#{type}/#{id}"`)。
+アプリ側は重複 key が出ない設計を取ること (例: `id` 列の DB 主キー、`SecureRandom.uuid`、複合キーなら `key: ->(it) { "#{it["type"]}/#{it["id"]}" }`)。
 
 ### 子 Widget との連携
 
