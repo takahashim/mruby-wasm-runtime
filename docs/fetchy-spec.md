@@ -110,7 +110,9 @@ req.abort
 
 ### timeout のクリア契約
 
-`timeout:` で予約した `setTimeout` は、**全ての終端経路** (成功 / `Fetchy::HTTPError` / network reject / abort / timeout 自身) で `clearTimeout` される。実装上は `ensure` ブロックでまとめて行う。`controller.signal` の `abort` イベントもリスンしているので、`req.abort` 経由のユーザキャンセルでも timer 即時解除される。
+`timeout:` で予約した `setTimeout` は、**全ての終端経路** (成功 / `Fetchy::HTTPError` / network reject / abort / timeout 自身) で `clearTimeout` される。実装上は `JS.__run_in_fiber__` の `ensure` ブロック1箇所に集約。`req.abort` でも、controller.abort → fetch reject → fiber resume → ensure と microtask 経由で即時に到達するので、timer は次の macrotask 境界より前に解除される。
+
+`timeout_callback` 自体も `ensure` で `JS.release_callback` され、長時間動作するページで callback table がリークしない。
 
 ### Request ハンドル API
 
@@ -278,15 +280,13 @@ end
 2. `init` ハッシュを構築:
    - `method` / `headers` / `body` / `signal` (controller の signal) をセット
    - `json:` 指定があれば `JSON.stringify` + Content-Type (case-insensitive 既存チェック)
-3. `timeout:` 指定があれば:
-   - `setTimeout` で `mark_timed_out!` + `controller.abort()` を予約
-   - `controller.signal.addEventListener("abort", ...)` で全 abort 経路で `clearTimeout` する
+3. `timeout:` 指定があれば `setTimeout` で `mark_timed_out!` + `controller.abort()` を予約
 4. `JS.__run_in_fiber__` 内で `begin/rescue/ensure`:
    - `JS.global.fetch(url, init_js).await`
    - `response.ok` でなければ `Fetchy::HTTPError` を raise
    - 成功時: `json()` / `text()` を await、`to_ruby` 適用、block を `(data, nil)` で呼ぶ
    - rescue: `Request` のフラグから `TimeoutError` / `AbortError` / `HTTPError` / その他に分類して block を `(nil, err)` で呼ぶ
-   - **`ensure`**: 残っていれば `clearTimeout`、`request.mark_completed!`
+   - **`ensure`**: 残っていれば `clearTimeout` + `JS.release_callback(timeout_callback)` + `request.mark_completed!`
 5. `Request` ハンドルを呼び出し元に返す
 
 ---

@@ -234,6 +234,25 @@ Spec.describe "Fetchy timeout / abort" do
     uninstall_fetch_stub
   end
 
+  Spec.assert "timeout JS callback is released after request completes" do
+    install_fetch_stub(JS.object(
+      "/quick" => JS.object(status: 200, body: '{"ok":1}', contentType: "application/json"),
+    ))
+
+    before = JS.stats[:callbacks]
+    10.times do
+      Fetchy.json("/quick", timeout: 1000) { |_, _| }
+      JS.eval("new Promise(r => setTimeout(r, 0))").await
+    end
+    after_count = JS.stats[:callbacks]
+
+    # Without release_callback in ensure, this would grow by ~10
+    # (timeout_callback per request). With release, it stays bounded.
+    Spec.assert_true (after_count - before) < 5
+
+    uninstall_fetch_stub
+  end
+
   Spec.assert "manual abort fires Fetchy::AbortError (not TimeoutError)" do
     install_fetch_stub(JS.object(
       "/slow" => JS.object(status: 200, body: "{}", delay: 100, contentType: "application/json"),

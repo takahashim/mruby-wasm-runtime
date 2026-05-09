@@ -155,19 +155,13 @@ class Fetchy
 
     timeout_ms = opts[:timeout]
     timeout_id = nil
+    timeout_callback = nil
     if timeout_ms
       timeout_callback = JS.callback do
         request.mark_timed_out!
         controller.call(:abort)
       end
       timeout_id = JS.global.call(:setTimeout, timeout_callback, timeout_ms).to_i
-      # Clear the timer on any abort path (user / timeout self-abort)
-      # by listening on the controller's signal. The timeout-self-abort
-      # case clears an already-fired timer, which is a no-op.
-      abort_callback = JS.callback do
-        JS.global.call(:clearTimeout, timeout_id) if timeout_id
-      end
-      controller[:signal].call(:addEventListener, "abort", abort_callback)
     end
 
     JS.__run_in_fiber__ do
@@ -188,14 +182,15 @@ class Fetchy
       rescue => e
         block.call(nil, classify_error(e, request, timeout_ms))
       ensure
-        # Clear the timeout on EVERY termination path (success / HTTP
-        # error / network reject / abort). Without this, a network
-        # reject before timeout fires would leave the timer scheduled
-        # and the JS callback uncollectable.
+        # All termination paths converge here: success / HTTPError /
+        # network reject / user abort / timeout self-abort. Microtasks
+        # drain before the next macrotask, so a still-pending timer
+        # gets cancelled here before it can fire post-completion.
         if timeout_id
           JS.global.call(:clearTimeout, timeout_id)
           timeout_id = nil
         end
+        JS.release_callback(timeout_callback) if timeout_callback
         request.mark_completed!
       end
     end
