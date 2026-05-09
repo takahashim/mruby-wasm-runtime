@@ -34,23 +34,42 @@ class Fetchy
   # timeout when needed.
   class TimeoutError < AbortError; end
 
+  # 4xx / 5xx HTTP responses. Carries enough context for callers to
+  # branch on status (e.g. 401 → re-auth, 404 → empty-state UI).
+  # `response` is the raw `JS::Object` Response when available, so
+  # callers can read body/headers if they need to (e.g. error JSON).
+  class HTTPError < StandardError
+    attr_reader :status, :status_text, :url, :response
+
+    def initialize(status, status_text, url, response = nil)
+      @status = status
+      @status_text = status_text
+      @url = url
+      @response = response
+      super("HTTP #{status}: #{status_text}")
+    end
+  end
+
   # Returned from #json / #text. Holds the JS AbortController so the
-  # caller can cancel an in-flight request.
+  # caller can cancel an in-flight request. The bang setters
+  # (`mark_timed_out!` / `mark_completed!`) are how Fetchy itself
+  # toggles internal state — they're public to allow cross-class
+  # mutation but the `!` flags them as "internal coordination, not
+  # something user code should call".
   class Request
     def initialize(controller)
       @controller = controller
       @aborted = false
       @timed_out = false
-      @on_user_abort = nil
+      @completed = false
     end
 
     # Cancel the in-flight request. Idempotent. No-op once the request
-    # has already been aborted (by user or timeout) — the block has
-    # received its single (nil, AbortError) call.
+    # has already terminated (completed / aborted / timed out) — the
+    # block has received its single `(data, err)` call.
     def abort
-      return if @aborted || @timed_out
+      return if @aborted || @timed_out || @completed
       @aborted = true
-      @on_user_abort.call if @on_user_abort
       @controller.call(:abort)
     end
 
@@ -62,12 +81,18 @@ class Fetchy
       @timed_out
     end
 
-    def __mark_timed_out__
+    # True after the block has been invoked (success or error path).
+    # Lets callers distinguish "still in flight" from "already done".
+    def completed?
+      @completed
+    end
+
+    def mark_timed_out!
       @timed_out = true
     end
 
-    def __on_user_abort__=(cb)
-      @on_user_abort = cb
+    def mark_completed!
+      @completed = true
     end
   end
 
@@ -118,7 +143,9 @@ class Fetchy
     if opts[:json]
       body_str = JS.global[:JSON].call(:stringify, JS.object(opts[:json])).to_s
       init_h[:body] = body_str
-      headers["Content-Type"] = "application/json" unless headers.key?("Content-Type")
+      unless headers.keys.any? { |k| k.to_s.downcase == "content-type" }
+        headers["Content-Type"] = "application/json"
+      end
     elsif opts[:body]
       init_h[:body] = opts[:body]
     end
@@ -129,27 +156,26 @@ class Fetchy
     timeout_ms = opts[:timeout]
     timeout_id = nil
     if timeout_ms
-      timeout_cb = JS.callback do
-        request.__mark_timed_out__
+      timeout_callback = JS.callback do
+        request.mark_timed_out!
         controller.call(:abort)
       end
-      timeout_id = JS.global.call(:setTimeout, timeout_cb, timeout_ms).to_i
-      request.__on_user_abort__ = -> { JS.global.call(:clearTimeout, timeout_id) }
+      timeout_id = JS.global.call(:setTimeout, timeout_callback, timeout_ms).to_i
+      # Clear the timer on any abort path (user / timeout self-abort)
+      # by listening on the controller's signal. The timeout-self-abort
+      # case clears an already-fired timer, which is a no-op.
+      abort_callback = JS.callback do
+        JS.global.call(:clearTimeout, timeout_id) if timeout_id
+      end
+      controller[:signal].call(:addEventListener, "abort", abort_callback)
     end
 
     JS.__run_in_fiber__ do
       begin
         response = JS.global.fetch(url, JS.object(init_h)).await
 
-        # Successful response (or HTTP error): cancel the timeout. No
-        # further abort can happen via timeout from this point.
-        if timeout_id
-          JS.global.call(:clearTimeout, timeout_id)
-          timeout_id = nil
-        end
-
         unless response[:ok].js_bool
-          raise "HTTP #{response[:status].to_i}: #{response[:statusText].to_s}"
+          raise HTTPError.new(response[:status].to_i, response[:statusText].to_s, url, response)
         end
 
         result =
@@ -161,6 +187,16 @@ class Fetchy
         block.call(result, nil)
       rescue => e
         block.call(nil, classify_error(e, request, timeout_ms))
+      ensure
+        # Clear the timeout on EVERY termination path (success / HTTP
+        # error / network reject / abort). Without this, a network
+        # reject before timeout fires would leave the timer scheduled
+        # and the JS callback uncollectable.
+        if timeout_id
+          JS.global.call(:clearTimeout, timeout_id)
+          timeout_id = nil
+        end
+        request.mark_completed!
       end
     end
 

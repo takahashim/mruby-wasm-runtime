@@ -630,9 +630,9 @@ module Grainet
       @_cleanups.reverse_each { |c| safe_release("cleanup")          { c.call } }
       @_effects.each          { |e| safe_release("effect dispose")   { e.dispose } }
       @_memos.each            { |m| safe_release("memo dispose")     { m.dispose } }
-      @_listeners.each do |target_js, event_str, cb_js|
-        safe_release("removeEventListener") { target_js.call(:removeEventListener, event_str, cb_js) }
-        safe_release("release_callback")    { JS.release_callback(cb_js) }
+      @_listeners.each do |target_js, event_str, callback_js|
+        safe_release("removeEventListener") { target_js.call(:removeEventListener, event_str, callback_js) }
+        safe_release("release_callback")    { JS.release_callback(callback_js) }
       end
       @_children.each { |c| safe_release("child unmount") { c.__unmount__ } }
     end

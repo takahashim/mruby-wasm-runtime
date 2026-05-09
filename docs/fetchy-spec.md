@@ -2,7 +2,7 @@
 
 軽量な HTTP クライアント。`window.fetch` を Ruby から ergonomic に呼ぶための薄いラッパで、Ky (JS) のスタイルを参考にしている。
 
-`mrbgem/mruby-widget/mrblib/fetchy.rb` に実装があるが、widget 層には依存していないので**単独で利用可能**。将来的に別 gem として切り出す余地を残してある。
+`mrbgem/mruby-grainet/mrblib/fetchy.rb` に実装があるが、widget 層には依存していないので**単独で利用可能**。将来的に別 gem として切り出す余地を残してある。
 
 ## なぜ Fetchy か
 
@@ -106,15 +106,20 @@ req.abort
 
 `abort` を呼ぶと `Request#aborted?` が true になり、block には `Fetchy::AbortError` が届く。
 
-成功後の `abort` は **no-op** (block は既に呼ばれているので二重発火しない)。
+成功・エラー・タイムアウトのいずれの経路でも block 呼び出し直後に `Request#completed?` が `true` になり、**それ以降の `abort` は完全に no-op** (`@aborted` を立てない)。状態 API としては `completed?` が真ならその後の `aborted?` は変化しないことが保証される。
+
+### timeout のクリア契約
+
+`timeout:` で予約した `setTimeout` は、**全ての終端経路** (成功 / `Fetchy::HTTPError` / network reject / abort / timeout 自身) で `clearTimeout` される。実装上は `ensure` ブロックでまとめて行う。`controller.signal` の `abort` イベントもリスンしているので、`req.abort` 経由のユーザキャンセルでも timer 即時解除される。
 
 ### Request ハンドル API
 
 | メソッド | 意味 |
 |---|---|
 | `req.abort` | リクエストを取り消す。冪等 (既に terminate 済みなら no-op) |
-| `req.aborted?` | ユーザが `abort` を呼んだか |
+| `req.aborted?` | ユーザが `abort` を呼んで実際にキャンセルされたか |
 | `req.timed_out?` | `timeout:` 経由でキャンセルされたか |
+| `req.completed?` | block が呼ばれて終端した (成功・失敗いずれも) か |
 
 ---
 
@@ -122,16 +127,44 @@ req.abort
 
 ```
 StandardError
-└─ Fetchy::AbortError       ← user abort
-   └─ Fetchy::TimeoutError  ← timeout 経由の abort
+├─ Fetchy::AbortError       ← user abort
+│  └─ Fetchy::TimeoutError  ← timeout 経由の abort
+└─ Fetchy::HTTPError        ← 4xx / 5xx
 ```
 
 ```ruby
 rescue Fetchy::AbortError    # キャンセル全般 (user + timeout)
 rescue Fetchy::TimeoutError  # timeout のみ個別判定
+rescue Fetchy::HTTPError     # HTTP エラー (status / status_text 取得可)
 ```
 
-通常の HTTP / parse / network エラーは Ruby 標準の例外 (`RuntimeError` 等) で、AbortError ではない。
+### `Fetchy::HTTPError`
+
+4xx/5xx 応答を表す例外。status コードでの分岐 (401 → 再認証、404 → not-found UI 等) を堅く書けるよう、レスポンスの主要メタ情報を保持する:
+
+| attr | 型 | 内容 |
+|---|---|---|
+| `status` | Integer | `response.status` |
+| `status_text` | String | `response.statusText` |
+| `url` | String | リクエスト先の URL (base 解決済み) |
+| `response` | `JS::Object` | 元の `Response` オブジェクト (body 再読み等のために保持) |
+
+```ruby
+Fetchy.json("/api/users") do |data, err|
+  case err
+  when Fetchy::HTTPError
+    case err.status
+    when 401 then refresh_token_and_retry
+    when 404 then @results.value = []
+    else          show_error("HTTP #{err.status} #{err.status_text}")
+    end
+  when nil then handle_data(data)
+  else          show_error(err.message)
+  end
+end
+```
+
+その他の network / parse エラーは Ruby 標準の例外 (`RuntimeError` / `JS::Error` 等) で届く。
 
 ---
 
@@ -163,7 +196,7 @@ class Search < Grainet::Widget
 end
 ```
 
-### widget setup での fetch (タイムアウト付き)
+### widget setup での fetch (タイムアウト付き + cleanup)
 
 ```ruby
 def setup
@@ -171,7 +204,7 @@ def setup
   @loading = signal(true)
   @error = signal(nil)
 
-  Fetchy.json("./data/items.json", timeout: 5000) do |data, err|
+  req = Fetchy.json("./data/items.json", timeout: 5000) do |data, err|
     @loading.value = false
     if err
       @error.value = err.is_a?(Fetchy::TimeoutError) ?
@@ -180,6 +213,11 @@ def setup
       @items.value = data
     end
   end
+
+  # Widget が unmount された後に fetch callback が走って disposed 済みの
+  # signal を更新するのを防ぐ。abort は冪等 + completed? なら no-op なので
+  # 「unmount 前に既に成功していたケース」でも安全。
+  cleanup { req.abort }
 end
 ```
 
@@ -195,7 +233,8 @@ end
 
 `json:` を使うと:
 - `JSON.stringify(value)` を自動適用して body にセット
-- `Content-Type: application/json` を自動付与 (既に headers にある場合は上書きしない)
+- `Content-Type: application/json` を自動付与
+- 既に `headers:` に Content-Type 系のキーが含まれている場合 (大文字小文字を問わず: `"Content-Type"` / `"content-type"` / `"CONTENT-TYPE"` 等) は **何もしない** (上書きしない / 重複追加しない)。HTTP ヘッダ名は case-insensitive なので、Hash 上の表記揺れで誤って 2 つ目を足さないようにしている
 
 ### インスタンスの共通設定
 
@@ -238,14 +277,17 @@ end
 1. AbortController を生成
 2. `init` ハッシュを構築:
    - `method` / `headers` / `body` / `signal` (controller の signal) をセット
-   - `json:` 指定があれば `JSON.stringify` + Content-Type
-3. `timeout:` 指定があれば `setTimeout` で abort 予約
-4. `JS.__run_in_fiber__` 内で:
+   - `json:` 指定があれば `JSON.stringify` + Content-Type (case-insensitive 既存チェック)
+3. `timeout:` 指定があれば:
+   - `setTimeout` で `mark_timed_out!` + `controller.abort()` を予約
+   - `controller.signal.addEventListener("abort", ...)` で全 abort 経路で `clearTimeout` する
+4. `JS.__run_in_fiber__` 内で `begin/rescue/ensure`:
    - `JS.global.fetch(url, init_js).await`
-   - 成功時: timeout を `clearTimeout`、`response.ok` チェック、`json()` or `text()` を await、`to_ruby` 適用
-   - 失敗時: `Request` のフラグ (`timed_out?` / `aborted?`) を見てエラー分類
-5. block を呼ぶ
-6. `Request` ハンドルを呼び出し元に返す
+   - `response.ok` でなければ `Fetchy::HTTPError` を raise
+   - 成功時: `json()` / `text()` を await、`to_ruby` 適用、block を `(data, nil)` で呼ぶ
+   - rescue: `Request` のフラグから `TimeoutError` / `AbortError` / `HTTPError` / その他に分類して block を `(nil, err)` で呼ぶ
+   - **`ensure`**: 残っていれば `clearTimeout`、`request.mark_completed!`
+5. `Request` ハンドルを呼び出し元に返す
 
 ---
 
@@ -256,10 +298,10 @@ end
 代わりに **`Request` 自身が「自分で abort したか」「timeout で abort したか」を覚える**:
 
 - `request.abort` → `@aborted = true`
-- timeout callback → `request.__mark_timed_out__` (= `@timed_out = true`)
+- timeout callback → `request.mark_timed_out!` (= `@timed_out = true`)
 - どちらも JS 側で `controller.abort()` を呼ぶ
 
-await が reject で raise した時、`request.timed_out?` か `request.aborted?` を見て `TimeoutError` / `AbortError` / 元のエラーに振り分ける。
+await が reject で raise した時、`request.timed_out?` か `request.aborted?` を見て `TimeoutError` / `AbortError` / 元のエラーに振り分ける。HTTP エラーは `response.ok` チェックで自前で `Fetchy::HTTPError` を raise しているので、await の reject 経由では来ない。
 
 このフラグベースの設計の利点:
 - JS Error の `name` プロパティに依存しない (環境差を吸収)

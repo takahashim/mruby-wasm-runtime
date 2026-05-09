@@ -67,7 +67,7 @@ module JS
         handles: _handle_count,           # JS-side handle table size
         callbacks: _callback_count,       # C-side callback Hash size
         await_fibers: @await_fibers.size, # suspended fibers waiting on .await
-        callback_ids: @callback_ids.size, # Ruby-side handle→cb_id map
+        callback_ids: @callback_ids.size, # Ruby-side handle→callback_id map
       }
     end
 
@@ -76,9 +76,9 @@ module JS
     # callbacks where you know the JS side will only invoke the wrapper
     # once (Object#await uses this internally to free the unfired half of
     # its (then, catch) pair).
-    def release_callback(cb_value)
-      return if cb_value.nil?
-      handle = cb_value.handle
+    def release_callback(callback)
+      return if callback.nil?
+      handle = callback.handle
       id = @callback_ids.delete(handle)
       _release_callback(id) if id
     end

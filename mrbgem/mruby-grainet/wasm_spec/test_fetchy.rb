@@ -69,7 +69,7 @@ Spec.describe "Fetchy.json" do
     uninstall_fetch_stub
   end
 
-  Spec.assert "HTTP error becomes a normal exception in the block" do
+  Spec.assert "HTTP error raises Fetchy::HTTPError carrying status / status_text / url" do
     install_fetch_stub(JS.object(
       "/api/missing" => JS.object(status: 404, statusText: "Not Found", body: ""),
     ))
@@ -78,8 +78,52 @@ Spec.describe "Fetchy.json" do
     Fetchy.json("/api/missing") { |_data, err| err_seen = err }
     JS.eval("new Promise(r => setTimeout(r, 0))").await
 
-    Spec.assert_true err_seen.message.include?("404")
+    Spec.assert_true err_seen.is_a?(Fetchy::HTTPError)
     Spec.assert_false err_seen.is_a?(Fetchy::AbortError)
+    Spec.assert_equal 404, err_seen.status
+    Spec.assert_equal "Not Found", err_seen.status_text
+    Spec.assert_equal "/api/missing", err_seen.url
+    Spec.assert_true err_seen.message.include?("404")
+    Spec.assert_true !err_seen.response.nil?
+
+    uninstall_fetch_stub
+  end
+
+  Spec.assert "abort after completion is a no-op (completed? wins)" do
+    install_fetch_stub(JS.object(
+      "/quick" => JS.object(status: 200, body: '{"ok":true}', contentType: "application/json"),
+    ))
+
+    req = Fetchy.json("/quick") { |_, _| }
+    JS.eval("new Promise(r => setTimeout(r, 0))").await
+
+    Spec.assert_true req.completed?
+    Spec.assert_false req.aborted?
+
+    req.abort   # should be no-op now
+    Spec.assert_false req.aborted?
+    Spec.assert_true req.completed?
+
+    uninstall_fetch_stub
+  end
+
+  Spec.assert "json: does not duplicate Content-Type when user provided lower-case header" do
+    install_fetch_stub(JS.object(
+      "/echo" => JS.object(status: 200, body: '{"ok":true}', contentType: "application/json"),
+    ))
+
+    Fetchy.json("/echo",
+                method: "POST",
+                json: { name: "Alice" },
+                headers: { "content-type" => "application/vnd.custom+json" }) { |_, _| }
+    JS.eval("new Promise(r => setTimeout(r, 0))").await
+
+    sent_headers = JS.global[:__last_init__][:headers].to_ruby
+    has_lower = sent_headers.key?("content-type")
+    has_pascal = sent_headers.key?("Content-Type")
+    Spec.assert_true has_lower
+    Spec.assert_false has_pascal
+    Spec.assert_equal "application/vnd.custom+json", sent_headers["content-type"]
 
     uninstall_fetch_stub
   end
