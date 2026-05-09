@@ -64,14 +64,12 @@ mrb_js_release_callback(mrb_state *mrb, mrb_value self) {
   return mrb_nil_value();
 }
 
-/* JS._callback_count() -> int — # of currently-registered callbacks. */
 static mrb_value
 mrb_js_callback_count(mrb_state *mrb, mrb_value self) {
   if (!mrb_hash_p(g_callback_table)) return mrb_fixnum_value(0);
   return mrb_fixnum_value(mrb_hash_size(mrb, g_callback_table));
 }
 
-/* JS._handle_count() -> int — # of currently-allocated JS handles. */
 static mrb_value
 mrb_js_handle_count(mrb_state *mrb, mrb_value self) {
   return mrb_fixnum_value(js_handle_count());
@@ -163,13 +161,12 @@ js_invoke_proc(int callback_id, int args_handle) {
    * remain held through normal mark-phase. */
   int arena_idx = mrb_gc_arena_save(mrb);
 
-  /* Discover the number of args by reading args_handle.length */
   int length_h = js_get(args_handle, "length", 6);
   int n = js_to_int(length_h);
   js_release(length_h);
 
-  /* Pull out each arg as a JS::Object. Index-as-string ("0", "1", ...) is
-   * how JS exposes array elements via property access. */
+  /* Index-as-string ("0", "1", ...) is how JS exposes array elements
+   * via property access. */
   mrb_value *args = NULL;
   if (n > 0) {
     args = (mrb_value *)mrb_malloc(mrb, sizeof(mrb_value) * (size_t)n);
