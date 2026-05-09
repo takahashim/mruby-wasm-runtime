@@ -117,7 +117,7 @@ module HTML
       out << "<" << name_str
       attrs.each do |k, v|
         next if v.nil? || v == false
-        key = escape(__attr_key__(k))
+        key = escape(attr_key(k))
         if v == true
           out << " " << key
         else
@@ -125,31 +125,9 @@ module HTML
         end
       end
       out << ">"
-      __append_body__(out, body)
+      append_body(out, body)
       out << "</" << name_str << ">"
       Safe.new(out)
-    end
-
-    # Internal: attribute name normalisation. Symbol keys map `_` to
-    # `-`; String keys pass through. See `tag` docs for the rationale.
-    def __attr_key__(k)
-      k.is_a?(Symbol) ? k.to_s.tr("_", "-") : k.to_s
-    end
-
-    # Internal: append body content to `out`, dispatching on type.
-    # Recurses into Arrays so nested fragments compose without
-    # `safe_join`. Skips nil entries — handy for conditional children.
-    def __append_body__(out, body)
-      case body
-      when nil
-        # empty
-      when Safe
-        out << body.to_s
-      when Array
-        body.each { |child| __append_body__(out, child) }
-      else
-        out << escape(body.to_s)
-      end
     end
 
     # Concatenate items into one Safe. Each item is escaped if plain,
@@ -161,6 +139,28 @@ module HTML
         item.is_a?(Safe) ? item.to_s : escape(item.to_s)
       end
       Safe.new(pieces.join(sep_str))
+    end
+
+    private
+
+    # Symbol keys map `_` to `-`; String keys pass through.
+    def attr_key(k)
+      k.is_a?(Symbol) ? k.to_s.tr("_", "-") : k.to_s
+    end
+
+    # Recurses into Arrays so nested fragments compose without
+    # `safe_join`. Skips nil entries — handy for conditional children.
+    def append_body(out, body)
+      case body
+      when nil
+        # empty
+      when Safe
+        out << body.to_s
+      when Array
+        body.each { |child| append_body(out, child) }
+      else
+        out << escape(body.to_s)
+      end
     end
   end
 end

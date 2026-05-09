@@ -89,23 +89,23 @@ class Fetchy
   end
 
   def json(path, **opts, &block)
-    __dispatch__(path, opts, :json, &block)
+    perform_request(path, opts, :json, &block)
   end
 
   def text(path, **opts, &block)
-    __dispatch__(path, opts, :text, &block)
+    perform_request(path, opts, :text, &block)
   end
 
   private
 
-  def __dispatch__(path, opts, kind, &block)
+  def perform_request(path, opts, kind, &block)
     raise ArgumentError, "block required" unless block
 
     if opts[:json] && opts[:body]
       raise ArgumentError, "Fetchy: pass either :json or :body, not both"
     end
 
-    url = __build_url__(path)
+    url = build_url(path)
 
     controller = JS.global[:AbortController].new
     request = Request.new(controller)
@@ -160,7 +160,7 @@ class Fetchy
 
         block.call(result, nil)
       rescue => e
-        block.call(nil, __classify_error__(e, request, timeout_ms))
+        block.call(nil, classify_error(e, request, timeout_ms))
       end
     end
 
@@ -175,13 +175,13 @@ class Fetchy
   # we set when triggering abort/timeout ourselves: those are
   # authoritative and cover all paths (manual abort, timeout, plus any
   # other error propagating through).
-  def __classify_error__(err, request, timeout_ms)
+  def classify_error(err, request, timeout_ms)
     return TimeoutError.new("timeout after #{timeout_ms}ms") if request.timed_out?
     return AbortError.new("aborted") if request.aborted?
     err
   end
 
-  def __build_url__(path)
+  def build_url(path)
     return path if @base.nil? || @base.empty?
     return path if path.start_with?("http://", "https://", "//")
     base = @base.end_with?("/") ? @base[0..-2] : @base

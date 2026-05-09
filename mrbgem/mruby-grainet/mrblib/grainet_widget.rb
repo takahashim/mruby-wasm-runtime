@@ -212,6 +212,21 @@ module Grainet
   # JS::Object so external (non-template) elements can flow through
   # `bind_list` without raw-element handling.
   class Template
+    # Clone `<template data-template="NAME">` from the document and
+    # wrap its first element child as a Template. `widget` is consulted
+    # by `TemplateRefs` for listener auto-cleanup tracking when the
+    # cloned content's RefElements register events.
+    def self.from_document(name, widget = nil)
+      tpl = JS.global[:document].call(:querySelector, "template[data-template=\"#{name}\"]")
+      raise Error, "Missing template: #{name}" if tpl.js_null?
+      frag = tpl[:content].call(:cloneNode, true)
+      clone = frag[:firstElementChild]
+      raise Error, "Empty template: #{name}" if clone.js_null?
+      t = new(clone, widget)
+      yield t.refs if block_given?
+      t
+    end
+
     def initialize(node, widget = nil)
       @node = node
       @widget = widget
@@ -271,7 +286,7 @@ module Grainet
     # mode pinning).
     def bind_list(ref, source, key:, template: nil, &item_proc)
       raise ArgumentError, "bind_list requires a block" unless item_proc
-      key_fn = __coerce_bind_list_key__(key)
+      key_fn = coerce_bind_list_key(key)
       el = coerce_ref(ref)
       label = "bind_list(#{el.name || "?"})"
       by_key = {}
@@ -298,15 +313,15 @@ module Grainet
             prev_t = existing && existing[:mode] == :template ? existing[:template] : nil
             t = prev_t || template(template_name)
             item_proc.call(item, t)
-            __bind_list_apply_template__(by_key, k, existing, t)
+            bind_list_apply_template(by_key, k, existing, t)
           else
             prev = existing && existing[:mode] == :template ? existing[:template] : nil
             result = item_proc.call(item, prev)
             case result
             when Template
-              __bind_list_apply_template__(by_key, k, existing, result)
+              bind_list_apply_template(by_key, k, existing, result)
             when HTML::Safe, String
-              __bind_list_apply_string__(by_key, k, existing, result.to_s)
+              bind_list_apply_string(by_key, k, existing, result.to_s)
             when JS::Object
               raise Grainet::Error,
                     "bind_list block returned a raw JS::Object. Wrap it via " \
@@ -363,7 +378,7 @@ module Grainet
 
     # See docs/grainet-spec.md "Template helper".
     def template(name, &block)
-      Grainet.__clone_template__(name, self, &block)
+      Template.from_document(name, self, &block)
     end
 
     private
@@ -408,7 +423,7 @@ module Grainet
     # Symbol is rejected (not coerced) so users coming from Rails-style
     # `:id` get an actionable error rather than silent nil keys against
     # our String-keyed items convention.
-    def __coerce_bind_list_key__(key)
+    def coerce_bind_list_key(key)
       case key
       when Proc
         key
@@ -425,7 +440,7 @@ module Grainet
     end
 
     # Build a single DOM Element from an HTML fragment string.
-    def __bind_list_node__(html_str)
+    def bind_list_node(html_str)
       doc = JS.global[:document]
       tpl = doc.call(:createElement, "template")
       tpl[:innerHTML] = html_str
@@ -434,7 +449,7 @@ module Grainet
 
     # Diff is by underlying node identity (not Template identity) so
     # `prev`-pass-through and `Template.new(same_node)` both reuse.
-    def __bind_list_apply_template__(by_key, k, existing, template)
+    def bind_list_apply_template(by_key, k, existing, template)
       node = template.to_js
       if existing && existing[:mode] == :template && existing[:node] == node
         return
@@ -451,12 +466,12 @@ module Grainet
       end
     end
 
-    def __bind_list_apply_string__(by_key, k, existing, new_html)
+    def bind_list_apply_string(by_key, k, existing, new_html)
       if existing && existing[:mode] == :string && existing[:html] == new_html
         return
       end
       if existing
-        new_node = __bind_list_node__(new_html)
+        new_node = bind_list_node(new_html)
         parent = existing[:node][:parentNode]
         parent.call(:replaceChild, new_node, existing[:node]) unless parent.js_null?
         existing[:node] = new_node
@@ -464,7 +479,7 @@ module Grainet
         existing[:template] = nil
         existing[:mode] = :string
       else
-        by_key[k] = { node: __bind_list_node__(new_html), template: nil, html: new_html, mode: :string }
+        by_key[k] = { node: bind_list_node(new_html), template: nil, html: new_html, mode: :string }
       end
     end
   end
@@ -517,7 +532,7 @@ module Grainet
       while current
         val = current.__provided_for__(key)
         return val unless val.equal?(NOT_FOUND)
-        current = current.__parent__
+        current = current.parent
       end
       return block.call if block
       return default unless default.equal?(NOT_FOUND)
@@ -578,7 +593,7 @@ module Grainet
       @_parent = parent_widget
     end
 
-    def __parent__
+    def parent
       @_parent
     end
 
@@ -827,22 +842,7 @@ module Grainet
     # method `template(name)` so that any listeners attached to refs in
     # the cloned content get auto-cleanup tracking.
     def template(name, &block)
-      __clone_template__(name, nil, &block)
-    end
-
-    # Shared implementation behind Bindable#template and
-    # Grainet.template. `widget` is the host (or nil) that listeners
-    # attached via the yielded refs bind to for auto-cleanup. Returns
-    # a Template wrapping the cloned firstElementChild.
-    def __clone_template__(name, widget)
-      tpl = JS.global[:document].call(:querySelector, "template[data-template=\"#{name}\"]")
-      raise Grainet::Error, "Missing template: #{name}" if tpl.js_null?
-      frag = tpl[:content].call(:cloneNode, true)
-      clone = frag[:firstElementChild]
-      raise Grainet::Error, "Empty template: #{name}" if clone.js_null?
-      template = Template.new(clone, widget)
-      yield template.refs if block_given?
-      template
+      Template.from_document(name, &block)
     end
   end
 end

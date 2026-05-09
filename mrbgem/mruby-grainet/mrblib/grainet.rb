@@ -45,7 +45,7 @@ module Grainet
       current = source
       while current
         return if current.__handle_error__(label, error)
-        current = current.__parent__
+        current = current.parent
       end
       if @logger
         @logger.call(:error, label, error)
