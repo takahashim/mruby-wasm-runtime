@@ -165,4 +165,42 @@ Spec.describe "Widget mount + refs + events" do
     body[:innerHTML] = ""
     JS.eval("new Promise(r => setTimeout(r, 0))").await
   end
+
+  Spec.assert "Widget#selector helper works inside bind/class flows" do
+    doc = JS.global[:document]
+    body = doc[:body]
+    body[:innerHTML] = <<~HTML
+      <template data-template="selector-row"><li><span data-ref="label"></span></li></template>
+      <div data-widget="selector-test"><ul data-ref="list"></ul></div>
+    HTML
+
+    selected = nil
+    klass = Class.new(Grainet::Widget) do
+      attr_reader :selected
+
+      define_method(:setup) do
+        @selected = signal("b")
+        match = selector(@selected)
+        list = signal(["a", "b", "c"])
+        bind_list refs.list, list, key: ->(it) { it }, template: "selector-row" do |it, t|
+          row = ref(t.to_js)
+          t.refs.label.text = it
+          bind row, class: { "active" => computed { match.call(it) } }
+        end
+      end
+    end
+    Grainet.register "selector-test", klass
+    Grainet.start
+
+    host = doc.call(:querySelector, "[data-widget='selector-test']")
+    inst = Grainet.find_for_element(host)
+    list = doc.call(:querySelector, "[data-ref='list']")
+    Spec.assert_true list[:children][1][:classList].call(:contains, "active").js_bool
+    inst.selected.value = "c"
+    Spec.assert_false list[:children][1][:classList].call(:contains, "active").js_bool
+    Spec.assert_true list[:children][2][:classList].call(:contains, "active").js_bool
+
+    body[:innerHTML] = ""
+    JS.eval("new Promise(r => setTimeout(r, 0))").await
+  end
 end

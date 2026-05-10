@@ -383,9 +383,11 @@ module Grainet
 
   # Read-only derived signal.
   class Computed
-    def initialize(&block)
+    def initialize(equals: nil, on: nil, &block)
       raise ArgumentError, "block required" unless block
       @block = block
+      @equals = equals
+      @on = normalize_on(on)
       @deps = []
       @subs = Subscribers.new
       @value = nil
@@ -407,7 +409,7 @@ module Grainet
     def __notify__
       prev = @value
       recompute
-      unless prev == @value
+      unless equal_for_skip?(prev, @value)
         Reactive.notify(@subs.to_a)
       end
     end
@@ -430,9 +432,32 @@ module Grainet
     def recompute
       @deps.each { |d| d.__subscribers__.remove(self) }
       @deps = []
-      Reactive.track(self) do
-        @value = @block.call
+      if @on
+        Reactive.track(self) do
+          @on.each { |dep| dep.value }
+        end
+        @value = Reactive.untrack { @block.call }
+      else
+        Reactive.track(self) do
+          @value = @block.call
+        end
       end
+    end
+
+    def equal_for_skip?(prev, next_value)
+      return false if @equals == false
+      return @equals.call(prev, next_value) if @equals.respond_to?(:call)
+      prev == next_value
+    end
+
+    def normalize_on(on)
+      return nil if on.nil?
+      deps = on.is_a?(Array) ? on : [on]
+      deps.each do |dep|
+        next if dep.respond_to?(:value)
+        raise ArgumentError, "computed on: entries must respond to #value"
+      end
+      deps
     end
   end
 
@@ -501,6 +526,85 @@ module Grainet
       @disposed = true
       @deps.each { |d| d.__subscribers__.remove(self) }
       @deps.clear
+    end
+  end
+
+  class SelectorEntry
+    attr_reader :subscribers
+
+    def initialize
+      @subscribers = Subscribers.new
+    end
+
+    def __subscribers__
+      @subscribers
+    end
+  end
+
+  class Selector
+    def initialize(source, equals: nil)
+      raise ArgumentError, "selector source must respond to #value" unless source.respond_to?(:value)
+      @source = source
+      @equals = equals
+      @deps = []
+      @entries = {}
+      @value = nil
+      recompute
+    end
+
+    def call(key)
+      if (obs = Reactive.current)
+        entry_for(key).subscribers.add(obs)
+        obs.__add_dep__(entry_for(key))
+      end
+      selected?(key)
+    end
+
+    def selected?(key)
+      compare(@value, key)
+    end
+
+    def __notify__
+      prev = @value
+      recompute
+      return if compare(prev, @value)
+      notify_entry(prev)
+      notify_entry(@value)
+    end
+
+    def __add_dep__(signal_or_computed)
+      @deps << signal_or_computed
+    end
+
+    def dispose
+      @deps.each { |d| d.__subscribers__.remove(self) }
+      @deps.clear
+      @entries.clear
+    end
+
+    private
+
+    def recompute
+      @deps.each { |d| d.__subscribers__.remove(self) }
+      @deps = []
+      Reactive.track(self) do
+        @value = @source.value
+      end
+    end
+
+    def notify_entry(key)
+      entry = @entries[key]
+      return unless entry
+      Reactive.notify(entry.subscribers.to_a)
+    end
+
+    def entry_for(key)
+      @entries[key] ||= SelectorEntry.new
+    end
+
+    def compare(a, b)
+      return @equals.call(a, b) if @equals.respond_to?(:call)
+      a == b
     end
   end
 

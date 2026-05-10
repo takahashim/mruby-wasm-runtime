@@ -62,18 +62,21 @@ module Grainet
       # method_missing when result is a `JS::Object` and throw.
       def apply_one(item, k)
         existing = @by_key[k]
+        return if existing && same_item?(existing[:item], item)
         prev_t = existing && existing[:mode] == :template ? existing[:template] : nil
+        existing[:scope].dispose if existing && existing[:scope]
+        scope = @host.__new_scope__
         if @template_name
           t = prev_t || @host.template(@template_name)
-          @item_proc.call(item, t)
-          apply_template(k, existing, t)
+          @host.__with_scope__(scope) { @item_proc.call(item, t) }
+          apply_template(k, existing, t, scope, item)
         else
-          result = @item_proc.call(item, prev_t)
+          result = @host.__with_scope__(scope) { @item_proc.call(item, prev_t) }
           case result
           when Template
-            apply_template(k, existing, result)
+            apply_template(k, existing, result, scope, item)
           when HTML::Safe, String
-            apply_string(k, existing, result.to_s)
+            apply_string(k, existing, result.to_s, scope, item)
           when JS::Object
             raise Grainet::Error,
                   "bind_list block returned a raw JS::Object. Wrap it via " \
@@ -88,9 +91,11 @@ module Grainet
 
       # Diff is by underlying node identity (not Template identity) so
       # `prev`-pass-through and `Template.new(same_node)` both reuse.
-      def apply_template(k, existing, template)
+      def apply_template(k, existing, template, scope, item = nil)
         node = template.to_js
         if existing && existing[:mode] == :template && existing[:node] == node
+          existing[:scope] = scope
+          existing[:item] = item
           return
         end
         if existing
@@ -100,13 +105,17 @@ module Grainet
           existing[:template] = template
           existing[:html] = nil
           existing[:mode] = :template
+          existing[:scope] = scope
+          existing[:item] = item
         else
-          @by_key[k] = { node: node, template: template, html: nil, mode: :template }
+          @by_key[k] = { node: node, template: template, html: nil, mode: :template, scope: scope, item: item }
         end
       end
 
-      def apply_string(k, existing, new_html)
+      def apply_string(k, existing, new_html, scope, item = nil)
         if existing && existing[:mode] == :string && existing[:html] == new_html
+          existing[:scope] = scope
+          existing[:item] = item
           return
         end
         if existing
@@ -117,8 +126,10 @@ module Grainet
           existing[:html] = new_html
           existing[:template] = nil
           existing[:mode] = :string
+          existing[:scope] = scope
+          existing[:item] = item
         else
-          @by_key[k] = { node: build_node(new_html), template: nil, html: new_html, mode: :string }
+          @by_key[k] = { node: build_node(new_html), template: nil, html: new_html, mode: :string, scope: scope, item: item }
         end
       end
 
@@ -129,6 +140,7 @@ module Grainet
         @by_key.each_key { |k| gone << k unless new_set[k] }
         gone.each do |k|
           record = @by_key.delete(k)
+          record[:scope]&.dispose
           n = record[:node]
           n.call(:remove) unless n.js_null?
         end
@@ -150,6 +162,17 @@ module Grainet
         tpl = doc.call(:createElement, "template")
         tpl[:innerHTML] = html_str
         tpl[:content][:firstElementChild]
+      end
+
+      def same_item?(a, b)
+        a.equal?(b) || a == b
+      end
+
+      public
+
+      def dispose
+        @by_key.each_value { |record| record[:scope]&.dispose }
+        @by_key.clear
       end
     end
     # property -> { event: ..., normalize: ->(value) { ... } }
@@ -188,6 +211,7 @@ module Grainet
       el = coerce_ref(ref)
       reconciler = ListReconciler.new(
         el, coerce_bind_list_key(key), template, self, item_proc)
+      cleanup { reconciler.dispose }
       effect(label: "bind_list(#{el.name || '?'})") do
         reconciler.run(source.value || [])
       end
@@ -216,7 +240,7 @@ module Grainet
 
     # See docs/grainet-spec.md "Template helper".
     def template(name, &block)
-      Template.from_document(name, self, &block)
+      Template.from_document(name, __owner_target__, &block)
     end
 
     private

@@ -10,6 +10,65 @@
 module Grainet
   # The user-inheritable base. Users write `class Counter < Grainet::Widget`.
   class Widget
+    class Scope
+      def initialize(source_widget)
+        @source_widget = source_widget
+        @listeners = []
+        @effects = []
+        @computeds = []
+        @resources = []
+        @selectors = []
+        @cleanups = []
+        @disposed = false
+      end
+
+      def __track_listener__(target_js, event_str, callback_js)
+        @listeners << [target_js, event_str, callback_js]
+      end
+
+      def __register_effect__(effect)
+        @effects << effect
+      end
+
+      def __register_computed__(computed)
+        @computeds << computed
+      end
+
+      def __register_resource__(resource)
+        @resources << resource
+      end
+
+      def __register_selector__(selector)
+        @selectors << selector
+      end
+
+      def __register_cleanup__(cleanup)
+        @cleanups << cleanup
+      end
+
+      def dispose
+        return if @disposed
+        @disposed = true
+        @cleanups.reverse_each { |c| safe_release("cleanup")          { c.call } }
+        @effects.each          { |e| safe_release("effect dispose")   { e.dispose } }
+        @computeds.each        { |m| safe_release("computed dispose") { m.dispose } }
+        @resources.each        { |r| safe_release("resource dispose") { r.dispose } }
+        @selectors.each        { |s| safe_release("selector dispose") { s.dispose } }
+        @listeners.each do |target_js, event_str, callback_js|
+          safe_release("removeEventListener") { target_js.call(:removeEventListener, event_str, callback_js) }
+          safe_release("release_callback")    { JS.release_callback(callback_js) }
+        end
+      end
+
+      private
+
+      def safe_release(label)
+        yield
+      rescue StandardError => e
+        Grainet.__error__("#{@source_widget.class.name} #{label}", e, source: @source_widget)
+      end
+    end
+
     # Sentinel for inject's default-not-supplied case. We can't use nil
     # because nil itself is a valid provided value.
     NOT_FOUND = Object.new.freeze
@@ -50,6 +109,7 @@ module Grainet
       @_effects = []
       @_computeds = []
       @_resources = []
+      @_selectors = []
       @_cleanups = []
       @_children = []
       @_parent = nil
@@ -96,7 +156,7 @@ module Grainet
     # querySelector result, etc.) and want the framework's ergonomic
     # API (`attr`, `data`, `on` with auto-cleanup, `text=` etc.) on it.
     def ref(js_element)
-      RefElement.new(js_element, self)
+      RefElement.new(js_element, __owner_target__)
     end
 
     def signal(initial)
@@ -134,21 +194,27 @@ module Grainet
       s
     end
 
-    def computed(&block)
-      m = Computed.new(&block)
-      @_computeds << m
+    def computed(equals: nil, on: nil, &block)
+      m = Computed.new(equals: equals, on: on, &block)
+      __owner_target__.__register_computed__(m)
       m
     end
 
     def resource(initial: nil, defer: false, keep_value: true, &block)
       r = Resource.new(initial: initial, defer: defer, keep_value: keep_value, &block)
-      @_resources << r
+      __owner_target__.__register_resource__(r)
       r
+    end
+
+    def selector(source, equals: nil)
+      s = Selector.new(source, equals: equals)
+      __owner_target__.__register_selector__(s)
+      s
     end
 
     def effect(label: nil, &block)
       e = Effect.new(label: label, source: self, &block)
-      @_effects << e
+      __owner_target__.__register_effect__(e)
       e
     end
 
@@ -179,7 +245,7 @@ module Grainet
 
     def cleanup(&block)
       raise ArgumentError, "block required" unless block
-      @_cleanups << block
+      __owner_target__.__register_cleanup__(block)
     end
 
     # See docs/grainet-spec.md "Error Boundary".
@@ -202,6 +268,38 @@ module Grainet
 
     def __track_listener__(target_js, event_str, callback_js)
       @_listeners << [target_js, event_str, callback_js]
+    end
+
+    def __register_effect__(effect)
+      @_effects << effect
+    end
+
+    def __register_computed__(computed)
+      @_computeds << computed
+    end
+
+    def __register_resource__(resource)
+      @_resources << resource
+    end
+
+    def __register_selector__(selector)
+      @_selectors << selector
+    end
+
+    def __register_cleanup__(cleanup)
+      @_cleanups << cleanup
+    end
+
+    def __new_scope__
+      Scope.new(self)
+    end
+
+    def __with_scope__(scope)
+      @_scope_stack ||= []
+      @_scope_stack << scope
+      yield
+    ensure
+      @_scope_stack.pop
     end
 
     def __track_child__(child_widget)
@@ -254,6 +352,7 @@ module Grainet
       @_effects.each          { |e| safe_release("effect dispose")   { e.dispose } }
       @_computeds.each        { |m| safe_release("computed dispose") { m.dispose } }
       @_resources.each        { |r| safe_release("resource dispose") { r.dispose } }
+      @_selectors.each        { |s| safe_release("selector dispose") { s.dispose } }
       @_listeners.each do |target_js, event_str, callback_js|
         safe_release("removeEventListener") { target_js.call(:removeEventListener, event_str, callback_js) }
         safe_release("release_callback")    { JS.release_callback(callback_js) }
@@ -262,6 +361,11 @@ module Grainet
     end
 
     private
+
+    def __owner_target__
+      stack = @_scope_stack
+      (stack && stack.last) || self
+    end
 
     def safe_release(label)
       yield

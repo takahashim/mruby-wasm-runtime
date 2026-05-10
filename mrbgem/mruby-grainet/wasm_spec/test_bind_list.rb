@@ -209,6 +209,37 @@ Spec.describe "bind_list" do
     body[:innerHTML] = ""
   end
 
+  Spec.assert "per-row bind/effect scope is disposed when a keyed row is removed" do
+    doc = JS.global[:document]
+    body = doc[:body]
+    body[:innerHTML] = <<~HTML
+      <template data-template="bl_scope"><li><span data-ref="label"></span></li></template>
+      <div data-widget="bl-scope-host"><ul data-ref="list"></ul></div>
+    HTML
+
+    cleaned = []
+    klass = Class.new(Grainet::Widget) do
+      attr_reader :items
+
+      define_method(:setup) do
+        @items = signal([{ "id" => 1, "label" => "alpha" }, { "id" => 2, "label" => "beta" }])
+        bind_list refs.list, @items, key: "id", template: "bl_scope" do |it, t|
+          t.refs.label.text = it["label"]
+          cleanup { cleaned << it["id"] }
+        end
+      end
+    end
+    Grainet.register "bl-scope-host", klass
+    Grainet.start
+
+    el = doc.call(:querySelector, "[data-widget='bl-scope-host']")
+    inst = Grainet.find_for_element(el)
+    inst.items.update { |arr| arr.reject { |it| it["id"] == 1 } }
+
+    Spec.assert_equal [1], cleaned
+    body[:innerHTML] = ""
+  end
+
   Spec.assert "duplicate keys raise Grainet::Error in dev mode" do
     doc = JS.global[:document]
     body = doc[:body]

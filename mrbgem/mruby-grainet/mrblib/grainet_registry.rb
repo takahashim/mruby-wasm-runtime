@@ -50,6 +50,7 @@ module Grainet
       # inserts nested data-widget nodes (e.g. bind_list with template:),
       # MO needs to be watching to mount them on the next microtask.
       install_observer
+      prune_disconnected_widgets
       mount_subtree(root_js)
       nil
     end
@@ -171,11 +172,24 @@ module Grainet
           end
           i += 1
         end
+        prune_disconnected_widgets
       end
       obs = Grainet.__window__[:MutationObserver].new(callback)
       obs.call(:observe, target, JS.object(childList: true, subtree: true))
       @observer = obs
       @observer_callback = callback
+    end
+
+    def prune_disconnected_widgets
+      stale = []
+      @widgets.each do |id, instance|
+        root_js = instance.root.to_js
+        stale << id unless root_js[:isConnected].js_bool
+      end
+      stale.each do |id|
+        instance = @widgets.delete(id)
+        instance&.__unmount__
+      end
     end
   end
 

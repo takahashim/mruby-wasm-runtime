@@ -36,4 +36,61 @@ Spec.describe "Grainet::Computed" do
     s.value = -1
     Spec.assert_equal 2, runs
   end
+
+  Spec.assert "computed supports custom equals comparator" do
+    s = Grainet::Signal.new("a")
+    folded = Grainet::Computed.new(equals: ->(a, b) { a.to_s.downcase == b.to_s.downcase }) do
+      s.value
+    end
+    seen = []
+    Grainet::Effect.new { seen << folded.value }
+    Spec.assert_equal ["a"], seen
+    s.value = "A"
+    Spec.assert_equal ["a"], seen
+    s.value = "B"
+    Spec.assert_equal ["a", "B"], seen
+  end
+
+  Spec.assert "computed supports equals: false to force downstream notify" do
+    s = Grainet::Signal.new(1)
+    truthy = Grainet::Computed.new(equals: false) { s.value > 0 }
+    runs = 0
+    Grainet::Effect.new { truthy.value; runs += 1 }
+    Spec.assert_equal 1, runs
+    s.value = 2
+    Spec.assert_equal 2, runs
+  end
+
+  Spec.assert "computed supports on: to restrict dependency tracking" do
+    trigger = Grainet::Signal.new(0)
+    noisy = Grainet::Signal.new(10)
+    memo = Grainet::Computed.new(on: trigger) { noisy.value * 2 }
+    Spec.assert_equal 20, memo.value
+    noisy.value = 11
+    Spec.assert_equal 20, memo.value
+    trigger.value = 1
+    Spec.assert_equal 22, memo.value
+  end
+
+  Spec.assert "selector only notifies the keys that changed" do
+    current = Grainet::Signal.new("a")
+    selector = Grainet::Selector.new(current)
+    runs = Hash.new(0)
+
+    Grainet::Effect.new { selector.call("a"); runs["a"] += 1 }
+    Grainet::Effect.new { selector.call("b"); runs["b"] += 1 }
+    Grainet::Effect.new { selector.call("c"); runs["c"] += 1 }
+
+    Spec.assert_equal({"a" => 1, "b" => 1, "c" => 1}, runs)
+
+    current.value = "b"
+    Spec.assert_equal 2, runs["a"]
+    Spec.assert_equal 2, runs["b"]
+    Spec.assert_equal 1, runs["c"]
+
+    current.value = "c"
+    Spec.assert_equal 2, runs["a"]
+    Spec.assert_equal 3, runs["b"]
+    Spec.assert_equal 2, runs["c"]
+  end
 end
