@@ -182,12 +182,16 @@ Inject server-side validation errors. Keys map to field names; values
 are error strings. Server errors override client-side validation.
 
 ```ruby
-Fetchy.json("/signup", json: @form.values.value) do |_data, err|
-  if err.is_a?(Fetchy::HTTPError) && err.status == 422
-    @form.set_server_errors(err.response[:errors] || {})
+begin
+  Fetchy.post("/signup", json: @form.values.value).json
+rescue Fetchy::HTTPError => err
+  if err.status == 422
+    @form.set_server_errors(err.response.json["errors"] || {})
   else
     @form.set_base_error("Could not sign up. Please try again.")
   end
+rescue Fetchy::Error
+  @form.set_base_error("Could not sign up. Please try again.")
 end
 ```
 

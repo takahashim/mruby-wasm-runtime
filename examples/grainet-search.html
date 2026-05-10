@@ -89,9 +89,9 @@ class CountryPicker < Grainet::Widget
   def setup
     @query   = signal("")
     @region  = signal("")
-    @items   = signal([])
-    @loading = signal(true)
-    @error   = signal(nil)
+    @items   = resource(initial: []) do |r|
+      Fetchy.json("./data/countries.json", timeout: 5000, signal: r.abort_signal)
+    end
 
     # Two-way bind for both inputs.
     model refs.query,  @query
@@ -110,13 +110,13 @@ class CountryPicker < Grainet::Widget
       end
     end
 
-    bind refs.status, class: { "error" => computed { !@error.value.nil? } }
+    bind refs.status, class: { "error" => computed { !@items.error.nil? } }
 
     bind refs.status, :text do
-      if @loading.value
+      if @items.loading?
         "loading…"
-      elsif @error.value
-        "error: #{@error.value}"
+      elsif @items.error
+        "error: #{@items.error.is_a?(Fetchy::TimeoutError) ? "request timed out" : @items.error.message}"
       else
         n     = @filtered.value.length
         total = @items.value.length
@@ -134,19 +134,6 @@ class CountryPicker < Grainet::Widget
       ])
     end
 
-    # GET + parse + Ruby-convert in one call. The block runs once
-    # (success or failure) inside its own fiber, so the surrounding
-    # setup returns immediately and the widget mounts in "loading"
-    # state until the JSON arrives.
-    Fetchy.json("./data/countries.json", timeout: 5000) do |data, err|
-      @loading.value = false
-      if err
-        @error.value = err.is_a?(Fetchy::TimeoutError) ?
-          "request timed out" : err.message
-      else
-        @items.value = data
-      end
-    end
   end
 end
 

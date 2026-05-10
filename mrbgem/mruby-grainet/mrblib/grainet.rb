@@ -145,32 +145,42 @@ module Grainet
   # houses only the shared tracker stack and notify pipeline they
   # depend on.
   module Reactive
-    TRACKER = []
+    TRACKER = {}
     BATCH = { depth: 0, queue: [] }
 
     class << self
+      def tracker_stack
+        fiber = Fiber.current
+        key = fiber ? fiber.__id__ : :main
+        TRACKER[key] ||= []
+      end
+
       def track(observer, &block)
-        TRACKER.push(observer)
+        stack = tracker_stack
+        stack.push(observer)
         begin
           block.call
         ensure
-          TRACKER.pop
+          stack.pop
+          TRACKER.delete(Fiber.current.__id__) if Fiber.current && stack.empty?
         end
       end
 
       # Run block with tracking suppressed (pushes nil onto TRACKER so
       # `current` reads as nil inside).
       def untrack
-        TRACKER.push(nil)
+        stack = tracker_stack
+        stack.push(nil)
         begin
           yield
         ensure
-          TRACKER.pop
+          stack.pop
+          TRACKER.delete(Fiber.current.__id__) if Fiber.current && stack.empty?
         end
       end
 
       def current
-        TRACKER.last
+        tracker_stack.last
       end
 
       # Notify a list of observers, respecting the active batch.
@@ -466,6 +476,200 @@ module Grainet
       end
     rescue => e
       Grainet.__error__("effect#{@label ? " (#{@label})" : ""}", e, source: @source)
+    end
+  end
+
+  class ResourceObserver
+    def initialize(resource)
+      @resource = resource
+      @deps = []
+      @disposed = false
+    end
+
+    def __notify__
+      return if @disposed
+      @resource.__observer_notified__(self)
+    end
+
+    def __add_dep__(signal_or_memo)
+      return if @disposed
+      @deps << signal_or_memo
+    end
+
+    def dispose
+      return if @disposed
+      @disposed = true
+      @deps.each { |d| d.__subscribers__.remove(self) }
+      @deps.clear
+    end
+  end
+
+  class ResourceRun
+    def initialize
+      ctor = JS.global[:AbortController]
+      @controller = ctor.js_null? ? nil : ctor.new
+      @cancelled = false
+      @null_signal = nil
+    end
+
+    def abort_signal
+      return @controller[:signal] if @controller
+      @null_signal ||= JS.wrap(nil)
+    end
+
+    def cancelled?
+      @cancelled
+    end
+
+    def __cancel__!
+      return if @cancelled
+      @cancelled = true
+      @controller&.call(:abort)
+    end
+  end
+
+  class Resource
+    def initialize(initial:, defer:, keep_value:, &block)
+      raise ArgumentError, "block required" unless block
+      @block = block
+      @initial = initial
+      @keep_value = keep_value
+      @value_signal = Signal.new(initial)
+      @error_signal = Signal.new(nil)
+      @state_signal = Signal.new(:idle)
+      @has_value = false
+      @disposed = false
+      @current_observer = nil
+      @current_run = nil
+      start_run unless defer
+    end
+
+    def value
+      @value_signal.value
+    end
+
+    def error
+      @error_signal.value
+    end
+
+    def state
+      @state_signal.value
+    end
+
+    def loading?
+      s = @state_signal.value
+      s == :pending || s == :refreshing
+    end
+
+    def idle?
+      @state_signal.value == :idle
+    end
+
+    def ready?
+      @state_signal.value == :ready
+    end
+
+    def refreshing?
+      @state_signal.value == :refreshing
+    end
+
+    def errored?
+      @state_signal.value == :errored
+    end
+
+    def reload
+      start_run
+      self
+    end
+
+    def mutate(&block)
+      ret = @value_signal.update(&block)
+      @has_value = true
+      ret
+    end
+
+    def reset
+      return if @disposed
+      cancel_current
+      Grainet.batch do
+        @value_signal.value = @initial
+        @error_signal.value = nil
+        @state_signal.value = :idle
+      end
+      @has_value = false
+      self
+    end
+
+    def dispose
+      return if @disposed
+      @disposed = true
+      cancel_current
+      @current_observer&.dispose
+      @current_observer = nil
+    end
+
+    def __observer_notified__(observer)
+      return observer.dispose if @disposed
+      return observer.dispose unless observer.equal?(@current_observer)
+      start_run
+    end
+
+    private
+
+    def start_run
+      return if @disposed
+      previous = @current_observer
+      previous&.dispose
+      cancel_current
+
+      observer = ResourceObserver.new(self)
+      run = ResourceRun.new
+      @current_observer = observer
+      @current_run = run
+
+      Grainet.batch do
+        @value_signal.value = @initial if !@keep_value || !@has_value
+        @error_signal.value = nil
+        @state_signal.value = (@keep_value && @has_value) ? :refreshing : :pending
+      end
+
+      JS.__run_in_fiber__ do
+        begin
+          result = Reactive.track(observer) { @block.call(run) }
+          settle_success(observer, run, result)
+        rescue => e
+          settle_error(observer, run, e)
+        end
+      end
+    end
+
+    def settle_success(observer, run, result)
+      return observer.dispose if stale_run?(observer, run)
+      @current_run = nil
+      Grainet.batch do
+        @value_signal.value = result
+        @error_signal.value = nil
+        @state_signal.value = :ready
+      end
+      @has_value = true
+    end
+
+    def settle_error(observer, run, error)
+      return observer.dispose if stale_run?(observer, run)
+      @current_run = nil
+      Grainet.batch do
+        @error_signal.value = error
+        @state_signal.value = :errored
+      end
+    end
+
+    def stale_run?(observer, run)
+      !observer.equal?(@current_observer) || !run.equal?(@current_run)
+    end
+
+    def cancel_current
+      @current_run&.__cancel__!
+      @current_run = nil
     end
   end
 end

@@ -49,6 +49,7 @@ module Grainet
       @_listeners = []
       @_effects = []
       @_computeds = []
+      @_resources = []
       @_cleanups = []
       @_children = []
       @_parent = nil
@@ -137,6 +138,12 @@ module Grainet
       m = Computed.new(&block)
       @_computeds << m
       m
+    end
+
+    def resource(initial: nil, defer: false, keep_value: true, &block)
+      r = Resource.new(initial: initial, defer: defer, keep_value: keep_value, &block)
+      @_resources << r
+      r
     end
 
     def effect(label: nil, &block)
@@ -246,6 +253,7 @@ module Grainet
       @_cleanups.reverse_each { |c| safe_release("cleanup")          { c.call } }
       @_effects.each          { |e| safe_release("effect dispose")   { e.dispose } }
       @_computeds.each        { |m| safe_release("computed dispose") { m.dispose } }
+      @_resources.each        { |r| safe_release("resource dispose") { r.dispose } }
       @_listeners.each do |target_js, event_str, callback_js|
         safe_release("removeEventListener") { target_js.call(:removeEventListener, event_str, callback_js) }
         safe_release("release_callback")    { JS.release_callback(callback_js) }
