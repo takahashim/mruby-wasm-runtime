@@ -38,6 +38,15 @@ globalThis.document = dom.document;
 globalThis.localStorage = dom.localStorage;
 globalThis.requestAnimationFrame = dom.requestAnimationFrame.bind(dom);
 globalThis.cancelAnimationFrame = dom.cancelAnimationFrame.bind(dom);
+// Router specs need history/location/window for popstate + pushState.
+// (`Event` is intentionally NOT exposed — it would shadow Node's
+// built-in Event constructor; happy-dom's classes are reached via
+// `document.defaultView` from Ruby instead.)
+globalThis.window = dom;
+globalThis.history = dom.history;
+globalThis.location = dom.location;
+globalThis.addEventListener = dom.addEventListener.bind(dom);
+globalThis.removeEventListener = dom.removeEventListener.bind(dom);
 
 const wasmUrl = process.env.MRUBY_WASM_PATH
   ? pathToFileURL(resolve(process.cwd(), process.env.MRUBY_WASM_PATH)).href
@@ -86,6 +95,8 @@ assert(!vm.fs.has("/data"), "fs.has returns false for directories");
 // --- Load spec_helper + all test_*.rb -------------------------------------
 const testDir = here;
 const grainetSpecDir = resolve(here, "../../mruby-grainet/wasm_spec");
+const routerSpecDir = resolve(here, "../../mruby-grainet-router/wasm_spec");
+const formSpecDir = resolve(here, "../../mruby-grainet-form/wasm_spec");
 const helper = "spec_helper.rb";
 
 console.log(`[runner] loading ${helper}`);
@@ -121,6 +132,8 @@ async function runDir(dir, label) {
 
 await runDir(testDir, "mruby-wasm-js");
 await runDir(grainetSpecDir, "mruby-grainet");
+await runDir(routerSpecDir, "mruby-grainet-router");
+await runDir(formSpecDir, "mruby-grainet-form");
 
 // Wait so any pending Promises (await tests, real-async setTimeout
 // inside tests) have time to settle before we print the summary.

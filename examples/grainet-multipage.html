@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Grainet — multipage SPA demo</title>
+    <style>
+      body {
+        font-family: system-ui, sans-serif;
+        max-width: 720px;
+        margin: 1.5em auto;
+        padding: 0 1em;
+        color: #222;
+      }
+      h1 { margin: 0 0 0.3em; font-size: 1.4em; }
+      h2 { font-size: 1.1em; color: #555; margin-top: 0; }
+
+      nav {
+        display: flex;
+        gap: 0.4em;
+        margin: 1em 0;
+        padding: 0.4em;
+        background: #f4f4f4;
+        border-radius: 8px;
+      }
+      nav a {
+        padding: 0.4em 0.9em;
+        text-decoration: none;
+        color: #444;
+        border-radius: 6px;
+      }
+      nav a:hover { background: #eaeaea; }
+      nav a.active {
+        background: #b94f3f;
+        color: #fff;
+      }
+
+      [data-router-outlet] {
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        padding: 1em 1.2em;
+        margin: 1em 0;
+        min-height: 12em;
+      }
+
+      .row { display: flex; gap: 0.5em; align-items: center; }
+      button {
+        padding: 0.4em 0.9em;
+        border-radius: 6px;
+        border: 1px solid #b94f3f;
+        background: #b94f3f;
+        color: #fff;
+        cursor: pointer;
+      }
+      button.ghost {
+        background: #fff;
+        color: #b94f3f;
+      }
+      .num {
+        font: 700 1.2em ui-monospace, monospace;
+        min-width: 2em;
+        text-align: center;
+      }
+      .hint {
+        color: #888;
+        font-size: 0.9em;
+        margin-top: 1em;
+      }
+      .users-list { list-style: none; padding: 0; }
+      .users-list li { padding: 0.3em 0; }
+      .users-list a { color: #b94f3f; }
+      code {
+        background: #f4f4f4;
+        padding: 0.1em 0.4em;
+        border-radius: 4px;
+        font-size: 0.9em;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Grainet — multipage SPA</h1>
+    <p>
+      Lazy-mount router showcase. URL の変化に応じて
+      <code>&lt;template&gt;</code> を outlet に clone、widget を auto-mount。
+      View source for the Ruby code.
+    </p>
+
+    <nav data-widget="nav">
+      <a href="/" data-ref="home">Home</a>
+      <a href="/counter" data-ref="counter">Counter</a>
+      <a href="/users" data-ref="users">Users</a>
+      <a href="/about" data-ref="about">About</a>
+    </nav>
+
+    <div data-router-outlet></div>
+
+    <p class="hint">
+      ヒント: Counter で数を進めて他ページへ移動して戻ると、state は 0 に戻ります
+      (lazy mount = unmount で signal が破棄される)。state を残したい場合は
+      <code>persistent_signal</code> か always-mounted パターンを使ってください。
+    </p>
+
+    <p id="status">booting…</p>
+
+    <!-- ============== Templates (route content) ============== -->
+
+    <template id="page-home">
+      <div data-widget="home-page">
+        <h2>Home</h2>
+        <p>Grainet Router の lazy mount デモ。Nav の link を押すと URL が変わり、
+           対応する <code>&lt;template&gt;</code> が outlet に clone されます。</p>
+        <p>各ページは普通の Grainet Widget — 既存の signal / bind / refs がそのまま使えます。</p>
+      </div>
+    </template>
+
+    <template id="page-counter">
+      <div data-widget="counter-page">
+        <h2>Counter</h2>
+        <div class="row">
+          <button data-ref="decrement">-</button>
+          <span class="num" data-ref="count">0</span>
+          <button data-ref="increment">+</button>
+          <button class="ghost" data-ref="reset">reset</button>
+        </div>
+        <p data-ref="message" class="hint"></p>
+      </div>
+    </template>
+
+    <template id="page-users">
+      <div data-widget="users-page">
+        <h2>Users</h2>
+        <p>クリックすると <code>/users/:id</code> route に遷移します。</p>
+        <ul class="users-list" data-ref="list"></ul>
+      </div>
+    </template>
+
+    <template id="page-user">
+      <div data-widget="user-page">
+        <h2 data-ref="title">User</h2>
+        <p>route param: <code data-ref="id"></code></p>
+        <p><a href="/users" data-ref="back">← back to Users</a></p>
+      </div>
+    </template>
+
+    <template id="page-about">
+      <div data-widget="about-page">
+        <h2>About</h2>
+        <p>このページ自体も <code>data-widget="about-page"</code> で
+           Grainet によってマウントされています。</p>
+        <p>Path helpers の例: home → <code data-ref="home_link"></code>、
+           user(id=1) → <code data-ref="user_link"></code></p>
+      </div>
+    </template>
+
+    <template id="page-404">
+      <div data-widget="not-found-page">
+        <h2>Not found</h2>
+        <p>このページは存在しません。<a href="/" data-ref="home">トップへ</a></p>
+      </div>
+    </template>
+
+    <!-- ============== Ruby source ============== -->
+
+    <script type="text/ruby" id="ruby-source">
+# Nav widget — always-mounted (outside outlet). Highlights active link
+# via router.current, intercepts clicks for SPA navigation.
+class Nav < Grainet::Widget
+  def setup
+    bind_link refs.home,    href: router.home_path
+    bind_link refs.counter, href: router.counter_path
+    bind_link refs.users,   href: router.users_path, match: [:users, :user]
+    bind_link refs.about,   href: router.about_path
+    root.on(:click) { |event| router.intercept_link(event) }
+  end
+end
+
+class HomePage < Grainet::Widget
+  def setup
+    # ホーム表示のみ。状態なし。
+  end
+end
+
+# Counter — state lives only while this page is mounted.
+class CounterPage < Grainet::Widget
+  def setup
+    @count = signal(0)
+
+    refs.increment.on(:click) { @count.update { |n| n + 1 } }
+    refs.decrement.on(:click) { @count.update { |n| n - 1 } }
+    refs.reset.on(:click)     { @count.value = 0 }
+
+    bind refs.count, text: @count
+    bind refs.message, :text do
+      n = @count.value
+      next "" if n == 0
+      "current: #{n} (移動して戻ると 0 に戻ります)"
+    end
+  end
+end
+
+USERS = [
+  { "id" => 1, "name" => "Alice" },
+  { "id" => 2, "name" => "Bob" },
+  { "id" => 3, "name" => "Carol" },
+].freeze
+
+class UsersPage < Grainet::Widget
+  def setup
+    # bind_list expects a signal/memo source — wrap the static array.
+    @users = signal(USERS)
+
+    bind_list refs.list, @users, key: "id" do |user|
+      href = router.href(router.user_path(id: user["id"]))
+      HTML(:li, [
+        HTML(:a, "#{user["id"]}: #{user["name"]}", href: href)
+      ])
+    end
+
+    refs.list.on(:click) { |event| router.intercept_link(event) }
+  end
+end
+
+class UserPage < Grainet::Widget
+  def setup
+    user_id = memo { router.params[:id] }
+    bind refs.title, text: memo { "User #{user_id.value}" }
+    bind refs.id, text: user_id
+    refs.back.attr("href", router.href(router.users_path))
+
+    refs.back.on(:click) { |event| router.intercept_link(event) }
+  end
+end
+
+class AboutPage < Grainet::Widget
+  def setup
+    refs.home_link.text = router.home_path
+    refs.user_link.text = router.user_path(id: 1)
+  end
+end
+
+class NotFoundPage < Grainet::Widget
+  def setup
+    refs.home.on(:click) { |event| router.intercept_link(event) }
+  end
+end
+
+# ---------------- Boot ----------------
+
+Grainet.register "nav",            Nav
+Grainet.register "home-page",      HomePage
+Grainet.register "counter-page",   CounterPage
+Grainet.register "users-page",     UsersPage
+Grainet.register "user-page",      UserPage
+Grainet.register "about-page",     AboutPage
+Grainet.register "not-found-page", NotFoundPage
+
+# Routes must be declared *before* `Grainet.start` mounts the widgets:
+# Nav#setup calls `router.home_path` etc., and those `*_path` methods
+# only exist after `page :home, ...` has run.
+Grainet::Router.draw outlet: "[data-router-outlet]" do
+  page :home,    "/"
+  page :counter, "/counter"
+  page :users,   "/users"
+  page :user,    "/users/:id"
+  page :about,   "/about"
+  fallback template: "page-404"
+end
+
+Grainet.start          # mount widgets (Nav etc.)
+Grainet::Router.start  # install listeners + render outlet for current path
+
+puts "multipage SPA mounted"
+    </script>
+
+    <script type="module">
+      import { createVM } from "../mrbgem/mruby-wasm-js/js/index.js";
+      const status = document.getElementById("status");
+      try {
+        const vm = await createVM({ wasm: "../build/mruby-js.wasm" });
+        vm.evalScript("#ruby-source");
+        status.textContent = "ready";
+      } catch (err) {
+        console.error(err);
+        status.textContent = "boot failed: " + err.message;
+      }
+    </script>
+  </body>
+</html>

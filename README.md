@@ -75,6 +75,8 @@ For fuller illustrations:
 - `examples/grainet-receipt.html` — invoice line-item calculator: each row's inputs are individual `signal`s wired by `model` inside the `bind_list` block, per-row `line_total` is a `memo`, and overall subtotal / tax / total form a memo chain. State is JSON-encoded into `location.hash` (via `history.replaceState`) for shareable URLs and reload-restore — without `localStorage`
 - `examples/grainet-breakout.html` — playable breakout game: paddle / ball / 32 bricks all live as `signal` state, DOM transforms follow via `bind style:` + `bind_list`. Frame loop runs through the new `Widget#each_frame` helper (`requestAnimationFrame` + auto-cleanup on unmount + error_boundary routing). Game logic (collisions, scoring) is plain Ruby; Grainet only handles state and rendering
 - `examples/grainet-racer.html` — pseudo-3D racing demo: classic Z-segment projection drawn imperatively to a `<canvas>`, while Grainet drives state (`@speed`, `@position`, `@player_x` signals), HUD (`bind`), keyboard input (`ref(JS.global[:document]).on(:keydown)`), and the frame loop (`each_frame`). Demonstrates the "Canvas for pixel work, Grainet for everything declarative" split
+- `examples/grainet-multipage.html` - 4-page SPA demo:  route param extraction, active-link strike, link interception, and 404 fallback — showcase of the Router gem.
+
 
 To open the browser samples, run `make serve` and visit
 `http://localhost:8001/examples/demo.html`.

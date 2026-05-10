@@ -47,6 +47,7 @@ MRuby::CrossBuild.new("wasi-cmd") do |conf|
   conf.gem core: "mruby-time"
   conf.gem core: "mruby-random"
   conf.gem core: "mruby-sprintf"
+  conf.gem core: "mruby-metaprog"
 
   # Ruby surface for WASI primitives that mruby core doesn't ship.
   conf.gem File.expand_path("../mrbgem/mruby-wasi-dir", __dir__)

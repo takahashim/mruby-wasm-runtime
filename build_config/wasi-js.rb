@@ -76,9 +76,12 @@ MRuby::CrossBuild.new(build_name) do |conf|
   conf.gem core: "mruby-time"
   conf.gem core: "mruby-random"
   conf.gem core: "mruby-sprintf"
+  conf.gem core: "mruby-metaprog"
 
   conf.gem File.expand_path("../mrbgem/mruby-wasm-js", __dir__)
   conf.gem File.expand_path("../mrbgem/mruby-grainet", __dir__)
+  conf.gem File.expand_path("../mrbgem/mruby-grainet-router", __dir__)
+  conf.gem File.expand_path("../mrbgem/mruby-grainet-form", __dir__)
   # Ruby surface for WASI primitives that mruby core doesn't ship.
   conf.gem File.expand_path("../mrbgem/mruby-wasi-dir", __dir__)
   conf.gem File.expand_path("../mrbgem/mruby-wasi-env", __dir__)

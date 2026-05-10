@@ -35,6 +35,10 @@
         font-size: 0.85em; color: var(--err); margin: 0.2em 0 0 0;
       }
       .error[hidden] { display: none; }
+      .base-error {
+        font-size: 0.9em; color: var(--err); margin: 0.8em 0 0 0;
+      }
+      .base-error[hidden] { display: none; }
       .checkbox { display: flex; align-items: center; gap: 0.5em; margin: 0.8em 0; }
       .row { display: flex; gap: 0.6em; align-items: center; margin-top: 0.8em; }
       button {
@@ -81,10 +85,18 @@
           <p class="error" data-ref="password_error" hidden>at least 8 characters</p>
         </div>
 
+        <div class="field" data-ref="password_confirm_field">
+          <label>Password (confirm)</label>
+          <input data-ref="password_confirm" type="password" placeholder="re-enter password">
+          <p class="error" data-ref="password_confirm_error" hidden>passwords don't match</p>
+        </div>
+
         <label class="checkbox">
           <input data-ref="terms" type="checkbox">
           I accept the (imaginary) terms.
         </label>
+
+        <p class="base-error" data-ref="base_error" hidden>Could not sign up. Please try again.</p>
 
         <div class="row">
           <button data-ref="submit" type="submit">Sign up</button>
@@ -98,69 +110,83 @@
     <script type="text/ruby" id="ruby-source">
 class SignupForm < Grainet::Widget
   def setup
-    @email = signal("")
-    @password = signal("")
-    @accepted = signal(false)
-    @email_dirty = signal(false)
-    @password_dirty = signal(false)
+    @form = form do |f|
+      f.field :email, ref: refs.email, initial: "" do |field|
+        required(field.value, message: "enter your email") ||
+          min_length(field.value, 4, message: "enter a valid address") ||
+          (field.value.include?("@") ? nil : "must include @")
+      end
+      f.field :password, ref: refs.password, initial: "" do |field|
+        required(field.value, message: "enter your password") ||
+          min_length(field.value, 8, message: "at least 8 characters")
+      end
+      f.field :password_confirm, ref: refs.password_confirm, initial: "" do |field|
+        required(field.value, message: "re-enter your password")
+      end
+      f.field :terms, ref: refs.terms, initial: false, type: :checkbox do |field|
+        acceptance(field.value, message: "please accept the terms")
+      end
 
-    @email_valid    = memo { @email.value.include?("@") && @email.value.length > 3 }
-    @password_valid = memo { @password.value.length >= 8 }
-    @form_valid     = memo do
-      @email_valid.value && @password_valid.value && @accepted.value
+      # Form-level validator: cross-field check for password match.
+      # Field-level "required" still wins (= confirm shows "required"
+      # while empty; once filled, this fires if it doesn't match).
+      f.validate do |form|
+        if form[:password].value != form[:password_confirm].value
+          { password_confirm: "passwords don't match" }
+        end
+      end
     end
 
-    # Two-way binding for inputs
-    model refs.email,    @email
-    model refs.password, @password
-    model refs.terms,    @accepted, property: :checked
+    email    = @form[:email]
+    password = @form[:password]
+    confirm  = @form[:password_confirm]
+    terms    = @form[:terms]
 
-    # Mark a field "dirty" once the user leaves it; only show errors after that
-    refs.email.on(:blur)    { @email_dirty.value    = true }
-    refs.password.on(:blur) { @password_dirty.value = true }
-
-    # Field-level visual states via class binding
     bind refs.email_field, class: {
-      "is-invalid" => memo { @email_dirty.value && !@email_valid.value },
-      "is-valid"   => memo { @email_dirty.value &&  @email_valid.value },
+      "is-invalid" => memo { email.show_error? },
+      "is-valid"   => memo { email.touched? && email.valid? },
     }
     bind refs.password_field, class: {
-      "is-invalid" => memo { @password_dirty.value && !@password_valid.value },
-      "is-valid"   => memo { @password_dirty.value &&  @password_valid.value },
+      "is-invalid" => memo { password.show_error? },
+      "is-valid"   => memo { password.touched? && password.valid? },
     }
+    bind refs.password_confirm_field, class: {
+      "is-invalid" => memo { confirm.show_error? },
+      "is-valid"   => memo { confirm.touched? && confirm.valid? },
+    }
+    bind refs.email_error,            text: email.error_signal,
+                                      hidden: memo { !email.show_error? }
+    bind refs.password_error,         text: password.error_signal,
+                                      hidden: memo { !password.show_error? }
+    bind refs.password_confirm_error, text: confirm.error_signal,
+                                      hidden: memo { !confirm.show_error? }
+    bind refs.base_error, text: @form.base_error_signal,
+                          hidden: memo { @form.base_error.nil? }
 
-    # Error messages: hidden unless dirty AND invalid
-    bind refs.email_error,    hidden: memo { !(@email_dirty.value    && !@email_valid.value) }
-    bind refs.password_error, hidden: memo { !(@password_dirty.value && !@password_valid.value) }
+    bind refs.submit, disabled: memo { !@form.valid? }
 
-    # Submit button gated on overall validity
-    bind refs.submit, disabled: memo { !@form_valid.value }
-
-    # Hint text when the form is incomplete
     bind refs.hint, :text do
-      if @form_valid.value
-        "ready to submit"
-      elsif !@accepted.value && @email.value.length > 0
-        "please accept the terms"
-      else
-        ""
-      end
+      next "ready to submit" if @form.valid?
+      next "please accept the terms" if !terms.value && email.value.length > 0
+      ""
     end
 
     root.on(:submit) do |event|
       event.preventDefault
-      next unless @form_valid.value
-      # Notify the outer ActivityLog widget. The event bubbles past the
-      # form's data-widget boundary because we set bubbles: true.
-      root.dispatch(:user_submitted,
-        detail: { email: @email.value },
-        bubbles: true)
-      # Reset for the next round
-      @email.value = ""
-      @password.value = ""
-      @accepted.value = false
-      @email_dirty.value = false
-      @password_dirty.value = false
+      @form.submit do |values|
+        # Demo-only stand-in for a submit-time/server-side failure.
+        if values[:email] == "taken@example.com"
+          @form.set_base_error("That address cannot be used right now.")
+          next
+        end
+
+        # Bubbles past the form's data-widget boundary so ActivityLog
+        # picks it up without coupling to this class.
+        root.dispatch(:user_submitted,
+          detail: { email: values[:email] },
+          bubbles: true)
+        @form.reset
+      end
     end
   end
 end

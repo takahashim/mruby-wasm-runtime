@@ -49,6 +49,28 @@
       .dismiss:hover { color: var(--accent); border-color: var(--border); }
       .status { color: var(--muted); font-size: 0.9em; margin-top: 0.6em; }
       #boot { color: var(--muted); font-size: 0.85em; margin-top: 2em; }
+      .overlay {
+        position: fixed; inset: 0;
+        background: rgba(20, 20, 20, 0.45);
+        display: flex; align-items: center; justify-content: center;
+        z-index: 100; padding: 1em;
+      }
+      .overlay[hidden] { display: none; }
+      .overlay .dialog {
+        background: var(--panel); border-radius: 10px;
+        padding: 1.2em 1.5em; max-width: 400px; width: 100%;
+        box-shadow: 0 14px 40px rgba(0,0,0,0.25);
+        border-top: 4px solid #d4a000;
+      }
+      .overlay .dialog h3 { margin: 0 0 0.6em 0; font-size: 1.05em; color: #a07800; }
+      .overlay .dialog p  { margin: 0 0 1em 0; }
+      .overlay .dialog .actions { display: flex; justify-content: flex-end; }
+      .overlay .dialog button {
+        font-size: 0.9em; padding: 0.4em 0.9em; border-radius: 6px;
+        border: 1px solid var(--accent); background: var(--accent);
+        color: white; cursor: pointer;
+      }
+      .overlay .dialog button:hover { opacity: 0.88; }
     </style>
   </head>
   <body>
@@ -64,10 +86,19 @@
 
     <!-- The <ul> is empty in the seed HTML; bind_list owns its children. -->
     <div data-widget="todo-list" class="panel">
-      <div class="row">
-        <input data-ref="input" type="text" placeholder="What needs doing?">
-        <button data-ref="add">Add</button>
+      <div data-ref="notice_overlay" class="overlay" hidden>
+        <div class="dialog" role="dialog" aria-labelledby="notice-title">
+          <h3 id="notice-title">入力エラー</h3>
+          <p data-ref="notice_text"></p>
+          <div class="actions">
+            <button data-ref="notice_dismiss" type="button">OK</button>
+          </div>
+        </div>
       </div>
+      <form class="row" novalidate>
+        <input data-ref="input" type="text" placeholder="What needs doing?">
+        <button data-ref="add" type="submit">Add</button>
+      </form>
       <ul data-ref="list" class="todos"></ul>
       <p class="status" data-ref="status"></p>
     </div>
@@ -106,14 +137,29 @@ class TodoList < Grainet::Widget
       { "id" => 2, "title" => "Try class & style binding" },
     ])
 
-    refs.add.on(:click) { add_item }
-    refs.input.on(:keydown) do |event|
-      add_item if event[:key].to_s == "Enter"
+    @form = form do |f|
+      f.field :title, ref: refs.input, initial: "" do |field|
+        required(field.value)
+      end
     end
 
-    # Remove by id when a child TodoItem dispatches :item_dismissed.
-    # We update the *signal*, not the DOM directly — bind_list handles
-    # the DOM. This is the inversion that makes the list declarative.
+    @notice = signal(nil)
+    bind refs.notice_overlay, hidden: memo { @notice.value.nil? }
+    bind refs.notice_text,    text:   memo { @notice.value.to_s }
+    refs.notice_dismiss.on(:click) { @notice.value = nil }
+
+    root.on(:submit) do |event|
+      event.preventDefault
+      unless @form.valid?
+        @notice.value = "タイトルを入力してください。"
+        next
+      end
+      @form.submit do |values|
+        add_item(values[:title])
+        @form.reset
+      end
+    end
+
     root.on(:item_dismissed) do |event|
       id = ref(event[:target]).data(:id).to_i
       @items.update { |arr| arr.reject { |it| it["id"] == id } }
@@ -140,14 +186,10 @@ class TodoList < Grainet::Widget
 
   private
 
-  def add_item
-    text = refs.input.value.to_s
-    return if text.empty?
+  def add_item(title)
     id = @next_id.value
     @next_id.update { |n| n + 1 }
-    # Source-of-truth update — DOM follows.
-    @items.update { |arr| arr + [{ "id" => id, "title" => text }] }
-    refs.input.value = ""
+    @items.update { |arr| arr + [{ "id" => id, "title" => title }] }
   end
 end
 
