@@ -126,7 +126,7 @@
       3 列の Kanban。カードを drag-and-drop で列間移動でき、
       内容は <code>localStorage</code> に自動保存される。
       <code>provide</code> / <code>inject</code> で <code>@cards</code>
-      signal を共有し、各列は <code>memo</code> で自分の status を filter
+      signal を共有し、各列は <code>computed</code> で自分の status を filter
       した view を <code>bind_list</code> でレンダリング。
       <strong>2 種のオーバーレイ</strong>を使い分け: 想定外例外は赤い
       <em>error overlay</em> (<code>error_boundary</code> 経由)、
@@ -223,8 +223,8 @@ class KanbanColumn < Grainet::Widget
     @notice = inject(:notice)
     status = root.data(:status)
 
-    @filtered = memo { @cards.value.select { |c| c["status"] == status } }
-    bind refs.count, text: memo { @filtered.value.length }
+    @filtered = computed { @cards.value.select { |c| c["status"] == status } }
+    bind refs.count, text: computed { @filtered.value.length }
 
     bind_list refs.list, @filtered, key: "id", template: "card-row" do |card, t|
       t.data(:id, card["id"])
@@ -315,14 +315,14 @@ class KanbanBoard < Grainet::Widget
   private
 
   def wire_error_overlay
-    bind refs.error_overlay, hidden: memo { @error_message.value.nil? }
-    bind refs.error_text,    text:   memo { @error_message.value.to_s }
+    bind refs.error_overlay, hidden: computed { @error_message.value.nil? }
+    bind refs.error_text,    text:   computed { @error_message.value.to_s }
     refs.error_dismiss.on(:click) { @error_message.value = nil }
   end
 
   def wire_notice_overlay
-    bind refs.notice_overlay, hidden: memo { @notice.value.nil? }
-    bind refs.notice_text,    text:   memo { @notice.value.to_s }
+    bind refs.notice_overlay, hidden: computed { @notice.value.nil? }
+    bind refs.notice_text,    text:   computed { @notice.value.to_s }
     refs.notice_dismiss.on(:click) { @notice.value = nil }
   end
 

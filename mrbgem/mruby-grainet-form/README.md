@@ -26,13 +26,13 @@ class SignupForm < Grainet::Widget
     end
 
     @form.fields.each do |name, field|
-      bind refs["#{name}_field"], class: { "is-invalid" => memo { field.error_visible? } }
+      bind refs["#{name}_field"], class: { "is-invalid" => computed { field.error_visible? } }
       bind refs["#{name}_error"], text: field.error,
-                                  hidden: memo { !field.error_visible? }
+                                  hidden: computed { !field.error_visible? }
     end
     bind refs.base_error, text: @form.base_error,
-                          hidden: memo { @form.base_error.value.nil? }
-    bind refs.submit, disabled: memo { !@form.valid? }
+                          hidden: computed { @form.base_error.value.nil? }
+    bind refs.submit, disabled: computed { !@form.valid? }
 
     root.on(:submit) do |event|
       event.preventDefault
@@ -80,7 +80,7 @@ widget ivars, and widget methods remain accessible.
 ### `Grainet::Form#field(name, ref:, initial:, type: :text, &validator)`
 
 Declare a field. This sets up 2-way binding via `model(ref, signal,
-property:)`, a blur listener for `touched`, and a derived error memo
+property:)`, a blur listener for `touched`, and a derived error computed
 from the optional validator block.
 
 | arg | description |
@@ -258,7 +258,7 @@ end
 | `Grainet::Form#[](name)` | `Field` (raises on unknown) | single field |
 | `Grainet::Form#base_error` | `Signal<String\|nil>` | non-field form-level message |
 | `Grainet::Form#value_of(name)` | value (auto-tracks) | read another field's value from inside a validator block |
-| `Grainet::Form#values` | Memo`<Hash>` | reactive snapshot of all values |
+| `Grainet::Form#values` | Computed`<Hash>` | reactive snapshot of all values |
 | `Grainet::Form#valid?` | Boolean (auto-tracks) | aggregate validity |
 | `Grainet::Form#validate { |values\| ... }` | registers form-level validator | cross-field validation |
 
@@ -269,7 +269,7 @@ end
 | `Field#value` | Signal | 2-way bound; `f.value.value` to read |
 | `Field#dirty` | Signal`<Boolean>` | true after first change from initial |
 | `Field#touched` | Signal`<Boolean>` | true after first blur |
-| `Field#error` | Memo`<String\|nil>` | merged field error state |
+| `Field#error` | Computed`<String\|nil>` | merged field error state |
 | `Field#valid?` | Boolean (auto-tracks) | shorthand for `error.value.nil?` |
 | `Field#error_visible?` | Boolean (auto-tracks) | `touched && !valid?` |
 | `Field#reset` | method | restore initial, clear state |

@@ -3,12 +3,12 @@
 # 2-layer API:
 #
 #   * Low-level: `router.location` (Signal), `path`/`query`/`hash` (sugar),
-#     `match(pattern)` (Memo), `navigate(path, replace:)`,
+#     `match(pattern)` (Computed), `navigate(path, replace:)`,
 #     `intercept_link(event)`. SPA-style URL state as a reactive signal.
 #
 #   * High-level DSL: `router.draw outlet:` block + `page :name, "/path",
 #     template:` declarations. Generates `*_path` /  `*_match` helpers via
-#     `define_singleton_method`, plus `params` / `current` memos. Active
+#     `define_singleton_method`, plus `params` / `current` computeds. Active
 #     route's `<template id="...">` is cloned into the outlet on every
 #     location change (lazy mount via existing
 #     MutationObserver-driven widget lifecycle).
@@ -48,9 +48,9 @@ module Grainet
         method_name = "#{name}_match"
         @target.define_singleton_method(method_name) do
           ensure_signal!
-          @named_match_memos[sym] ||= begin
+          @named_match_computeds[sym] ||= begin
             loc = @location_signal
-            Grainet::Memo.new { match_path(compiled, loc.value[:path]) }
+            Grainet::Computed.new { match_path(compiled, loc.value[:path]) }
           end
         end
         remember(method_name)
@@ -89,10 +89,10 @@ module Grainet
         @mode = :hash
         @base = "/"
         @location_signal = nil
-        @match_memo_cache = {}
-        @named_match_memos = {}
-        @params_memo = nil
-        @current_memo = nil
+        @match_computed_cache = {}
+        @named_match_computeds = {}
+        @params_computed = nil
+        @current_computed = nil
         @route_methods = GeneratedRouteMethods.new(self)
         @hashchange_cb = nil
         @popstate_cb = nil
@@ -112,7 +112,7 @@ module Grainet
         @mode = mode if mode
         @base = base if base
         ensure_signal!
-        # Force-refresh the signal so subscribers (memos that read
+        # Force-refresh the signal so subscribers (computeds that read
         # `current` / `params` before draw) re-evaluate now that the
         # route table is populated. Hash-valued signals always notify
         # via `value=` (no equal_for_skip? short-circuit on Hash), so
@@ -138,7 +138,7 @@ module Grainet
         @route_methods.clear_all
         @routes.clear
         @fallback_template = nil
-        @named_match_memos.clear
+        @named_match_computeds.clear
         instance_eval(&block)
         # If start has already run (test re-init flow), set up the render
         # effect now that we have an outlet.
@@ -191,25 +191,25 @@ module Grainet
         @location_signal.value[:hash]
       end
 
-      # Match memo for an arbitrary pattern. Cached per pattern string so
-      # two widgets matching the same pattern share one memo (avoids
+      # Match computed for an arbitrary pattern. Cached per pattern string so
+      # two widgets matching the same pattern share one computed (avoids
       # graph blowup on hot paths).
       def match(pattern)
         ensure_signal!
-        @match_memo_cache[pattern] ||= begin
+        @match_computed_cache[pattern] ||= begin
           compiled = compile(pattern)
           loc = @location_signal
-          Grainet::Memo.new { match_path(compiled, loc.value[:path]) }
+          Grainet::Computed.new { match_path(compiled, loc.value[:path]) }
         end
       end
 
       # Hash of params for the currently-active named route, or `{}` if
       # no route matches. Only meaningful with the DSL.
       #
-      # Accessing `params` inside a reactive scope (memo / effect / bind)
+      # Accessing `params` inside a reactive scope (computed / effect / bind)
       # registers a dependency on the location signal automatically (via
       # the internal `@location_signal.value` read), so `params[:id]`
-      # in a `memo { ... }` will re-evaluate on URL change.
+      # in a `computed { ... }` will re-evaluate on URL change.
       def params
         ensure_signal!
         current_route_params
@@ -279,7 +279,7 @@ module Grainet
       #
       # Args:
       #   el                — RefElement (preferred) or raw JS element
-      #   href:             — String / Symbol / Signal / Memo / Proc → route path
+      #   href:             — String / Symbol / Signal / Computed / Proc → route path
       #   match:            — what makes the link "active" (Symbol route name,
       #                       Array of names, or path string with prefix matching).
       #                       When omitted, falls back to `href`'s path
@@ -362,10 +362,10 @@ module Grainet
         @routes = []
         @fallback_template = nil
         @outlet_selector = nil
-        @match_memo_cache.clear
-        @named_match_memos.clear
-        @params_memo = nil
-        @current_memo = nil
+        @match_computed_cache.clear
+        @named_match_computeds.clear
+        @params_computed = nil
+        @current_computed = nil
         @route_methods.clear_all
         @mode = :hash
         @base = "/"
@@ -515,7 +515,7 @@ module Grainet
       end
 
       def source_value(source)
-        if source.is_a?(Grainet::Signal) || source.is_a?(Grainet::Memo)
+        if source.is_a?(Grainet::Signal) || source.is_a?(Grainet::Computed)
           source.value
         elsif source.is_a?(Proc)
           source.call

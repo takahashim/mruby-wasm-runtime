@@ -158,7 +158,7 @@ module Grainet
       checked: { event: :change, normalize: ->(v) { !!v } },
     }.freeze
 
-    # bind(ref, prop: signal_or_memo)             # single property
+    # bind(ref, prop: signal_or_computed)         # single property
     # bind(ref, class: { "is-active" => @on })    # multi-toggle classes
     # bind(ref, style: { "color" => @color })     # multi inline styles
     # bind(ref, :prop) { ...computed... }         # block form

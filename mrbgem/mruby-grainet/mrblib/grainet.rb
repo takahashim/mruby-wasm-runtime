@@ -8,7 +8,7 @@
 #   - Grainet::Reactive (private infrastructure: TRACKER, BATCH, helpers)
 #   - Grainet::Subscribers
 #   - Grainet::MutationGuard
-#   - Grainet::Signal / Grainet::Memo / Grainet::Effect (user-facing types,
+#   - Grainet::Signal / Grainet::Computed / Grainet::Effect (user-facing types,
 #     flat under Grainet — no Reactive:: in the path)
 #
 # Companion file grainet_widget.rb adds Grainet::Widget (the user's
@@ -141,7 +141,7 @@ module Grainet
   end
 
   # Reactive infrastructure (private). The user-facing types Signal /
-  # Memo / Effect are flattened to Grainet::* directly. This module
+  # Computed / Effect are flattened to Grainet::* directly. This module
   # houses only the shared tracker stack and notify pipeline they
   # depend on.
   module Reactive
@@ -372,7 +372,7 @@ module Grainet
   end
 
   # Read-only derived signal.
-  class Memo
+  class Computed
     def initialize(&block)
       raise ArgumentError, "block required" unless block
       @block = block
@@ -391,7 +391,7 @@ module Grainet
     end
 
     def value=(_)
-      raise NoMethodError, "Memo is read-only"
+      raise NoMethodError, "Computed is read-only"
     end
 
     def __notify__
@@ -402,8 +402,8 @@ module Grainet
       end
     end
 
-    def __add_dep__(signal_or_memo)
-      @deps << signal_or_memo
+    def __add_dep__(signal_or_computed)
+      @deps << signal_or_computed
     end
 
     def __subscribers__
@@ -445,8 +445,8 @@ module Grainet
       run
     end
 
-    def __add_dep__(signal_or_memo)
-      @deps << signal_or_memo
+    def __add_dep__(signal_or_computed)
+      @deps << signal_or_computed
     end
 
     def dispose

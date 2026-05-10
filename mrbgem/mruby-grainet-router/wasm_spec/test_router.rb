@@ -27,7 +27,7 @@ Spec.describe "Grainet::Router low-level: location/path/match" do
     Spec.assert_equal "9", router.query["z"]
   end
 
-  Spec.assert "match returns memo with params hash on hit, nil on miss" do
+  Spec.assert "match returns computed with params hash on hit, nil on miss" do
     router.__reset_for_tests__
     JS.global[:history].call(:replaceState, nil, "", "#/users/42")
     router.start
@@ -38,7 +38,7 @@ Spec.describe "Grainet::Router low-level: location/path/match" do
     Spec.assert_equal nil, n.value
   end
 
-  Spec.assert "match memo updates when location changes" do
+  Spec.assert "match computed updates when location changes" do
     router.__reset_for_tests__
     JS.global[:history].call(:replaceState, nil, "", "#/users/1")
     router.start
@@ -49,7 +49,7 @@ Spec.describe "Grainet::Router low-level: location/path/match" do
     Spec.assert_equal "2", m.value[:id]
   end
 
-  Spec.assert "match memo is cached per pattern (same memo returned)" do
+  Spec.assert "match computed is cached per pattern (same computed returned)" do
     router.__reset_for_tests__
     router.start
     m1 = router.match("/users/:id")
@@ -164,7 +164,7 @@ Spec.describe "router.draw + page DSL" do
     Spec.assert_raises(ArgumentError) { router.user_path(id: 1, x: 2) }
   end
 
-  Spec.assert "*_match returns memo with params on active route" do
+  Spec.assert "*_match returns computed with params on active route" do
     router.__reset_for_tests__
     JS.global[:history].call(:replaceState, nil, "", "#/users/9")
     router.draw outlet: "[data-router-outlet]" do
@@ -198,9 +198,9 @@ Spec.describe "router.draw + page DSL" do
     router.start
     Spec.assert_equal "55", router.params[:id]
 
-    # Reactive tracking: a memo reading params should re-run on navigate.
+    # Reactive tracking: a computed reading params should re-run on navigate.
     seen = []
-    m = Grainet::Memo.new { router.params[:id] }
+    m = Grainet::Computed.new { router.params[:id] }
     seen << m.value
     router.navigate("/users/77")
     seen << m.value

@@ -205,7 +205,7 @@ USERS = [
 
 class UsersPage < Grainet::Widget
   def setup
-    # bind_list expects a signal/memo source — wrap the static array.
+    # bind_list expects a signal/computed source — wrap the static array.
     @users = signal(USERS)
 
     bind_list refs.list, @users, key: "id" do |user|
@@ -221,8 +221,8 @@ end
 
 class UserPage < Grainet::Widget
   def setup
-    user_id = memo { router.params[:id] }
-    bind refs.title, text: memo { "User #{user_id.value}" }
+    user_id = computed { router.params[:id] }
+    bind refs.title, text: computed { "User #{user_id.value}" }
     bind refs.id, text: user_id
     refs.back.attr("href", router.href(router.users_path))
 

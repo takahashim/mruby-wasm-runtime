@@ -144,8 +144,8 @@ class TodoList < Grainet::Widget
     end
 
     @notice = signal(nil)
-    bind refs.notice_overlay, hidden: memo { @notice.value.nil? }
-    bind refs.notice_text,    text:   memo { @notice.value.to_s }
+    bind refs.notice_overlay, hidden: computed { @notice.value.nil? }
+    bind refs.notice_text,    text:   computed { @notice.value.to_s }
     refs.notice_dismiss.on(:click) { @notice.value = nil }
 
     root.on(:submit) do |event|

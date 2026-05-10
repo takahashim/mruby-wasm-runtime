@@ -39,10 +39,10 @@ Spec.describe "Grainet::Reactive.untrack" do
     Grainet::Effect.new do
       a.value
       Grainet::Reactive.untrack do
-        # Nested Memo creates its own tracker scope. The Memo subscribes
+        # Nested Computed creates its own tracker scope. The Computed subscribes
         # to b, but the OUTER Effect remains untracked from b.
-        m = Grainet::Memo.new { b.value }
-        m.value     # untracked read of memo from outer effect
+        m = Grainet::Computed.new { b.value }
+        m.value     # untracked read of computed from outer effect
         inner_runs += 1
       end
     end
@@ -54,16 +54,16 @@ Spec.describe "Grainet::Reactive.untrack" do
     Spec.assert_equal 2, inner_runs
   end
 
-  Spec.assert "memo inside untrack does not subscribe outer effect to its deps" do
+  Spec.assert "computed inside untrack does not subscribe outer effect to its deps" do
     s = Grainet::Signal.new(10)
-    m = Grainet::Memo.new { s.value * 2 }
+    m = Grainet::Computed.new { s.value * 2 }
     runs = 0
     Grainet::Effect.new do
       Grainet::Reactive.untrack { m.value }
       runs += 1
     end
     Spec.assert_equal 1, runs
-    s.value = 20    # memo recomputes (it tracked s), but outer effect didn't sub to memo
+    s.value = 20    # computed recomputes (it tracked s), but outer effect didn't sub to computed
     Spec.assert_equal 1, runs
   end
 

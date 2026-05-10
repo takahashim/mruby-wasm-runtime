@@ -47,18 +47,17 @@ module Grainet
 
         # error precedence: server_error → field validator → form-level validator.
         @server_error_signal = widget.signal(nil)
-        @validator_error_memo = widget.memo do
+        @validator_error_computed = widget.computed do
           # Validator receives (field, form); extra arg is ignored by Proc
           # when the block only declares one parameter.
           msg = @validator ? @validator.call(self, @form) : nil
           (msg.is_a?(String) && !msg.empty?) ? msg : nil
         end
-        @error_memo = widget.memo do
+        @error_signal = widget.computed do
           @server_error_signal.value ||
-            @validator_error_memo.value ||
+            @validator_error_computed.value ||
             (@form && @form.form_error_for(@name).value)
         end
-        @show_error_memo = widget.memo { show_error? }
       end
 
       def value
@@ -75,7 +74,7 @@ module Grainet
       end
 
       def valid?
-        @error_memo.value.nil?
+        @error_signal.value.nil?
       end
 
       def invalid?
@@ -92,13 +91,13 @@ module Grainet
 
       # Show errors after the user has touched the field OR after a
       # submit attempt. Both conditions are reactive when called inside
-      # a memo or effect.
+      # a computed or effect.
       def show_error?
         invalid? && (touched? || (@form ? @form.submit_attempted? : false))
       end
 
       def error
-        @error_memo.value
+        @error_signal.value
       end
 
       def server_error
@@ -134,9 +133,9 @@ module Grainet
       @fields                = {}
       @base_error_signal     = widget.signal(nil)
       @submit_attempted_signal  = widget.signal(false)
-      @form_validator        = widget.signal(nil)
-      @form_validator_result = nil
-      @form_error_memos      = {}
+      @form_validator_signal        = widget.signal(nil)
+      @form_validator_computed = nil
+      @form_error_computeds      = {}
     end
 
     # Primary field accessor.
@@ -171,27 +170,27 @@ module Grainet
     # returns Hash<Symbol, String> or nil. A second call replaces the first.
     def validate(&block)
       raise ArgumentError, "block required" unless block
-      @form_validator.value = block
+      @form_validator_signal.value = block
       nil
     end
 
-    # Reactive memo of the form-level validator result Hash.
+    # Reactive computed of the form-level validator result Hash.
     # Reads form[:name].value inside the block, which auto-tracks each
-    # field's signal when evaluated inside this memo.
-    def form_validator_result
-      @form_validator_result ||= @widget.memo do
-        block = @form_validator.value
+    # field's signal when evaluated inside this computed.
+    def form_validator_computed
+      @form_validator_computed ||= @widget.computed do
+        block = @form_validator_signal.value
         next {} unless block
         result = block.call(self)
         result.is_a?(Hash) ? result : {}
       end
     end
 
-    # Cached per-field memo of the form-level error for one field.
+    # Cached per-field computed of the form-level error for one field.
     def form_error_for(name)
       sym = name.to_sym
-      @form_error_memos[sym] ||= @widget.memo do
-        msg = form_validator_result.value[sym]
+      @form_error_computeds[sym] ||= @widget.computed do
+        msg = form_validator_computed.value[sym]
         (msg.is_a?(String) && !msg.empty?) ? msg : nil
       end
     end

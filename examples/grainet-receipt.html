@@ -55,8 +55,8 @@
       明細計算機。state は <code>location.hash</code> に JSON で乗るので、
       編集中も URL が更新され、コピペでシェア可能 + リロードで復元される。
       bind_list の per-row block で <code>model</code> を貼って各 input を
-      個別 signal に直結し、line_total は per-row memo、小計 / 税 / 合計は
-      memo chain で集約。
+      個別 signal に直結し、line_total は per-row computed、小計 / 税 / 合計は
+      computed chain で集約。
     </p>
 
     <div data-widget="receipt">
@@ -114,15 +114,15 @@ class Receipt < Grainet::Widget
   end
 
   def setup
-    @subtotal = memo do
+    @subtotal = computed do
       @items.value.sum { |it| it["qty"].value.to_i * it["unit_price"].value.to_i }
     end
-    @tax   = memo { (@subtotal.value * 0.1).round }
-    @total = memo { @subtotal.value + @tax.value }
+    @tax   = computed { (@subtotal.value * 0.1).round }
+    @total = computed { @subtotal.value + @tax.value }
 
-    bind refs.subtotal, text: memo { format_yen(@subtotal.value) }
-    bind refs.tax,      text: memo { format_yen(@tax.value) }
-    bind refs.total,    text: memo { format_yen(@total.value) }
+    bind refs.subtotal, text: computed { format_yen(@subtotal.value) }
+    bind refs.tax,      text: computed { format_yen(@tax.value) }
+    bind refs.total,    text: computed { format_yen(@total.value) }
 
     bind_list refs.rows, @items, key: "id", template: "line-row" do |it, t|
       # この block が demo の中核 — bind_list の row template に対して
@@ -131,7 +131,7 @@ class Receipt < Grainet::Widget
       model t.refs.qty,         it["qty"]
       model t.refs.unit_price,  it["unit_price"]
 
-      bind t.refs.line_total, text: memo {
+      bind t.refs.line_total, text: computed {
         format_yen(it["qty"].value.to_i * it["unit_price"].value.to_i)
       }
 

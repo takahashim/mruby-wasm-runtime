@@ -65,7 +65,7 @@
     <p class="lede">
       <code>Fetchy.json</code> で
       <code>./data/countries.json</code> を読み、検索ボックスとリージョン
-      フィルタの組み合わせを <code>memo</code> で計算、
+      フィルタの組み合わせを <code>computed</code> で計算、
       <code>bind_list</code> で差分描画する。
     </p>
 
@@ -100,10 +100,10 @@ class CountryPicker < Grainet::Widget
     model refs.query,  @query
     model refs.region, @region
 
-    # Filter computed from @items + @query + @region. memo skips
+    # Filter computed from @items + @query + @region. computed skips
     # downstream notifies when the result is the same Array (== check),
     # so typing characters that don't change the filter is a no-op.
-    @filtered = memo do
+    @filtered = computed do
       q = @query.value.downcase.strip
       r = @region.value
       @items.value.select do |it|
@@ -113,7 +113,7 @@ class CountryPicker < Grainet::Widget
       end
     end
 
-    bind refs.status, class: { "error" => memo { !@error.value.nil? } }
+    bind refs.status, class: { "error" => computed { !@error.value.nil? } }
 
     bind refs.status, :text do
       if @loading.value

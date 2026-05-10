@@ -196,27 +196,27 @@ class Racer < Grainet::Widget
   # ---- HUD ---------------------------------------------------------
 
   def wire_hud
-    bind refs.speed, text: memo {
+    bind refs.speed, text: computed {
       "#{(@speed.value * 6).to_i} km/h"
     }
-    bind refs.distance, text: memo {
+    bind refs.distance, text: computed {
       m = (@position.value / 10).to_i
       m >= 1000 ? sprintf("%.2f km", m / 1000.0) : "#{m} m"
     }
-    bind refs.fps,           text: memo { @fps.value.to_s }
-    bind refs.wasm_mem,      text: memo { format_bytes(@wasm_mem.value) }
-    bind refs.js_handles,    text: memo { @js_handles.value.to_s }
-    bind refs.rb_callbacks,  text: memo { @rb_callbacks.value.to_s }
-    bind refs.rb_objects,    text: memo { @rb_objects.value.to_s }
-    bind refs.rb_obj_delta,  text: memo {
+    bind refs.fps,           text: computed { @fps.value.to_s }
+    bind refs.wasm_mem,      text: computed { format_bytes(@wasm_mem.value) }
+    bind refs.js_handles,    text: computed { @js_handles.value.to_s }
+    bind refs.rb_callbacks,  text: computed { @rb_callbacks.value.to_s }
+    bind refs.rb_objects,    text: computed { @rb_objects.value.to_s }
+    bind refs.rb_obj_delta,  text: computed {
       d = @rb_obj_delta.value
       d > 0 ? "+#{d}" : d.to_s
     }
     # Highlight negative delta (= GC swept) by painting it in the
     # accent colour via class binding.
     bind refs.rb_obj_delta, class: {
-      "gc"     => memo { @rb_obj_delta.value < 0 },
-      "growth" => memo { @rb_obj_delta.value > 0 },
+      "gc"     => computed { @rb_obj_delta.value < 0 },
+      "growth" => computed { @rb_obj_delta.value > 0 },
     }
   end
 

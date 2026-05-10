@@ -143,27 +143,27 @@ class SignupForm < Grainet::Widget
     terms    = @form[:terms]
 
     bind refs.email_field, class: {
-      "is-invalid" => memo { email.show_error? },
-      "is-valid"   => memo { email.touched? && email.valid? },
+      "is-invalid" => computed { email.show_error? },
+      "is-valid"   => computed { email.touched? && email.valid? },
     }
     bind refs.password_field, class: {
-      "is-invalid" => memo { password.show_error? },
-      "is-valid"   => memo { password.touched? && password.valid? },
+      "is-invalid" => computed { password.show_error? },
+      "is-valid"   => computed { password.touched? && password.valid? },
     }
     bind refs.password_confirm_field, class: {
-      "is-invalid" => memo { confirm.show_error? },
-      "is-valid"   => memo { confirm.touched? && confirm.valid? },
+      "is-invalid" => computed { confirm.show_error? },
+      "is-valid"   => computed { confirm.touched? && confirm.valid? },
     }
     bind refs.email_error,            text: email.error_signal,
-                                      hidden: memo { !email.show_error? }
+                                      hidden: computed { !email.show_error? }
     bind refs.password_error,         text: password.error_signal,
-                                      hidden: memo { !password.show_error? }
+                                      hidden: computed { !password.show_error? }
     bind refs.password_confirm_error, text: confirm.error_signal,
-                                      hidden: memo { !confirm.show_error? }
+                                      hidden: computed { !confirm.show_error? }
     bind refs.base_error, text: @form.base_error_signal,
-                          hidden: memo { @form.base_error.nil? }
+                          hidden: computed { @form.base_error.nil? }
 
-    bind refs.submit, disabled: memo { !@form.valid? }
+    bind refs.submit, disabled: computed { !@form.valid? }
 
     bind refs.hint, :text do
       next "ready to submit" if @form.valid?

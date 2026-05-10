@@ -105,7 +105,7 @@ class ThemeCard < Grainet::Widget
 
     # bind on root: the widget's own DOM root gets the .is-dark class
     # whenever the inherited theme is "dark".
-    bind root, class: { "is-dark" => memo { @theme.value == "dark" } }
+    bind root, class: { "is-dark" => computed { @theme.value == "dark" } }
   end
 end
 

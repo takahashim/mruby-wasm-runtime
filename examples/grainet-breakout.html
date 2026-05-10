@@ -160,14 +160,14 @@ class Breakout < Grainet::Widget
   # ---- view bindings -----------------------------------------------
 
   def wire_view
-    visible_bricks = memo { @bricks.value.select { |br| br["alive"] } }
+    visible_bricks = computed { @bricks.value.select { |br| br["alive"] } }
 
     bind refs.paddle, style: {
-      "transform" => memo { "translateX(#{@paddle_x.value}px)" },
+      "transform" => computed { "translateX(#{@paddle_x.value}px)" },
     }
 
     bind refs.ball, style: {
-      "transform" => memo {
+      "transform" => computed {
         b = @ball.value
         "translate(#{b["x"]}px, #{b["y"]}px)"
       },
@@ -178,10 +178,10 @@ class Breakout < Grainet::Widget
       t.to_js[:className] = "brick row-#{b["row"]}"
     end
 
-    bind refs.score, text: memo { @score.value.to_s }
-    bind refs.lives, text: memo { "♥" * @lives.value }
+    bind refs.score, text: computed { @score.value.to_s }
+    bind refs.lives, text: computed { "♥" * @lives.value }
 
-    bind refs.banner, hidden: memo { @state.value == :playing }
+    bind refs.banner, hidden: computed { @state.value == :playing }
     bind refs.banner_text, :text do
       case @state.value
       when :ready then "Click to start"
@@ -195,10 +195,10 @@ class Breakout < Grainet::Widget
   # ---- stats overlay -----------------------------------------------
 
   def wire_stats
-    bind refs.fps,           text: memo { "#{@fps.value}" }
-    bind refs.wasm_mem,      text: memo { format_bytes(@wasm_mem.value) }
-    bind refs.js_handles,    text: memo { @js_handles.value.to_s }
-    bind refs.rb_callbacks,  text: memo { @rb_callbacks.value.to_s }
+    bind refs.fps,           text: computed { "#{@fps.value}" }
+    bind refs.wasm_mem,      text: computed { format_bytes(@wasm_mem.value) }
+    bind refs.js_handles,    text: computed { @js_handles.value.to_s }
+    bind refs.rb_callbacks,  text: computed { @rb_callbacks.value.to_s }
   end
 
   # Update the stats signals every ~500ms. Faster polling makes the

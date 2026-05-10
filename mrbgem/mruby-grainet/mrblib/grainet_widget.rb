@@ -1,7 +1,7 @@
 # grainet_widget.rb — Grainet::Widget base class.
 #
 # Users write `class Counter < Grainet::Widget`. Owns lifecycle
-# (provides / setup / cleanup), reactive helpers (signal / memo /
+# (provides / setup / cleanup), reactive helpers (signal / computed /
 # effect / persistent_signal), error boundary, and provide / inject.
 #
 # Bindable mixin (in grainet_bindable.rb) supplies bind / model /
@@ -48,7 +48,7 @@ module Grainet
       @refs = nil
       @_listeners = []
       @_effects = []
-      @_memos = []
+      @_computeds = []
       @_cleanups = []
       @_children = []
       @_parent = nil
@@ -133,9 +133,9 @@ module Grainet
       s
     end
 
-    def memo(&block)
-      m = Memo.new(&block)
-      @_memos << m
+    def computed(&block)
+      m = Computed.new(&block)
+      @_computeds << m
       m
     end
 
@@ -245,7 +245,7 @@ module Grainet
       @_unmounted = true
       @_cleanups.reverse_each { |c| safe_release("cleanup")          { c.call } }
       @_effects.each          { |e| safe_release("effect dispose")   { e.dispose } }
-      @_memos.each            { |m| safe_release("memo dispose")     { m.dispose } }
+      @_computeds.each        { |m| safe_release("computed dispose") { m.dispose } }
       @_listeners.each do |target_js, event_str, callback_js|
         safe_release("removeEventListener") { target_js.call(:removeEventListener, event_str, callback_js) }
         safe_release("release_callback")    { JS.release_callback(callback_js) }
