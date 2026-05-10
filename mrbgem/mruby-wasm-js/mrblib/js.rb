@@ -58,6 +58,16 @@ module JS
       Object.new(_eval(src))
     end
 
+    # Thin wrappers over the browser's global URI component helpers.
+    # Input is coerced with `to_s`; malformed decode input raises JS::Error.
+    def encode_uri_component(value)
+      global.call(:encodeURIComponent, value.to_s).to_s
+    end
+
+    def decode_uri_component(value)
+      global.call(:decodeURIComponent, value.to_s).to_s
+    end
+
     # Wrap a Ruby block as a JS callback function.
     # Returns a Object holding the JS wrapper. The Proc is registered in
     # the C-side callback table; release_callback frees it explicitly,

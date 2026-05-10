@@ -150,7 +150,7 @@ class Receipt < Grainet::Widget
           "qty"         => it["qty"].value,
           "unit_price"  => it["unit_price"].value }
       end
-      encoded = JS.global.call(:encodeURIComponent, Grainet::JSON.generate(snapshot)).to_s
+      encoded = JS.encode_uri_component(Grainet::JSON.generate(snapshot))
       JS.global[:history].call(:replaceState,
                                JS.global[:history][:state], "",
                                "#{HASH_PREFIX}#{encoded}")
@@ -183,7 +183,7 @@ class Receipt < Grainet::Widget
     hash = JS.global[:location][:hash].to_s
     return nil if hash.empty? || !hash.start_with?(HASH_PREFIX)
     encoded = hash[HASH_PREFIX.length..-1]
-    json = JS.global.call(:decodeURIComponent, encoded).to_s
+    json = JS.decode_uri_component(encoded)
     parsed = Grainet::JSON.parse(json)
     return nil unless parsed.is_a?(Array)
     parsed.map { |h| signalize_row(h) }

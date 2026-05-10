@@ -481,13 +481,13 @@ module Grainet
       end
 
       def decode(s)
-        JS.global.call(:decodeURIComponent, s.to_s).to_s
+        JS.decode_uri_component(s)
       rescue StandardError
         s.to_s
       end
 
       def encode(s)
-        JS.global.call(:encodeURIComponent, s.to_s).to_s
+        JS.encode_uri_component(s)
       rescue StandardError
         s.to_s
       end

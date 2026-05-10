@@ -77,4 +77,23 @@ Spec.describe "JS::Object primitives (to_s/i/f, nil?, typeof, etc)" do
     Spec.assert_true v.respond_to?(:anything)
     Spec.assert_true v.respond_to?(:foo_bar)
   end
+
+  Spec.assert "JS.encode_uri_component wraps global encodeURIComponent" do
+    Spec.assert_equal "a%20b%2Fc%3Fd", JS.encode_uri_component("a b/c?d")
+  end
+
+  Spec.assert "JS.decode_uri_component wraps global decodeURIComponent" do
+    Spec.assert_equal "a b/c?d", JS.decode_uri_component("a%20b%2Fc%3Fd")
+  end
+
+  Spec.assert "URI component helpers coerce input with to_s" do
+    Spec.assert_equal "42", JS.encode_uri_component(42)
+    Spec.assert_equal "42", JS.decode_uri_component("42")
+  end
+
+  Spec.assert "malformed decode_uri_component input raises JS::Error" do
+    Spec.assert_raises(JS::Error) do
+      JS.decode_uri_component("%E0%A4%A")
+    end
+  end
 end

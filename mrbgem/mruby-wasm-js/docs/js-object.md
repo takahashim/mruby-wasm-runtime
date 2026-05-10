@@ -1,12 +1,26 @@
 # `JS::Object` 拡張
 
-`mruby-wasm-js` は C 側で `JS::Object` (BasicObject 派生) を定義し、`mrblib/js.rb` で Ruby 側のメソッドを足している。基本 API (`[]` / `[]=` / `call` / `new` / `await` / `to_s` / `to_i` / `to_f` / `nil?` / `typeof` / `instanceof?` / ...) に加えて、汎用ヘルパが 3 つ用意されている:
+`mruby-wasm-js` は C 側で `JS::Object` (BasicObject 派生) を定義し、`mrblib/js.rb` で Ruby 側のメソッドを足している。基本 API (`[]` / `[]=` / `call` / `new` / `await` / `to_s` / `to_i` / `to_f` / `nil?` / `typeof` / `instanceof?` / ...) に加えて、汎用ヘルパが用意されている:
 
 | メソッド | 用途 |
 |---|---|
 | `js_null?` | JS の `null` / `undefined` 判定 (mruby の `nil?` 最適化を回避) |
 | `js_bool` | JS Boolean を Ruby Boolean に変換 |
 | `to_ruby` | JSON ライクな JS 値を Ruby Hash/Array ツリーに再帰変換 |
+| `JS.encode_uri_component(str)` | `globalThis.encodeURIComponent` の薄いラッパ |
+| `JS.decode_uri_component(str)` | `globalThis.decodeURIComponent` の薄いラッパ |
+
+## `JS.encode_uri_component` / `JS.decode_uri_component`
+
+```ruby
+JS.encode_uri_component("a b/c?d")   # => "a%20b%2Fc%3Fd"
+JS.decode_uri_component("a%20b")     # => "a b"
+```
+
+どちらも入力は `to_s` で String 化され、戻り値は Ruby String。挙動は
+対応する browser global にそのまま委譲するので、不正な decode 入力は
+`JS::Error` を raise する。`+` を空白に変換するような query-string
+専用の規約は含まない。
 
 ## `js_null?` — `null` / `undefined` 判定
 

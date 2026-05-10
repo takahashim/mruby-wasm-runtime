@@ -68,6 +68,13 @@ sandboxing, hot reload).
 `vm.eval(source)` parses + runs Ruby source on the live VM. Each call
 is auto-wrapped in a Fiber so `JS::Object#await` works at top level.
 
+Common browser helpers are exposed directly on `JS` as thin wrappers:
+
+```ruby
+JS.encode_uri_component("a b/c?d")   # => "a%20b%2Fc%3Fd"
+JS.decode_uri_component("a%20b")     # => "a b"
+```
+
 The VM handle exposes:
 
 | Property | Purpose |

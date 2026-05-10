@@ -216,7 +216,7 @@ Grainet::Router.start
 
 ```ruby
 effect(label: "url-sync") do
-  encoded = encodeURIComponent(JSON.generate(snapshot))
+  encoded = JS.encode_uri_component(JSON.generate(snapshot))
   JS.global[:history].call(:replaceState, ..., "##{prefix}#{encoded}")
 end
 ```
@@ -964,7 +964,7 @@ def parse_query(s)
 end
 
 def decode(s)
-  JS.global.call(:decodeURIComponent, s).to_s
+  JS.decode_uri_component(s)
 rescue
   s
 end
