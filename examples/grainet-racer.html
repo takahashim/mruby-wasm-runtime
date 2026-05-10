@@ -44,14 +44,7 @@
   <body>
     <h1>Grainet — Pseudo-3D racer demo</h1>
     <p class="lede">
-      矢印キー (←→ steer / ↑ accel / ↓ brake) で運転する擬似 3D レーシング。
-      Z-segment ベースの遠近投影で路面 / 路肩 sprite を `&lt;canvas&gt;` に
-      毎フレーム描画する古典的アルゴリズムを Ruby で実装したもの。
-      状態 (<code>@speed</code>, <code>@position</code>, <code>@player_x</code>) は
-      signal、HUD は <code>bind</code>、ループは <code>each_frame</code>。
-      <strong>pixel 単位の描画は Canvas に imperative で投げる</strong>のが
-      本デモのねらい — Grainet が苦手な領域は素直に外に出して、宣言的な
-      部分だけ受け持つ split を showcase。
+      A pseudo-3D driving demo with keyboard steering, speed, and distance.
     </p>
 
     <div data-widget="racer">

@@ -76,12 +76,7 @@
   <body>
     <h1>Grainet — todo demo</h1>
     <p class="lede">
-      Row markup lives in a <code>&lt;template data-template="todo-row"&gt;</code>
-      element (below); <code>bind_list</code> clones it per item and
-      fills the title via <code>data-ref="title"</code>. Adding an item
-      updates the <code>@items</code> signal and a fresh row is cloned;
-      updates to existing items mutate the cached node in place
-      (preserving the row's <code>todo-item</code> widget identity).
+      A simple todo list with add and remove actions.
     </p>
 
     <!-- The <ul> is empty in the seed HTML; bind_list owns its children. -->

@@ -46,11 +46,7 @@
   <body>
     <h1>Grainet — provide / inject theme demo</h1>
     <p class="lede">
-      The outer <code>theme-app</code> widget publishes a <code>:theme</code>
-      signal in its <code>provides</code> hook. Each <code>theme-card</code>
-      and <code>theme-badge</code> widget calls <code>inject(:theme)</code>
-      in its setup and binds its CSS classes reactively. None of the inner
-      widgets know who provides the theme — they just ask for it by key.
+      A shared theme switcher that updates multiple cards at once.
     </p>
 
     <div data-widget="theme-app">
@@ -61,8 +57,7 @@
 
       <div data-widget="theme-card" class="card">
         <h3>First card</h3>
-        <p>This card asks <code>inject(:theme)</code>. Two levels deep, the
-           badge does the same independently.
+        <p>This card updates together with the shared theme setting.
            <span data-widget="theme-badge" class="badge" data-ref="badge_root">
              status
            </span>
@@ -71,9 +66,7 @@
 
       <div data-widget="theme-card" class="card">
         <h3>Second card</h3>
-        <p>Both cards re-render only their CSS class on toggle — the DOM
-           nodes are not replaced, so any focus / scroll / nested widget
-           state is preserved.</p>
+        <p>Both cards reflect the current mode immediately.</p>
       </div>
     </div>
 

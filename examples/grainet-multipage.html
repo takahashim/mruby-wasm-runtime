@@ -79,9 +79,7 @@
   <body>
     <h1>Grainet — multipage SPA</h1>
     <p>
-      Lazy-mount router showcase. URL の変化に応じて
-      <code>&lt;template&gt;</code> を outlet に clone、widget を auto-mount。
-      View source for the Ruby code.
+      A small multipage app with client-side navigation and route-based views.
     </p>
 
     <nav data-widget="nav">
@@ -94,9 +92,7 @@
     <div data-router-outlet></div>
 
     <p class="hint">
-      ヒント: Counter で数を進めて他ページへ移動して戻ると、state は 0 に戻ります
-      (lazy mount = unmount で signal が破棄される)。state を残したい場合は
-      <code>persistent_signal</code> か always-mounted パターンを使ってください。
+      Tip: the counter resets after leaving and returning to its page.
     </p>
 
     <p id="status">booting…</p>
@@ -106,9 +102,8 @@
     <template id="page-home">
       <div data-widget="home-page">
         <h2>Home</h2>
-        <p>Grainet Router の lazy mount デモ。Nav の link を押すと URL が変わり、
-           対応する <code>&lt;template&gt;</code> が outlet に clone されます。</p>
-        <p>各ページは普通の Grainet Widget — 既存の signal / bind / refs がそのまま使えます。</p>
+        <p>A simple landing page for the demo app.</p>
+        <p>Use the navigation above to move between pages.</p>
       </div>
     </template>
 
@@ -128,7 +123,7 @@
     <template id="page-users">
       <div data-widget="users-page">
         <h2>Users</h2>
-        <p>クリックすると <code>/users/:id</code> route に遷移します。</p>
+        <p>Select a user to open a detail page.</p>
         <ul class="users-list" data-ref="list"></ul>
       </div>
     </template>
@@ -144,9 +139,8 @@
     <template id="page-about">
       <div data-widget="about-page">
         <h2>About</h2>
-        <p>このページ自体も <code>data-widget="about-page"</code> で
-           Grainet によってマウントされています。</p>
-        <p>Path helpers の例: home → <code data-ref="home_link"></code>、
+        <p>A basic informational page inside the demo app.</p>
+        <p>Example links: home → <code data-ref="home_link"></code>,
            user(id=1) → <code data-ref="user_link"></code></p>
       </div>
     </template>
@@ -154,7 +148,7 @@
     <template id="page-404">
       <div data-widget="not-found-page">
         <h2>Not found</h2>
-        <p>このページは存在しません。<a href="/" data-ref="home">トップへ</a></p>
+        <p>This page does not exist. <a href="/" data-ref="home">Go home</a></p>
       </div>
     </template>
 

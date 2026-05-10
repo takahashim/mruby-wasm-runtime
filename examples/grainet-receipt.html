@@ -52,11 +52,7 @@
   <body>
     <h1>Grainet — receipt demo</h1>
     <p class="lede">
-      明細計算機。state は <code>location.hash</code> に JSON で乗るので、
-      編集中も URL が更新され、コピペでシェア可能 + リロードで復元される。
-      bind_list の per-row block で <code>model</code> を貼って各 input を
-      個別 signal に直結し、line_total は per-row computed、小計 / 税 / 合計は
-      computed chain で集約。
+      An editable receipt with line items, totals, and shareable state in the URL.
     </p>
 
     <div data-widget="receipt">

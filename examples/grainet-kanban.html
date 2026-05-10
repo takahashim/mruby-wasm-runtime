@@ -123,15 +123,7 @@
   <body>
     <h1>Grainet — Kanban demo</h1>
     <p class="lede">
-      3 列の Kanban。カードを drag-and-drop で列間移動でき、
-      内容は <code>localStorage</code> に自動保存される。
-      <code>provide</code> / <code>inject</code> で <code>@cards</code>
-      signal を共有し、各列は <code>computed</code> で自分の status を filter
-      した view を <code>bind_list</code> でレンダリング。
-      <strong>2 種のオーバーレイ</strong>を使い分け: 想定外例外は赤い
-      <em>error overlay</em> (<code>error_boundary</code> 経由)、
-      validation 等の予測される user message は黄色の
-      <em>notice overlay</em> (<code>@notice</code> signal を inject)。
+      A three-column Kanban board with drag-and-drop cards and saved state.
     </p>
 
     <div data-widget="kanban-board">
