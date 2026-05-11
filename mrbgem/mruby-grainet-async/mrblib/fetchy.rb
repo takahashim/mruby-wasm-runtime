@@ -381,5 +381,10 @@ class Fetchy
       method = opts.key?(:method) ? opts.delete(:method) : "GET"
       request(url, method: method, **opts, &builder).text
     end
+
+    def bytes(url, **opts, &builder)
+      method = opts.key?(:method) ? opts.delete(:method) : "GET"
+      request(url, method: method, **opts, &builder).bytes
+    end
   end
 end

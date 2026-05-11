@@ -55,6 +55,18 @@ module Grainet
       nil
     end
 
+    def reset!
+      @widgets.each_value(&:__unmount__)
+      @widgets = {}
+      @widget_classes = {}
+      @next_widget_id = 0
+      return unless @observer
+      @observer.call(:disconnect)
+      JS.release_callback(@observer_callback)
+      @observer = nil
+      @observer_callback = nil
+    end
+
     def mount_subtree(root_js)
       return if root_js.js_null? || root_js.typeof != "object"
       collected = []
@@ -157,13 +169,13 @@ module Grainet
           added = rec[:addedNodes]
           removed = rec[:removedNodes]
           an = added[:length].to_i
+          rn = removed[:length].to_i
           ai = 0
           while ai < an
             node = added[ai]
             mount_subtree(node) if node[:nodeType].to_i == 1
             ai += 1
           end
-          rn = removed[:length].to_i
           ri = 0
           while ri < rn
             node = removed[ri]
@@ -208,6 +220,10 @@ module Grainet
 
     def start(root_js = nil)
       registry.start(root_js)
+    end
+
+    def reset!
+      registry.reset!
     end
 
     def find_for_element(js_element)

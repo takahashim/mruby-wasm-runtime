@@ -16,8 +16,7 @@ module Grainet
         @listeners = []
         @effects = []
         @computeds = []
-        @resources = []
-        @selectors = []
+        @disposables = []
         @cleanups = []
         @disposed = false
       end
@@ -34,12 +33,8 @@ module Grainet
         @computeds << computed
       end
 
-      def __register_resource__(resource)
-        @resources << resource
-      end
-
-      def __register_selector__(selector)
-        @selectors << selector
+      def __register_disposable__(label, disposable)
+        @disposables << [label, disposable]
       end
 
       def __register_cleanup__(cleanup)
@@ -52,8 +47,7 @@ module Grainet
         @cleanups.reverse_each { |c| safe_release("cleanup")          { c.call } }
         @effects.each          { |e| safe_release("effect dispose")   { e.dispose } }
         @computeds.each        { |m| safe_release("computed dispose") { m.dispose } }
-        @resources.each        { |r| safe_release("resource dispose") { r.dispose } }
-        @selectors.each        { |s| safe_release("selector dispose") { s.dispose } }
+        @disposables.each      { |label, d| safe_release("#{label} dispose") { d.dispose } }
         @listeners.each do |target_js, event_str, callback_js|
           safe_release("removeEventListener") { target_js.call(:removeEventListener, event_str, callback_js) }
           safe_release("release_callback")    { JS.release_callback(callback_js) }
@@ -108,8 +102,7 @@ module Grainet
       @_listeners = []
       @_effects = []
       @_computeds = []
-      @_resources = []
-      @_selectors = []
+      @_disposables = []
       @_cleanups = []
       @_children = []
       @_parent = nil
@@ -200,18 +193,6 @@ module Grainet
       m
     end
 
-    def resource(initial: nil, defer: false, keep_value: true, &block)
-      r = Resource.new(initial: initial, defer: defer, keep_value: keep_value, &block)
-      __owner_target__.__register_resource__(r)
-      r
-    end
-
-    def selector(source, equals: nil)
-      s = Selector.new(source, equals: equals)
-      __owner_target__.__register_selector__(s)
-      s
-    end
-
     def effect(label: nil, &block)
       e = Effect.new(label: label, source: self, &block)
       __owner_target__.__register_effect__(e)
@@ -278,12 +259,8 @@ module Grainet
       @_computeds << computed
     end
 
-    def __register_resource__(resource)
-      @_resources << resource
-    end
-
-    def __register_selector__(selector)
-      @_selectors << selector
+    def __register_disposable__(label, disposable)
+      @_disposables << [label, disposable]
     end
 
     def __register_cleanup__(cleanup)
@@ -351,8 +328,7 @@ module Grainet
       @_cleanups.reverse_each { |c| safe_release("cleanup")          { c.call } }
       @_effects.each          { |e| safe_release("effect dispose")   { e.dispose } }
       @_computeds.each        { |m| safe_release("computed dispose") { m.dispose } }
-      @_resources.each        { |r| safe_release("resource dispose") { r.dispose } }
-      @_selectors.each        { |s| safe_release("selector dispose") { s.dispose } }
+      @_disposables.each      { |label, d| safe_release("#{label} dispose") { d.dispose } }
       @_listeners.each do |target_js, event_str, callback_js|
         safe_release("removeEventListener") { target_js.call(:removeEventListener, event_str, callback_js) }
         safe_release("release_callback")    { JS.release_callback(callback_js) }

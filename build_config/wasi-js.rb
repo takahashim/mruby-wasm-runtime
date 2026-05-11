@@ -80,6 +80,7 @@ MRuby::CrossBuild.new(build_name) do |conf|
 
   conf.gem File.expand_path("../mrbgem/mruby-wasm-js", __dir__)
   conf.gem File.expand_path("../mrbgem/mruby-grainet", __dir__)
+  conf.gem File.expand_path("../mrbgem/mruby-grainet-async", __dir__)
   conf.gem File.expand_path("../mrbgem/mruby-grainet-router", __dir__)
   conf.gem File.expand_path("../mrbgem/mruby-grainet-form", __dir__)
   # Ruby surface for WASI primitives that mruby core doesn't ship.

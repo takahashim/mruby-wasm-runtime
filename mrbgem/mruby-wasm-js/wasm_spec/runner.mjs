@@ -95,6 +95,7 @@ assert(!vm.fs.has("/data"), "fs.has returns false for directories");
 // --- Load spec_helper + all test_*.rb -------------------------------------
 const testDir = here;
 const grainetSpecDir = resolve(here, "../../mruby-grainet/wasm_spec");
+const grainetAsyncSpecDir = resolve(here, "../../mruby-grainet-async/wasm_spec");
 const routerSpecDir = resolve(here, "../../mruby-grainet-router/wasm_spec");
 const formSpecDir = resolve(here, "../../mruby-grainet-form/wasm_spec");
 const helper = "spec_helper.rb";
@@ -120,18 +121,37 @@ async function runDir(dir, label) {
       console.error(`[runner] ${label}/${f} failed to load (parse/runtime error)`);
       process.exit(1);
     }
-    // Resume any fibers suspended on `await` before the next file
-    // runs, so its DOM mutations don't batch into the awaiting test's
-    // MutationObserver callback. Loop is generously sized to cover
-    // files with multiple chained awaits per test.
-    for (let i = 0; i < 30; i++) {
-      await new Promise((r) => setTimeout(r, 0));
-    }
+    await drainPendingFibers(label, f);
   }
+}
+
+// Wait until all fibers the file suspended on `await` have completed.
+//
+// Why this exists: each test file is wrapped in `JS.__run_in_fiber__`, so
+// `vm.eval(src)` returns as soon as the first `.await` yields — even if
+// the file still has work queued (subsequent awaits, cleanup like
+// `body.innerHTML = ""`). Without waiting, that stale work fires during
+// the *next* file's tests and corrupts shared DOM state (e.g., MO sees a
+// transient empty body, prunes the new file's widgets mid-fetch).
+//
+// We poll `JS.stats[:await_fibers]` and only return when it hits zero.
+// Each iteration runs one macrotask + microtask drain, which is enough
+// for a chained `await`. A generous cap keeps a stuck fiber from hanging
+// the suite indefinitely; a warning is printed so the test author sees it.
+async function drainPendingFibers(label, f) {
+  const maxIterations = 200;
+  for (let i = 0; i < maxIterations; i++) {
+    await new Promise((r) => setTimeout(r, 5));
+    vm.eval("JS.global[:__await_fibers__] = JS.stats[:await_fibers]");
+    const pending = Number(globalThis.__await_fibers__) || 0;
+    if (pending === 0) return;
+  }
+  console.error(`[runner] ${label}/${f}: fibers still pending after ${maxIterations} iterations`);
 }
 
 await runDir(testDir, "mruby-wasm-js");
 await runDir(grainetSpecDir, "mruby-grainet");
+await runDir(grainetAsyncSpecDir, "mruby-grainet-async");
 await runDir(routerSpecDir, "mruby-grainet-router");
 await runDir(formSpecDir, "mruby-grainet-form");
 
