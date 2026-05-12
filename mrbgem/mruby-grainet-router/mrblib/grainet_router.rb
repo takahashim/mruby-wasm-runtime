@@ -618,7 +618,7 @@ module Grainet
       def mount_template_into_outlet(template_id, outlet)
         template_el = JS.global[:document].call(:getElementById, template_id)
         if template_el.js_null?
-          Grainet.__warn__("router: template '#{template_id}' not found")
+          Grainet.logger.warn("router: template '#{template_id}' not found")
           return
         end
         cloned = template_el[:content].call(:cloneNode, true)

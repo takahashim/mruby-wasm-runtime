@@ -22,8 +22,8 @@ module Grainet
   #   5. listeners (removeEventListener + release_callback)
   #
   # Each step is wrapped in a rescue that routes through
-  # `Grainet.__error__` with `source:` set to the owning Widget, so a
-  # single bad cleanup doesn't poison the rest of the teardown.
+  # `Grainet.logger.error` with `source:` set to the owning Widget, so
+  # a single bad cleanup doesn't poison the rest of the teardown.
   class DisposableSet
     def initialize(source)
       @source = source
@@ -74,7 +74,7 @@ module Grainet
     def safe_release(label)
       yield
     rescue StandardError => e
-      Grainet.__error__("#{@source.class.name} #{label}", e, source: @source)
+      Grainet.logger.error("#{@source.class.name} #{label}", e, source: @source)
     end
   end
 
@@ -237,7 +237,7 @@ module Grainet
             loaded = true
           end
         rescue JS::Error => e
-          Grainet.__warn__("persistent_signal(#{k.inspect}): load failed (#{e.class}: #{e.message}); using default")
+          Grainet.logger.warn("persistent_signal(#{k.inspect}): load failed (#{e.class}: #{e.message}); using default")
         end
       end
       initial = block_default ? block_default.call : default unless loaded
@@ -272,7 +272,7 @@ module Grainet
         begin
           block.call(ts)
         rescue => e
-          Grainet.__error__("each_frame", e, source: self)
+          Grainet.logger.error("each_frame", e, source: self)
         end
         raf_id = JS.global.call(:requestAnimationFrame, cb) if running
       end
@@ -301,7 +301,7 @@ module Grainet
       begin
         !!@error_handler.call(label, error)
       rescue => e
-        Grainet.__error__("on_error handler in #{self.class.name}", e)
+        Grainet.logger.error("on_error handler in #{self.class.name}", e)
         false
       end
     end
@@ -356,7 +356,7 @@ module Grainet
       begin
         provides
       rescue => e
-        Grainet.__error__("#{self.class.name}#provides", e, source: self)
+        Grainet.logger.error("#{self.class.name}#provides", e, source: self)
       end
     end
 
@@ -366,7 +366,7 @@ module Grainet
       begin
         setup
       rescue => e
-        Grainet.__error__("#{self.class.name}#setup", e, source: self)
+        Grainet.logger.error("#{self.class.name}#setup", e, source: self)
       end
       @mounted = true
     end

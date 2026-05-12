@@ -131,7 +131,7 @@ module Grainet
       return nil if name.js_null?
       klass = @widget_classes[name.to_s]
       unless klass
-        Grainet.__warn__("No widget registered for name: #{name.to_s.inspect}")
+        Grainet.logger.warn("No widget registered for name: #{name.to_s.inspect}")
         return nil
       end
       @next_widget_id += 1

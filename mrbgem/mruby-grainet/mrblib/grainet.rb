@@ -3,7 +3,8 @@
 # Defines:
 #   - module Grainet (top-level brand namespace)
 #   - Grainet::Error
-#   - Grainet.dev_mode / .logger / .__warn__ / .__error__ / .__window__ / .batch
+#   - Grainet.dev_mode / .logger / .__window__ / .batch
+#   - Grainet::Logger (default writes to STDERR; override emit_warn / emit_error)
 #   - Grainet::DomExtensions (JS::Object DOM mixin)
 #   - Grainet::Reactive (private infrastructure: TRACKER, BATCH, helpers)
 #   - Grainet::Subscribers
@@ -63,40 +64,24 @@ module Grainet
   @logger = nil
 
   class << self
-    attr_accessor :dev_mode, :logger
+    attr_accessor :dev_mode
 
     def dev_mode?
       @dev_mode
     end
 
-    # Internal: emit a development-mode warning. Routed through
-    # Grainet.logger if set (`logger.call(:warn, msg, nil)`),
-    # otherwise to STDERR.
-    def __warn__(msg)
-      return unless dev_mode?
-      if @logger
-        @logger.call(:warn, msg, nil)
-      else
-        STDERR.puts "[Grainet] #{msg}"
-      end
+    # Returns the active logger, instantiating a default
+    # `Grainet::Logger` on first access. `Grainet.logger = nil` clears
+    # the override so the next read re-creates the default.
+    def logger
+      @logger ||= Logger.new
     end
 
-    # See docs/grainet-spec.md "Error Boundary" for the bubbling rules.
-    def __error__(label, error, source: nil)
-      current = source
-      while current
-        return if current.handle_error(label, error)
-        current = current.parent
-      end
-      if @logger
-        @logger.call(:error, label, error)
-        return
-      end
-      STDERR.puts "[Grainet] Error in #{label}"
-      STDERR.puts "  #{error.class}: #{error.message}"
-      return unless dev_mode?
-      bt = error.backtrace if error.respond_to?(:backtrace)
-      bt&.each { |line| STDERR.puts "    #{line}" }
+    # Accepts a `Grainet::Logger` (or duck-typed object), a Proc (which
+    # is auto-wrapped — receives `(severity, msg_or_label, err_or_nil)`),
+    # or `nil` to reset to the default.
+    def logger=(value)
+      @logger = value.is_a?(Proc) ? Logger::ProcAdapter.new(value) : value
     end
 
     # Resolve the DOM window. In a browser, `window === globalThis`,
@@ -110,6 +95,59 @@ module Grainet
       view = doc[:defaultView]
       return view if !view.js_null?
       JS.global
+    end
+  end
+
+  # Default logger. `warn(msg)` and `error(label, error, source:)` are
+  # the public entry points used throughout the framework. Subclass and
+  # override `emit_warn` / `emit_error` to redirect output (tests use
+  # this to capture emissions into an array). `error` first bubbles
+  # `label, error` up the `source` parent chain via `handle_error`; only
+  # if no boundary absorbs it does `emit_error` actually run — see
+  # docs/grainet-spec.md "Error Boundary".
+  class Logger
+    def warn(msg)
+      return unless Grainet.dev_mode?
+      emit_warn(msg)
+    end
+
+    def error(label, error, source: nil)
+      current = source
+      while current
+        return if current.handle_error(label, error)
+        current = current.parent
+      end
+      emit_error(label, error)
+    end
+
+    def emit_warn(msg)
+      STDERR.puts "[Grainet] #{msg}"
+    end
+
+    def emit_error(label, error)
+      STDERR.puts "[Grainet] Error in #{label}"
+      STDERR.puts "  #{error.class}: #{error.message}"
+      return unless Grainet.dev_mode?
+      bt = error.backtrace if error.respond_to?(:backtrace)
+      bt&.each { |line| STDERR.puts "    #{line}" }
+    end
+
+    # Auto-installed when a user does `Grainet.logger = ->(s, m, e) { ... }`.
+    # Forwards both severity channels into the single callable using the
+    # legacy three-argument shape so existing test/debug snippets keep
+    # working against the new Logger API.
+    class ProcAdapter < Logger
+      def initialize(callable)
+        @callable = callable
+      end
+
+      def emit_warn(msg)
+        @callable.call(:warn, msg, nil)
+      end
+
+      def emit_error(label, error)
+        @callable.call(:error, label, error)
+      end
     end
   end
 
@@ -339,7 +377,7 @@ module Grainet
 
       def warn(symbol)
         msg = WARNINGS[symbol]
-        Grainet.__warn__(msg) if msg
+        Grainet.logger.warn(msg) if msg
       end
 
       def type_name(v)
@@ -491,7 +529,7 @@ module Grainet
 
   # Side effect that re-runs whenever a tracked dependency changes.
   # `source:` (the owning Widget, when created via Widget#effect) is
-  # consulted by `Grainet.__error__` for on_error bubbling.
+  # consulted by `Grainet.logger.error` for on_error bubbling.
   class Effect
     include Reactive::Observer
 
@@ -524,7 +562,7 @@ module Grainet
         @block.call
       end
     rescue => e
-      Grainet.__error__("effect#{@label ? " (#{@label})" : ""}", e, source: @source)
+      Grainet.logger.error("effect#{@label ? " (#{@label})" : ""}", e, source: @source)
     end
   end
 
