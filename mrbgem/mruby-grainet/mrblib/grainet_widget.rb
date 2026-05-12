@@ -113,8 +113,8 @@ module Grainet
   class Widget
     # A bag of lifecycle resources associated with a sub-scope (e.g.
     # one row of a `bind_list` block). Disposed when the row is removed
-    # or the host Widget unmounts; the API mirrors Widget's
-    # `__register_*__` so the same helpers can target either.
+    # or the host Widget unmounts. Shares ResourceOwner's `register_*`
+    # API with Widget so the same helpers target either.
     class Scope
       include ResourceOwner
 
@@ -159,19 +159,19 @@ module Grainet
       end
     end
 
-    attr_reader :root, :refs
+    attr_reader :root, :refs, :parent
 
     def initialize(root_element)
       @root = RefElement.new(root_element, self, name: "(root)")
       @refs = nil
       @resources = DisposableSet.new(self)
-      @_children = []
-      @_parent = nil
-      @_provides = {}
-      @_provided = false
-      @_mounted = false
-      @_unmounted = false
-      @_error_handler = nil
+      @children = []
+      @parent = nil
+      @provides = {}
+      @provide_phase_done = false
+      @mounted = false
+      @unmounted = false
+      @error_handler = nil
     end
 
     # Override to publish values to descendants. Runs in pre-order
@@ -188,7 +188,7 @@ module Grainet
     # ---- Provide / Inject ------------------------------------------
 
     def provide(key, value)
-      @_provides[key] = value
+      @provides[key] = value
     end
 
     def inject(key, default = NOT_FOUND, &block)
@@ -293,13 +293,13 @@ module Grainet
     # See docs/grainet-spec.md "Error Boundary".
     def on_error(&block)
       raise ArgumentError, "block required" unless block
-      @_error_handler = block
+      @error_handler = block
     end
 
     def handle_error(label, error)
-      return false unless @_error_handler
+      return false unless @error_handler
       begin
-        !!@_error_handler.call(label, error)
+        !!@error_handler.call(label, error)
       rescue => e
         Grainet.__error__("on_error handler in #{self.class.name}", e)
         false
@@ -315,32 +315,28 @@ module Grainet
     end
 
     def with_scope(scope)
-      @_scope_stack ||= []
-      @_scope_stack << scope
+      @scope_stack ||= []
+      @scope_stack << scope
       yield
     ensure
-      @_scope_stack.pop
+      @scope_stack.pop
     end
 
     # Add a child widget to this Widget's subtree. Registry calls this
     # during mount; wires the child's `parent` reverse-pointer.
     def add_child(child_widget)
-      @_children << child_widget
+      @children << child_widget
       child_widget.assign_parent(self)
     end
 
     # Framework-internal: pair with `add_child` on the parent.
     # User code should not re-parent widgets.
     def assign_parent(parent_widget)
-      @_parent = parent_widget
-    end
-
-    def parent
-      @_parent
+      @parent = parent_widget
     end
 
     def provided_for(key)
-      @_provides.key?(key) ? @_provides[key] : NOT_FOUND
+      @provides.key?(key) ? @provides[key] : NOT_FOUND
     end
 
     # ---- Lifecycle hooks (framework-internal) ----------------------
@@ -352,10 +348,10 @@ module Grainet
     # Run the `provides` hook exactly once, before any descendant's
     # `setup` runs. Called by Registry in the pre-order phase.
     def provide_phase
-      return if @_provided
-      @_provided = true
+      return if @provide_phase_done
+      @provide_phase_done = true
       if (boundary = self.class.error_boundary_block)
-        @_error_handler = ->(label, error) { instance_exec(label, error, &boundary) }
+        @error_handler = ->(label, error) { instance_exec(label, error, &boundary) }
       end
       begin
         provides
@@ -365,21 +361,21 @@ module Grainet
     end
 
     def mount
-      return if @_mounted
+      return if @mounted
       @refs = Refs.new(self)
       begin
         setup
       rescue => e
         Grainet.__error__("#{self.class.name}#setup", e, source: self)
       end
-      @_mounted = true
+      @mounted = true
     end
 
     def unmount
-      return if @_unmounted
-      @_unmounted = true
+      return if @unmounted
+      @unmounted = true
       @resources.dispose
-      @_children.each { |c| @resources.safe_release("child unmount") { c.unmount } }
+      @children.each { |c| @resources.safe_release("child unmount") { c.unmount } }
     end
 
     private
@@ -389,7 +385,7 @@ module Grainet
     # `effect`/`computed`/`cleanup`/`ref` to attach to whichever scope
     # is current.
     def current_owner
-      stack = @_scope_stack
+      stack = @scope_stack
       (stack && stack.last) || self
     end
   end

@@ -271,11 +271,11 @@ module Grainet
     def initialize(node, widget = nil)
       @node = node
       @widget = widget
-      @_refs = nil
+      @refs = nil
     end
 
     def refs
-      @_refs ||= TemplateRefs.new(@node, @widget)
+      @refs ||= TemplateRefs.new(@node, @widget)
     end
 
     def to_js
