@@ -5,6 +5,19 @@
 # table and exposes pass/fail to JS via JS.global[:__test_failed__].
 
 module Spec
+  class Group
+    attr_reader :name, :results
+
+    def initialize(name)
+      @name = name
+      @results = []
+    end
+
+    def add(entry)
+      @results << entry
+    end
+  end
+
   @groups = []
   @counts = { tests: 0, asserts: 0, failures: 0 }
   # Per-Fiber active group, so test files that yield (await tests) don't
@@ -14,7 +27,7 @@ module Spec
 
   class << self
     def describe(name)
-      group = [name, []]
+      group = Group.new(name)
       @groups << group
       @fiber_groups[::Fiber.current] = group
       begin
@@ -69,12 +82,12 @@ module Spec
 
     def summary
       puts ""
-      @groups.each do |name, results|
-        pass = results.count { |r| r[0] == :pass }
-        total = results.length
+      @groups.each do |group|
+        pass = group.results.count { |r| r[0] == :pass }
+        total = group.results.length
         status = total == pass ? "OK  " : "FAIL"
-        puts "[#{status}] #{name}: #{pass}/#{total}"
-        results.each do |r|
+        puts "[#{status}] #{group.name}: #{pass}/#{total}"
+        group.results.each do |r|
           if r[0] == :fail
             puts "  - #{r[1]}"
             puts "    #{r[2].class}: #{r[2].message}"
@@ -90,7 +103,7 @@ module Spec
 
     def record(*entry)
       group = @fiber_groups[::Fiber.current]
-      group[1] << entry if group
+      group&.add(entry)
     end
   end
 end
