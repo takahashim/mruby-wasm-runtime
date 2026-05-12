@@ -1683,6 +1683,32 @@ mruby の標準ビルドには Regexp が無いことがある。本 gem は Reg
 
 ---
 
+## Known Limitations
+
+設計上の選択で発生している既知の制約。バグではなく将来の議論対象。
+
+### `Grainet.registry` はプロセス内シングルトン
+
+`Grainet.registry` は `@registry ||= Registry.new` でモジュール変数として保持され、1 プロセスに 1 つしか存在しない。フロントエンドアプリでは想定通り (1 ページ = 1 アプリ) だが、以下の含意がある:
+
+- **テストで状態が持ち越される**: テストファイルをまたいで `@widgets` / `@widget_classes` / `MutationObserver` が残る。テスト分離が必要な場合は **テスト先頭で `Grainet.reset!` を呼ぶ**こと（`Spec.before { Grainet.reset! }` のパターン推奨）。
+- **複数 Grainet インスタンスは作れない**: 同一ページに独立した Grainet アプリを 2 つ走らせる用途は非対応。
+
+### Resource は所有 Widget の lifetime に従属
+
+`resource(...)` で作った `Resource` は呼び出し元 Widget の `@_disposables` に登録され、Widget の `__unmount__` 時に `Resource#dispose` → 進行中の fetch が AbortError で中断される。
+
+- **意図的設計**: メモリリーク防止 + 不要な通信のキャンセル。
+- **副作用**: Widget が DOM から削除された瞬間に fetch 結果は捨てられる。「unmount 後も値を保持して再 mount で復元したい」用途には非対応。必要なら Widget の外側 (Provider 的な存在) で Resource を保持する設計を取る。
+
+### MutationObserver 由来の widget mount/unmount は `removedNodes` 経由のみ
+
+`prune_disconnected_widgets` は **`Grainet.start` 冒頭でのみ実行**される defensive cleanup で、MO callback からは呼ばれない（過去に MO callback からも呼んでいたが、別 fiber の transient な body 変更で live widget が暴発 unmount される flaky テストの原因になったため撤廃）。MO の `removedNodes` 経由の `unmount_subtree` が in-flight な削除の正規ルート。
+
+含意: **`document.body` 配下の DOM 操作で `data-widget` 要素を removeChild なしに置き換える** (例: 親要素を別ツリーに付け替えるなど) と widget が unmount されない可能性がある。MO の `removedNodes` に乗らない移動は registry のリークになる。通常用途 (innerHTML 書き換え、`removeChild`、`replaceChildren`) では問題ない。
+
+---
+
 ## ライセンス・依存関係
 
 - License: MIT
