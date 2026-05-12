@@ -6,11 +6,13 @@
  * back into the wasm.
  */
 #include "imports.h"
+#include <stdint.h>
 #include <stdio.h>
 #include <string.h>
 #include <mruby/array.h>
 #include <mruby/hash.h>
 #include <mruby/class.h>
+#include <mruby/irep.h>
 #include <mruby/proc.h>
 #include <mruby/string.h>
 #include <mruby/throw.h>
@@ -123,27 +125,40 @@ mrb_to_fresh_js_handle(mrb_state *mrb, mrb_value v) {
 /* ---------- WASM exports ---------- */
 
 /*
- * WASM export: JS calls this with a handle to a Ruby source string.
- * mruby loads/parses/executes it; on parse/runtime error, prints to
- * stderr and returns 1 (so the host can show an error).
- *
- * The source is wrapped in `JS.__run_in_fiber__ do ... end` so
- * that any `Value#await` inside has a Fiber to yield from. If the
- * fiber suspends (await fired), this function still returns 0 — the
- * fiber resumes asynchronously when the awaited Promise settles, via
- * the existing js_invoke_proc callback path.
+ * Return codes used by js_eval_handle / js_load_irep_handle:
+ *   0  success
+ *   1  parse/runtime error (printed to stderr)
+ *   2  not supported in this build (e.g., compiler-less variant)
+ * The JS host inspects these to surface the right exception type.
  */
-#define FIBER_PREAMBLE "::JS.__run_in_fiber__ do\n"
-#define FIBER_POSTAMBLE "\nend\n"
 
+/*
+ * WASM export: evaluate a Ruby source string.
+ *
+ * The source is wrapped in `JS.__run_in_fiber__ do ... end` so that
+ * `.await` inside has a Fiber to yield from. If the fiber suspends
+ * (await fired), this function still returns 0 — the fiber resumes
+ * asynchronously when the awaited Promise settles, via the existing
+ * js_invoke_proc callback path.
+ *
+ * Compiler-less builds (MRUBY_WASM_NO_COMPILER) drop the mrb_load_string
+ * path entirely and return 2; callers must use js_load_irep_handle with
+ * pre-compiled bytecode instead.
+ */
 __attribute__((export_name("js_eval_handle")))
 int
 js_eval_handle(int src_handle) {
   if (!g_mrb) return 1;
+#ifdef MRUBY_WASM_NO_COMPILER
+  (void)src_handle;
+  return 2;
+#else
   mrb_state *mrb = g_mrb;
   int len = js_to_string_len(src_handle);
   if (len <= 0) return 0;
 
+  static const char FIBER_PREAMBLE[]  = "::JS.__run_in_fiber__ do\n";
+  static const char FIBER_POSTAMBLE[] = "\nend\n";
   size_t pre = sizeof(FIBER_PREAMBLE) - 1;
   size_t post = sizeof(FIBER_POSTAMBLE) - 1;
   char *buf = (char *)mrb_malloc(mrb, pre + (size_t)len + post + 1);
@@ -166,10 +181,56 @@ js_eval_handle(int src_handle) {
     return 1;
   }
   return 0;
+#endif
 }
 
-#undef FIBER_PREAMBLE
-#undef FIBER_POSTAMBLE
+/*
+ * WASM export: load pre-compiled bytecode (output of `mrbc`).
+ *
+ * The byte array comes through a JS handle pointing at a Uint8Array.
+ * Unlike js_eval_handle, this path does NOT auto-wrap the source — the
+ * caller is responsible for compiling Ruby that already contains any
+ * needed `::JS.__run_in_fiber__ do ... end` wrapper.
+ *
+ * Available in both compiler-full and compiler-less builds. The chief
+ * use case is the compiler-less (production / "min") variant, where
+ * Ruby sources are pre-compiled with `mrbc` and loaded as IREP at
+ * runtime — saving the size cost of the parser.
+ */
+__attribute__((export_name("js_load_irep_handle")))
+int
+js_load_irep_handle(int bytes_handle) {
+  if (!g_mrb) return 1;
+  mrb_state *mrb = g_mrb;
+
+  /* JS hands us a Uint8Array; pull its length + each byte via the same
+   * property/index access the callback args path uses. */
+  int length_h = js_get(bytes_handle, "length", 6);
+  int n = js_to_int(length_h);
+  js_release(length_h);
+  if (n <= 0) return 0;
+
+  uint8_t *buf = (uint8_t *)mrb_malloc(mrb, (size_t)n);
+  for (int i = 0; i < n; i++) {
+    char idx[16];
+    int k = snprintf(idx, sizeof(idx), "%d", i);
+    int byte_h = js_get(bytes_handle, idx, k);
+    buf[i] = (uint8_t)js_to_int(byte_h);
+    js_release(byte_h);
+  }
+
+  int arena_idx = mrb_gc_arena_save(mrb);
+  mrb_load_irep(mrb, buf);
+  mrb_free(mrb, buf);
+  mrb_gc_arena_restore(mrb, arena_idx);
+
+  if (mrb->exc) {
+    mrb_print_error(mrb);
+    mrb->exc = NULL;
+    return 1;
+  }
+  return 0;
+}
 
 /*
  * WASM export: invoked by the JS wrapper function when its callback fires.

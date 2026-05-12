@@ -257,7 +257,8 @@ function createJsImports({ handles, errorSlot, getInstance }) {
  *
  * @returns {Promise<{
  *   instance: WebAssembly.Instance,
- *   eval: (source: string) => number,           // 0 on success, 1 on parse/runtime error
+ *   eval: (source: string) => number,           // 0 on success, 1 on parse/runtime error. Throws NotImplementedError in compiler-less builds.
+ *   loadIrep: (bytes: Uint8Array | ArrayBuffer) => number,  // load pre-compiled mrbc bytecode. 0 on success, 1 on runtime error.
  *   alloc: (value: any) => number,               // power-user handle table
  *   get: (handle: number) => any,
  *   release: (handle: number) => void,
@@ -337,7 +338,37 @@ export async function createVM(options = {}) {
 
   function evalRuby(source) {
     const handle = handles.alloc(source);
-    try { return instance.exports.js_eval_handle(handle); }
+    let rc;
+    try { rc = instance.exports.js_eval_handle(handle); }
+    finally { handles.release(handle); }
+    // rc === 2: compiler-less build signalled that source eval is not
+    // available. Surface as NotImplementedError so the caller learns to
+    // pre-compile with mrbc and use loadIrep instead.
+    if (rc === 2) {
+      const err = new Error(
+        "vm.eval(source) is not available in this mruby build " +
+        "(compiled without mruby-compiler). Pre-compile with mrbc and use vm.loadIrep(bytes) instead.",
+      );
+      err.name = "NotImplementedError";
+      throw err;
+    }
+    return rc;
+  }
+
+  // Load pre-compiled mruby bytecode (output of `mrbc`). The bytes must
+  // already contain whatever fiber wrapping the source needs — this path
+  // does NOT auto-wrap, unlike `eval(source)`. Available in all build
+  // variants; primary use is the compiler-less / production variant.
+  //
+  // Accepts `Uint8Array` or `ArrayBuffer` (auto-wrapped as a zero-copy
+  // view), since `await fetch(...).arrayBuffer()` returns the latter.
+  function loadIrep(bytes) {
+    if (bytes instanceof ArrayBuffer) bytes = new Uint8Array(bytes);
+    if (!(bytes instanceof Uint8Array)) {
+      throw new TypeError("loadIrep: expected Uint8Array or ArrayBuffer");
+    }
+    const handle = handles.alloc(bytes);
+    try { return instance.exports.js_load_irep_handle(handle); }
     finally { handles.release(handle); }
   }
 
@@ -360,6 +391,7 @@ export async function createVM(options = {}) {
   return {
     instance,
     eval: evalRuby,
+    loadIrep,
     evalScript,
     alloc: handles.alloc,
     get: handles.get,

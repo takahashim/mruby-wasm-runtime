@@ -149,6 +149,7 @@ $(BUILD_WASM_JS): $(LIBMRUBY_JS) | $(BUILD_DIR)
 	  -Wl,--allow-undefined \
 	  -Wl,--export=js_invoke_proc \
 	  -Wl,--export=js_eval_handle \
+	  -Wl,--export=js_load_irep_handle \
 	  -Wl,--whole-archive $(LIBMRUBY_JS) -Wl,--no-whole-archive \
 	  -o $(BUILD_WASM_JS) \
 	  -lsetjmp
@@ -162,6 +163,7 @@ $(BUILD_WASM_JS_RELEASE): $(LIBMRUBY_JS_RELEASE) | $(BUILD_DIR)
 	  -Wl,--strip-debug \
 	  -Wl,--export=js_invoke_proc \
 	  -Wl,--export=js_eval_handle \
+	  -Wl,--export=js_load_irep_handle \
 	  -Wl,--whole-archive $(LIBMRUBY_JS_RELEASE) -Wl,--no-whole-archive \
 	  -o $(BUILD_WASM_JS_RELEASE) \
 	  -lsetjmp
