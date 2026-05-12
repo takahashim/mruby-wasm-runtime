@@ -40,7 +40,18 @@ def uninstall_resource_fetch_stub
   JS.eval('(() => { delete globalThis.fetch; delete globalThis.__resource_fetch_stub__; })()')
 end
 
+# Reset DOM + Grainet registry so each test starts from a clean slate.
+# Without this, leftover widgets from earlier tests stay in the registry
+# and a transient body mutation can trigger MutationObserver pruning
+# that unmounts the current test's resource mid-fetch.
+def reset_grainet_state
+  JS.global[:document][:body][:innerHTML] = ""
+  Grainet.reset!
+end
+
 Spec.describe "Widget#resource" do
+  Spec.before { reset_grainet_state }
+
   Spec.assert "loads with pending -> ready state and exposes reactive getters" do
     install_resource_fetch_stub(JS.object(
       "/users/1" => JS.object(status: 200, body: '{"id":1,"name":"Alice"}', delay: 20),
