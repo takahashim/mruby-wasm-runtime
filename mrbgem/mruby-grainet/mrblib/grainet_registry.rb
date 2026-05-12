@@ -184,7 +184,6 @@ module Grainet
           end
           i += 1
         end
-        prune_disconnected_widgets
       end
       obs = Grainet.__window__[:MutationObserver].new(callback)
       obs.call(:observe, target, JS.object(childList: true, subtree: true))
@@ -192,6 +191,12 @@ module Grainet
       @observer_callback = callback
     end
 
+    # Defensive sweep used at `Grainet.start` to drop registry entries
+    # whose DOM root is no longer connected (e.g., leftover from a
+    # previous test that didn't call `Grainet.reset!`). NOT called from
+    # the MO callback: transient body mutations during another fiber's
+    # await would otherwise falsely prune live widgets — `unmount_subtree`
+    # on the MO's `removedNodes` is the authoritative cleanup path.
     def prune_disconnected_widgets
       stale = []
       @widgets.each do |id, instance|
