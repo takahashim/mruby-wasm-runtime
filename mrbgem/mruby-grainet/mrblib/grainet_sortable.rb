@@ -93,7 +93,7 @@ module Grainet
       # `key:` is the Hash key inside each item that carries the row
       # identity (e.g. `"id"`).
       def sortable_target(el_ref, signal, key:, event: DEFAULT_EVENT)
-        el = el_ref.is_a?(RefElement) ? el_ref : ref(el_ref)
+        el = el_ref.is_a?(RefElement) ? el_ref : wrap(el_ref)
 
         el.on(event) do |ev|
           src_id = ev[:detail][:src].to_s

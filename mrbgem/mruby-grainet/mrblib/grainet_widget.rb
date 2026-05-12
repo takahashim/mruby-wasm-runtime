@@ -209,7 +209,7 @@ module Grainet
     # widget. Use when you have a JS-side element (event.target,
     # querySelector result, etc.) and want the framework's ergonomic
     # API (`attr`, `data`, `on` with auto-cleanup, `text=` etc.) on it.
-    def ref(js_element)
+    def wrap(js_element)
       RefElement.new(js_element, current_owner)
     end
 

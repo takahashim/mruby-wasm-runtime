@@ -117,9 +117,9 @@ Spec.describe "Widget mount + refs + events" do
     klass = Class.new(Grainet::Widget) do
       define_method(:setup) do
         nodes = root.to_js.call(:querySelectorAll, "li")
-        captured[:first_id]  = ref(nodes[0]).attr("data-id").to_i
-        captured[:second_id] = ref(nodes[1]).attr("data-id").to_i
-        captured[:text]      = ref(nodes[0]).text
+        captured[:first_id]  = wrap(nodes[0]).attr("data-id").to_i
+        captured[:second_id] = wrap(nodes[1]).attr("data-id").to_i
+        captured[:text]      = wrap(nodes[0]).text
       end
     end
     Grainet.register "ref-wrap", klass
@@ -183,7 +183,7 @@ Spec.describe "Widget mount + refs + events" do
         match = selector(@selected)
         list = signal(["a", "b", "c"])
         bind_list refs.list, list, key: ->(it) { it }, template: "selector-row" do |it, t|
-          row = ref(t.to_js)
+          row = wrap(t.to_js)
           t.refs.label.text = it
           bind row, class: { "active" => computed { match.call(it) } }
         end

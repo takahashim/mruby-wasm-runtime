@@ -391,7 +391,7 @@ Spec.describe "Grainet::Router link helpers" do
 
     widget = Class.new(Grainet::Widget).new(doc.call(:createElement, "div"))
     link = doc.call(:getElementById, "widget-link")
-    widget.bind_link(widget.ref(link), href: "/users", active_class: "active")
+    widget.bind_link(widget.wrap(link), href: "/users", active_class: "active")
 
     Spec.assert_equal "#/users", link.call(:getAttribute, "href").to_s
     Spec.assert_false link[:classList].call(:contains, "active").js_bool

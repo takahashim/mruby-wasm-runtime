@@ -292,13 +292,13 @@ refs.box.set_style("color", nil)   # property を削除
 
 (通常は `bind class:` / `bind style:` で間接利用するため、直接呼ぶことは少ない)
 
-### 任意の DOM 要素を wrap: `Widget#ref(js)`
+### 任意の DOM 要素を wrap: `Widget#wrap(js)`
 
-`refs.x` は `data-ref` で宣言された要素用、それ以外で **JS::Object な DOM 要素** (event.target、querySelector の結果、外部ライブラリが返す要素等) を扱いたい時は `ref(js_element)` で RefElement に wrap する:
+`refs.x` は `data-ref` で宣言された要素用、それ以外で **JS::Object な DOM 要素** (event.target、querySelector の結果、外部ライブラリが返す要素等) を扱いたい時は `wrap(js_element)` で RefElement に変換する:
 
 ```ruby
 root.on(:item_dismissed) do |event|
-  id = ref(event[:target]).data(:id).to_i
+  id = wrap(event[:target]).data(:id).to_i
   @items.update { |arr| arr.reject { |it| it["id"] == id } }
 end
 ```
@@ -1498,7 +1498,7 @@ class TodoList < Grainet::Widget
 
     refs.add.on(:click) { add_item }
     root.on(:item_dismissed) do |event|
-      id = ref(event[:target]).data(:id).to_i
+      id = wrap(event[:target]).data(:id).to_i
       @items.update { |arr| arr.reject { |it| it["id"] == id } }
     end
 
@@ -1558,7 +1558,7 @@ end
 | `prepare_setup` | override 任意フック (pre-order)、子孫に値を publish |
 | `root` | RefElement (Widget のルート要素) |
 | `refs.x` / `refs[:x]` | RefElement (data-ref で指定された要素) |
-| `ref(js_element)` | 任意の `JS::Object` DOM 要素を RefElement に wrap (auto-cleanup tracking 付き) |
+| `wrap(js_element)` | 任意の `JS::Object` DOM 要素を RefElement に wrap (auto-cleanup tracking 付き) |
 | `signal(initial)` | Signal を作成 |
 | `persistent_signal(key, default: nil) { ... }` | localStorage に自動同期する signal |
 | `resource(initial: nil, defer: false, keep_value: true) { |run| ... }` | async derived state |

@@ -216,7 +216,7 @@ class Racer < Grainet::Widget
   # ---- Input -------------------------------------------------------
 
   def wire_input
-    doc = ref(JS.global[:document])
+    doc = wrap(JS.global[:document])
     doc.on(:keydown) { |event| update_key(event[:key].to_s, true) }
     doc.on(:keyup)   { |event| update_key(event[:key].to_s, false) }
   end

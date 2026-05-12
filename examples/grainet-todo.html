@@ -172,7 +172,7 @@ class TodoList < Grainet::Widget
     end
 
     root.on(:item_dismissed) do |event|
-      id = ref(event[:target]).data(:id).to_i
+      id = wrap(event[:target]).data(:id).to_i
       @items.update { |arr| arr.reject { |it| it["id"] == id } }
     end
 
