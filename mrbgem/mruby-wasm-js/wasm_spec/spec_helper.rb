@@ -1,20 +1,29 @@
-# Minimal spec framework for mruby-wasm-js tests. assert / assert_equal /
-# assert_raises in the mruby-test idiom, but lightweight (no rake-test
-# integration). Each test file calls Spec.describe / Spec.assert; the
-# Node runner triggers Spec.summary at the end which prints a per-group
-# table and exposes pass/fail to JS via JS.global[:__test_failed__].
+# Minimal spec framework for the wasm test suite. Test files call
+# `Spec.describe` / `Spec.assert`; the Node runner triggers
+# `Spec.summary` at the end.
 
 module Spec
   class Group
     attr_reader :name, :results
+    attr_accessor :before_hook, :after_hook
 
     def initialize(name)
       @name = name
       @results = []
+      @before_hook = nil
+      @after_hook = nil
     end
 
     def add(entry)
       @results << entry
+    end
+
+    def run_before
+      @before_hook&.call
+    end
+
+    def run_after
+      @after_hook&.call
     end
   end
 
@@ -37,11 +46,25 @@ module Spec
       end
     end
 
-    # Wraps a test: runs the block, records result. Any error from the
-    # block (including assertion failures) is caught.
+    # Last call wins; multiple before-blocks per describe overwrite.
+    def before(&block)
+      current_group!.before_hook = block
+    end
+
+    # Last call wins; multiple after-blocks per describe overwrite.
+    def after(&block)
+      current_group!.after_hook = block
+    end
+
     def assert(message)
       @counts[:tests] += 1
-      yield
+      group = @fiber_groups[::Fiber.current]
+      group&.run_before
+      begin
+        yield
+      ensure
+        group&.run_after
+      end
       record(:pass, message)
     rescue => err
       @counts[:failures] += 1
@@ -96,10 +119,17 @@ module Spec
       end
       puts ""
       puts "#{@counts[:tests] - @counts[:failures]}/#{@counts[:tests]} tests pass (#{@counts[:asserts]} assertions)"
+      # Cross-boundary contract: runner.mjs reads this to set the
+      # process exit code. Rename here = silent CI break.
       JS.global[:__test_failed__] = @counts[:failures] > 0
     end
 
     private
+
+    def current_group!
+      @fiber_groups[::Fiber.current] ||
+        raise("must be called inside Spec.describe")
+    end
 
     def record(*entry)
       group = @fiber_groups[::Fiber.current]
