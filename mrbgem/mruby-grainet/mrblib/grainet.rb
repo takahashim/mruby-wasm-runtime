@@ -197,7 +197,7 @@ module Grainet
         observers.each do |o|
           next if seen[o.__id__]
           seen[o.__id__] = true
-          o.__notify__
+          o.notify
         end
       end
 
@@ -214,10 +214,49 @@ module Grainet
             queued.each do |o|
               next if seen[o.__id__]
               seen[o.__id__] = true
-              o.__notify__
+              o.notify
             end
           end
         end
+      end
+    end
+
+    # Role mixin: a value that observers can subscribe to and that
+    # broadcasts changes via `notify_subscribers`. Signal, Computed, and
+    # SelectorEntry include this. Including class must set
+    # `@subs = Subscribers.new` before any subscription call.
+    module Subscribable
+      def subscribe(observer)
+        @subs.add(observer)
+      end
+
+      def unsubscribe(observer)
+        @subs.remove(observer)
+      end
+
+      # Notify all current subscribers via `Reactive.notify` (respects
+      # active batch). Public so a co-operating subject (e.g. a Selector
+      # firing per-key entries) can trigger notification from outside.
+      def notify_subscribers
+        Reactive.notify(@subs.to_a)
+      end
+    end
+
+    # Role mixin: a thing that observes Signal/Computed values and
+    # reacts to their changes. Computed, Effect, ResourceObserver, and
+    # Selector include this. Including class must initialize `@deps = []`
+    # and implement `def notify; ...; end`.
+    module Observer
+      def add_dep(dep)
+        @deps << dep
+      end
+
+      # Unsubscribe from every tracked dependency and clear the dep
+      # list. Used by `dispose` and re-execution paths (Effect#run,
+      # Computed#recompute) that re-collect deps from scratch.
+      def remove_all_deps
+        @deps.each { |d| d.unsubscribe(self) }
+        @deps.clear
       end
     end
   end
@@ -317,6 +356,8 @@ module Grainet
 
   # Writable reactive cell.
   class Signal
+    include Reactive::Subscribable
+
     def initialize(initial)
       @value = initial
       @subs = Subscribers.new
@@ -324,8 +365,8 @@ module Grainet
 
     def value
       if (obs = Reactive.current)
-        @subs.add(obs)
-        obs.__add_dep__(self)
+        subscribe(obs)
+        obs.add_dep(self)
       end
       @value
     end
@@ -333,7 +374,7 @@ module Grainet
     def value=(new_value)
       return new_value if equal_for_skip?(@value, new_value)
       @value = new_value
-      Reactive.notify(@subs.to_a)
+      notify_subscribers
       new_value
     end
 
@@ -351,7 +392,7 @@ module Grainet
         MutationGuard.warn(MutationGuard.detect_update_misuse(prev, arg, new_value))
       end
       @value = new_value
-      Reactive.notify(@subs.to_a)
+      notify_subscribers
       new_value
     end
 
@@ -362,12 +403,8 @@ module Grainet
       if Grainet.dev_mode?
         MutationGuard.warn(MutationGuard.detect_mutate_misuse(@value, ret))
       end
-      Reactive.notify(@subs.to_a)
+      notify_subscribers
       @value
-    end
-
-    def __subscribers__
-      @subs
     end
 
     private
@@ -383,6 +420,9 @@ module Grainet
 
   # Read-only derived signal.
   class Computed
+    include Reactive::Subscribable
+    include Reactive::Observer
+
     def initialize(equals: nil, on: nil, &block)
       raise ArgumentError, "block required" unless block
       @block = block
@@ -396,8 +436,8 @@ module Grainet
 
     def value
       if (obs = Reactive.current)
-        @subs.add(obs)
-        obs.__add_dep__(self)
+        subscribe(obs)
+        obs.add_dep(self)
       end
       @value
     end
@@ -406,32 +446,20 @@ module Grainet
       raise NoMethodError, "Computed is read-only"
     end
 
-    def __notify__
+    def notify
       prev = @value
       recompute
-      unless equal_for_skip?(prev, @value)
-        Reactive.notify(@subs.to_a)
-      end
-    end
-
-    def __add_dep__(signal_or_computed)
-      @deps << signal_or_computed
-    end
-
-    def __subscribers__
-      @subs
+      notify_subscribers unless equal_for_skip?(prev, @value)
     end
 
     def dispose
-      @deps.each { |d| d.__subscribers__.remove(self) }
-      @deps.clear
+      remove_all_deps
     end
 
     private
 
     def recompute
-      @deps.each { |d| d.__subscribers__.remove(self) }
-      @deps = []
+      remove_all_deps
       if @on
         Reactive.track(self) do
           @on.each { |dep| dep.value }
@@ -465,6 +493,8 @@ module Grainet
   # `source:` (the owning Widget, when created via Widget#effect) is
   # consulted by `Grainet.__error__` for on_error bubbling.
   class Effect
+    include Reactive::Observer
+
     def initialize(label: nil, source: nil, &block)
       raise ArgumentError, "block required" unless block
       @block = block
@@ -475,27 +505,21 @@ module Grainet
       run
     end
 
-    def __notify__
+    def notify
       return if @disposed
       run
-    end
-
-    def __add_dep__(signal_or_computed)
-      @deps << signal_or_computed
     end
 
     def dispose
       return if @disposed
       @disposed = true
-      @deps.each { |d| d.__subscribers__.remove(self) }
-      @deps.clear
+      remove_all_deps
     end
 
     private
 
     def run
-      @deps.each { |d| d.__subscribers__.remove(self) }
-      @deps = []
+      remove_all_deps
       Reactive.track(self) do
         @block.call
       end

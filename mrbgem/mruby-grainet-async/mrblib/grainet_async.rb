@@ -19,18 +19,16 @@ module Grainet
   end
 
   class SelectorEntry
-    attr_reader :subscribers
+    include Reactive::Subscribable
 
     def initialize
-      @subscribers = Subscribers.new
-    end
-
-    def __subscribers__
-      @subscribers
+      @subs = Subscribers.new
     end
   end
 
   class Selector
+    include Reactive::Observer
+
     def initialize(source, equals: nil)
       raise ArgumentError, "selector source must respond to #value" unless source.respond_to?(:value)
       @source = source
@@ -43,8 +41,9 @@ module Grainet
 
     def call(key)
       if (obs = Reactive.current)
-        entry_for(key).subscribers.add(obs)
-        obs.__add_dep__(entry_for(key))
+        entry = entry_for(key)
+        entry.subscribe(obs)
+        obs.add_dep(entry)
       end
       selected?(key)
     end
@@ -53,7 +52,7 @@ module Grainet
       compare(@value, key)
     end
 
-    def __notify__
+    def notify
       prev = @value
       recompute
       return if compare(prev, @value)
@@ -61,21 +60,15 @@ module Grainet
       notify_entry(@value)
     end
 
-    def __add_dep__(signal_or_computed)
-      @deps << signal_or_computed
-    end
-
     def dispose
-      @deps.each { |d| d.__subscribers__.remove(self) }
-      @deps.clear
+      remove_all_deps
       @entries.clear
     end
 
     private
 
     def recompute
-      @deps.each { |d| d.__subscribers__.remove(self) }
-      @deps = []
+      remove_all_deps
       Reactive.track(self) do
         @value = @source.value
       end
@@ -83,8 +76,7 @@ module Grainet
 
     def notify_entry(key)
       entry = @entries[key]
-      return unless entry
-      Reactive.notify(entry.subscribers.to_a)
+      entry&.notify_subscribers
     end
 
     def entry_for(key)
@@ -98,27 +90,30 @@ module Grainet
   end
 
   class ResourceObserver
+    include Reactive::Observer
+
     def initialize(resource)
       @resource = resource
       @deps = []
       @disposed = false
     end
 
-    def __notify__
+    def notify
       return if @disposed
       @resource.__observer_notified__(self)
     end
 
-    def __add_dep__(signal_or_memo)
+    # Override Observer#add_dep to guard against deps being added
+    # after dispose (e.g. a stale fiber resuming).
+    def add_dep(dep)
       return if @disposed
-      @deps << signal_or_memo
+      super
     end
 
     def dispose
       return if @disposed
       @disposed = true
-      @deps.each { |d| d.__subscribers__.remove(self) }
-      @deps.clear
+      remove_all_deps
     end
   end
 
