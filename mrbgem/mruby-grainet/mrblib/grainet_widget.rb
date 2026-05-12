@@ -8,58 +8,109 @@
 # bind_list. Registry (in grainet_registry.rb) drives mount / unmount.
 
 module Grainet
+  # Aggregates a Widget's (or Scope's) lifecycle resources — effects,
+  # computeds, listeners, cleanups, and labeled "disposables" (resource
+  # / selector / ...) — and tears them down in the right order on
+  # `dispose`. Both Widget and its inner Scope compose one of these so
+  # the teardown sequence lives in exactly one place.
+  #
+  # Teardown order on `dispose`:
+  #   1. cleanups in reverse (LIFO)
+  #   2. effects
+  #   3. computeds
+  #   4. disposables (resource / selector / ...)
+  #   5. listeners (removeEventListener + release_callback)
+  #
+  # Each step is wrapped in a rescue that routes through
+  # `Grainet.__error__` with `source:` set to the owning Widget, so a
+  # single bad cleanup doesn't poison the rest of the teardown.
+  class DisposableSet
+    def initialize(source)
+      @source = source
+      @cleanups = []
+      @effects = []
+      @computeds = []
+      @disposables = []
+      @listeners = []
+      @disposed = false
+    end
+
+    def register_cleanup(cleanup)
+      @cleanups << cleanup
+    end
+
+    def register_effect(effect)
+      @effects << effect
+    end
+
+    def register_computed(computed)
+      @computeds << computed
+    end
+
+    def register_disposable(label, disposable)
+      @disposables << [label, disposable]
+    end
+
+    def track_listener(target_js, event_str, callback_js)
+      @listeners << [target_js, event_str, callback_js]
+    end
+
+    def dispose
+      return if @disposed
+      @disposed = true
+      @cleanups.reverse_each { |c| safe_release("cleanup")          { c.call } }
+      @effects.each          { |e| safe_release("effect dispose")   { e.dispose } }
+      @computeds.each        { |m| safe_release("computed dispose") { m.dispose } }
+      @disposables.each      { |label, d| safe_release("#{label} dispose") { d.dispose } }
+      @listeners.each do |target_js, event_str, callback_js|
+        safe_release("removeEventListener") { target_js.call(:removeEventListener, event_str, callback_js) }
+        safe_release("release_callback")    { JS.release_callback(callback_js) }
+      end
+    end
+
+    # Public so callers can route their own teardown bits (e.g. a
+    # Widget's child-widget loop) through the same error-routing rescue
+    # as the resources we hold internally.
+    def safe_release(label)
+      yield
+    rescue StandardError => e
+      Grainet.__error__("#{@source.class.name} #{label}", e, source: @source)
+    end
+  end
+
   # The user-inheritable base. Users write `class Counter < Grainet::Widget`.
   class Widget
+    # A bag of lifecycle resources associated with a sub-scope (e.g.
+    # one row of a `bind_list` block). Disposed when the row is removed
+    # or the host Widget unmounts; the API mirrors Widget's
+    # `__register_*__` so the same helpers can target either.
     class Scope
       def initialize(source_widget)
-        @source_widget = source_widget
-        @listeners = []
-        @effects = []
-        @computeds = []
-        @disposables = []
-        @cleanups = []
-        @disposed = false
+        @resources = DisposableSet.new(source_widget)
       end
 
       def __track_listener__(target_js, event_str, callback_js)
-        @listeners << [target_js, event_str, callback_js]
+        @resources.track_listener(target_js, event_str, callback_js)
       end
 
       def __register_effect__(effect)
-        @effects << effect
+        @resources.register_effect(effect)
       end
 
       def __register_computed__(computed)
-        @computeds << computed
+        @resources.register_computed(computed)
       end
 
       def __register_disposable__(label, disposable)
-        @disposables << [label, disposable]
+        @resources.register_disposable(label, disposable)
       end
 
       def __register_cleanup__(cleanup)
-        @cleanups << cleanup
+        @resources.register_cleanup(cleanup)
       end
 
       def dispose
-        return if @disposed
-        @disposed = true
-        @cleanups.reverse_each { |c| safe_release("cleanup")          { c.call } }
-        @effects.each          { |e| safe_release("effect dispose")   { e.dispose } }
-        @computeds.each        { |m| safe_release("computed dispose") { m.dispose } }
-        @disposables.each      { |label, d| safe_release("#{label} dispose") { d.dispose } }
-        @listeners.each do |target_js, event_str, callback_js|
-          safe_release("removeEventListener") { target_js.call(:removeEventListener, event_str, callback_js) }
-          safe_release("release_callback")    { JS.release_callback(callback_js) }
-        end
-      end
-
-      private
-
-      def safe_release(label)
-        yield
-      rescue StandardError => e
-        Grainet.__error__("#{@source_widget.class.name} #{label}", e, source: @source_widget)
+        @resources.dispose
       end
     end
 
@@ -99,11 +150,7 @@ module Grainet
     def initialize(root_element)
       @root = RefElement.new(root_element, self, name: "(root)")
       @refs = nil
-      @_listeners = []
-      @_effects = []
-      @_computeds = []
-      @_disposables = []
-      @_cleanups = []
+      @_resources = DisposableSet.new(self)
       @_children = []
       @_parent = nil
       @_provides = {}
@@ -248,23 +295,23 @@ module Grainet
     # ---- Internal API used by Registry -----------------------------
 
     def __track_listener__(target_js, event_str, callback_js)
-      @_listeners << [target_js, event_str, callback_js]
+      @_resources.track_listener(target_js, event_str, callback_js)
     end
 
     def __register_effect__(effect)
-      @_effects << effect
+      @_resources.register_effect(effect)
     end
 
     def __register_computed__(computed)
-      @_computeds << computed
+      @_resources.register_computed(computed)
     end
 
     def __register_disposable__(label, disposable)
-      @_disposables << [label, disposable]
+      @_resources.register_disposable(label, disposable)
     end
 
     def __register_cleanup__(cleanup)
-      @_cleanups << cleanup
+      @_resources.register_cleanup(cleanup)
     end
 
     def __new_scope__
@@ -325,15 +372,8 @@ module Grainet
     def __unmount__
       return if @_unmounted
       @_unmounted = true
-      @_cleanups.reverse_each { |c| safe_release("cleanup")          { c.call } }
-      @_effects.each          { |e| safe_release("effect dispose")   { e.dispose } }
-      @_computeds.each        { |m| safe_release("computed dispose") { m.dispose } }
-      @_disposables.each      { |label, d| safe_release("#{label} dispose") { d.dispose } }
-      @_listeners.each do |target_js, event_str, callback_js|
-        safe_release("removeEventListener") { target_js.call(:removeEventListener, event_str, callback_js) }
-        safe_release("release_callback")    { JS.release_callback(callback_js) }
-      end
-      @_children.each { |c| safe_release("child unmount") { c.__unmount__ } }
+      @_resources.dispose
+      @_children.each { |c| @_resources.safe_release("child unmount") { c.__unmount__ } }
     end
 
     private
@@ -341,12 +381,6 @@ module Grainet
     def __owner_target__
       stack = @_scope_stack
       (stack && stack.last) || self
-    end
-
-    def safe_release(label)
-      yield
-    rescue StandardError => e
-      Grainet.__error__("#{self.class.name} #{label}", e, source: self)
     end
   end
 end
