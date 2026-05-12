@@ -39,8 +39,17 @@
         display: flex; align-items: center; gap: 0.6em;
         padding: 0.5em 0.7em; border-radius: 6px;
         background: var(--bg); border: 1px solid var(--border);
+        cursor: grab;
       }
-      ul.todos li span { flex: 1; }
+      ul.todos li:active { cursor: grabbing; }
+      ul.todos li.is-dragging { opacity: 0.4; }
+      ul.todos li.drop-before { box-shadow: 0 -2px 0 0 var(--accent) inset; }
+      ul.todos li.drop-after  { box-shadow: 0  2px 0 0 var(--accent) inset; }
+      ul.todos li .handle {
+        color: var(--muted); font-size: 1.1em; line-height: 1;
+        user-select: none; padding: 0 0.1em;
+      }
+      ul.todos li span.title { flex: 1; }
       .dismiss {
         background: transparent; border: 1px solid transparent;
         color: var(--muted); font-size: 1.1em; line-height: 1;
@@ -76,7 +85,7 @@
   <body>
     <h1>Grainet — todo demo</h1>
     <p class="lede">
-      A simple todo list with add and remove actions.
+      A simple todo list with add, remove, and drag-to-reorder.
     </p>
 
     <!-- The <ul> is empty in the seed HTML; bind_list owns its children. -->
@@ -101,8 +110,9 @@
     <!-- Row markup lives here as inert template content. bind_list
          clones it per item; setup_row fills in title + data-id. -->
     <template data-template="todo-row">
-      <li data-widget="todo-item">
-        <span data-ref="title"></span>
+      <li data-widget="todo-item" draggable="true">
+        <span class="handle" aria-hidden="true">⋮⋮</span>
+        <span class="title" data-ref="title"></span>
         <button class="dismiss" data-ref="dismiss" aria-label="delete">×</button>
       </li>
     </template>
@@ -114,7 +124,11 @@
 # bind_list removes the <li>, the MutationObserver unmounts this and
 # the click handler / cleanup is released.
 class TodoItem < Grainet::Widget
+  include Grainet::Sortable::Item
+
   def setup
+    make_sortable
+
     refs.dismiss.on(:click) do
       # bubbles: true lets the event cross the data-widget boundary up
       # to the parent TodoList. event.target on the parent side is the
@@ -125,6 +139,8 @@ class TodoItem < Grainet::Widget
 end
 
 class TodoList < Grainet::Widget
+  include Grainet::Sortable::List
+
   def setup
     @next_id = signal(3)
     @items   = signal([
@@ -168,6 +184,8 @@ class TodoList < Grainet::Widget
       t.data(:id, it["id"])
       t.refs.title.text = it["title"]
     end
+
+    sortable_target refs.list, @items, key: "id"
 
     bind refs.status, :text do
       n = @items.value.length
