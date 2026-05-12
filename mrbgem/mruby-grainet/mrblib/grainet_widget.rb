@@ -1,8 +1,8 @@
 # grainet_widget.rb — Grainet::Widget base class.
 #
 # Users write `class Counter < Grainet::Widget`. Owns lifecycle
-# (provides / setup / cleanup), reactive helpers (signal / computed /
-# effect / persistent_signal), error boundary, and provide / inject.
+# (exposes / setup / cleanup), reactive helpers (signal / computed /
+# effect / persistent_signal), error boundary, and expose / lookup.
 #
 # Bindable mixin (in grainet_bindable.rb) supplies bind / model /
 # bind_list. Registry (in grainet_registry.rb) drives mount / unmount.
@@ -127,8 +127,8 @@ module Grainet
       end
     end
 
-    # Sentinel for inject's default-not-supplied case. We can't use nil
-    # because nil itself is a valid provided value.
+    # Sentinel for lookup's default-not-supplied case. We can't use nil
+    # because nil itself is a valid exposed value.
     NOT_FOUND = Object.new.freeze
 
     include Bindable
@@ -138,11 +138,11 @@ module Grainet
       # Class-level error boundary declaration. The block runs in the
       # widget instance's context (instance_exec), so `@ivars` resolve
       # to the instance, and is auto-installed at the START of the
-      # provides phase — early enough to catch errors in `provides`
-      # itself and in any descendant's setup.
+      # expose phase — early enough to catch errors in `exposes` itself
+      # and in any descendant's setup.
       #
       # Subclasses inherit a parent class's boundary unless they
-      # declare their own. Calling `on_error` in `provides`/`setup`
+      # declare their own. Calling `on_error` in `exposes`/`setup`
       # overrides the class-level boundary for that instance.
       def error_boundary(&block)
         raise ArgumentError, "block required" unless block
@@ -167,8 +167,8 @@ module Grainet
       @resources = DisposableSet.new(self)
       @children = []
       @parent = nil
-      @provides = {}
-      @provide_phase_done = false
+      @exposed = {}
+      @expose_phase_done = false
       @mounted = false
       @unmounted = false
       @error_handler = nil
@@ -176,7 +176,7 @@ module Grainet
 
     # Override to publish values to descendants. Runs in pre-order
     # (parent first) before any descendant's `setup`.
-    def provides
+    def exposes
     end
 
     # Override for the main lifecycle. Runs in post-order (children
@@ -185,22 +185,22 @@ module Grainet
     def setup
     end
 
-    # ---- Provide / Inject ------------------------------------------
+    # ---- Expose / Lookup -------------------------------------------
 
-    def provide(key, value)
-      @provides[key] = value
+    def expose(key, value)
+      @exposed[key] = value
     end
 
-    def inject(key, default = NOT_FOUND, &block)
+    def lookup(key, default = NOT_FOUND, &block)
       current = self
       while current
-        val = current.provided_for(key)
+        val = current.exposed_for(key)
         return val unless val.equal?(NOT_FOUND)
         current = current.parent
       end
       return block.call if block
       return default unless default.equal?(NOT_FOUND)
-      raise Grainet::Error, "inject: no provider for #{key.inspect} in #{self.class.name}"
+      raise Grainet::Error, "lookup: no exposed value for #{key.inspect} in #{self.class.name}"
     end
 
     # ---- Reactive helpers ------------------------------------------
@@ -335,28 +335,28 @@ module Grainet
       @parent = parent_widget
     end
 
-    def provided_for(key)
-      @provides.key?(key) ? @provides[key] : NOT_FOUND
+    def exposed_for(key)
+      @exposed.key?(key) ? @exposed[key] : NOT_FOUND
     end
 
     # ---- Lifecycle hooks (framework-internal) ----------------------
-    # Driven by Registry; user code should override `provides` / `setup`
+    # Driven by Registry; user code should override `exposes` / `setup`
     # / `on_error` / `cleanup` (the user-facing hooks) instead of these.
     # If a subclass really needs to extend one of the lifecycle methods
     # below, override and call `super`.
 
-    # Run the `provides` hook exactly once, before any descendant's
+    # Run the `exposes` hook exactly once, before any descendant's
     # `setup` runs. Called by Registry in the pre-order phase.
-    def provide_phase
-      return if @provide_phase_done
-      @provide_phase_done = true
+    def expose_phase
+      return if @expose_phase_done
+      @expose_phase_done = true
       if (boundary = self.class.error_boundary_block)
         @error_handler = ->(label, error) { instance_exec(label, error, &boundary) }
       end
       begin
-        provides
+        exposes
       rescue => e
-        Grainet.logger.error("#{self.class.name}#provides", e, source: self)
+        Grainet.logger.error("#{self.class.name}#exposes", e, source: self)
       end
     end
 

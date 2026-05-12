@@ -1,6 +1,6 @@
 # Grainet 実装仕様
 
-このドキュメントは、`mrbgem/mruby-grainet/` で実装されている **Grainet** (signal-first widget system) の現状仕様である。設計提案 (`mruby-widget.md` / `mruby-widget-2ed.md`) を実装した上で、bind_list / provide-inject / HTML helper など派生機能を含めた最終形を記述する。
+このドキュメントは、`mrbgem/mruby-grainet/` で実装されている **Grainet** (signal-first widget system) の現状仕様である。設計提案 (`mruby-widget.md` / `mruby-widget-2ed.md`) を実装した上で、bind_list / expose-lookup / HTML helper など派生機能を含めた最終形を記述する。
 
 対象読者: この gem を使って widget を書く人、API の境界を確認したい人。
 
@@ -21,7 +21,7 @@ mruby.wasm 上で動く軽量な「既存 HTML に Ruby の状態・イベント
 
 - JSX 相当のテンプレート構文 (HTML helper のみ提供)
 - 仮想 DOM (リスト差分は bind_list で key ベース)
-- グローバル状態管理 (provide/inject はあるが store 抽象は無い)
+- グローバル状態管理 (expose/lookup はあるが store 抽象は無い)
 - SSR / hydration
 - Custom Element export (将来検討)
 
@@ -132,18 +132,18 @@ Grainet.register "counter", Counter
 
 | フック | 実行タイミング | 順序 |
 |---|---|---|
-| `provides` | mount 時 | **pre-order (親→子)** |
+| `exposes`  | mount 時 | **pre-order (親→子)** |
 | `setup`    | mount 時 | **post-order (子→親)** |
 | `cleanup` ブロック | unmount 時 | 登録の **逆順 (LIFO)**, 子 unmount より**前** |
-| `__unmount__` | unmount 時 | top-down (親→子) |
+| `unmount`  | unmount 時 | top-down (親→子) |
 
 **2フェーズ mount** が肝心:
 
-1. Pass 1 (pre-order): 各 widget をインスタンス化、親子関係を確立、`provides` 実行
+1. Pass 1 (pre-order): 各 widget をインスタンス化、親子関係を確立、`exposes` 実行
 2. Pass 2 (post-order): 各 widget の `setup` 実行
 
 これにより:
-- `provides` で publish した値は、子の `setup` 内 `inject` から見える
+- `exposes` で publish した値は、子の `setup` 内 `lookup` から見える
 - `setup` 内 `refs.x.widget.method` で子インスタンスを呼べる (子は既に setup 済み)
 
 ### `setup`
@@ -158,18 +158,18 @@ def setup
 end
 ```
 
-### `provides`
+### `exposes`
 
 オプションフック。子孫に値を publish する時のみ override。
 
 ```ruby
-def provides
+def exposes
   @theme = signal("light")
-  provide :theme, @theme
+  expose :theme, @theme
 end
 ```
 
-`provides` 内で生成した `@theme` 等は `setup` でも参照できる (同一インスタンスの ivar)。
+`exposes` 内で生成した `@theme` 等は `setup` でも参照できる (同一インスタンスの ivar)。
 
 ### `root`
 
@@ -788,7 +788,7 @@ model refs.cb, @accepted, property: :checked      # checkbox
 - DOM 境界 (HTML 属性 `data-widget` 等) も String 主体
 - プロジェクト内で String に揃えると、API 経由で取ってきたデータを bind_list に流す時にキー変換が要らない
 
-別軸として、Grainet の **kwargs / `provide`/`inject` キー / event detail** は Symbol を使う (Ruby kwarg 構文と整合)。**境界線**は「ユーザがデータとして扱う Hash」 vs 「ライブラリのメソッド引数」。
+別軸として、Grainet の **kwargs / `expose`/`lookup` キー / event detail** は Symbol を使う (Ruby kwarg 構文と整合)。**境界線**は「ユーザがデータとして扱う Hash」 vs 「ライブラリのメソッド引数」。
 
 `bind_list` の `key:` は String キー規約に合わせて `key: "id"` のショートカットを受け付ける (詳細は次節)。Symbol 渡しは明示エラーで誘導する。
 
@@ -913,19 +913,19 @@ block が返す HTML に `data-widget` 属性を含めると、bind_list が DOM
 
 ---
 
-## Provide / Inject
+## Expose / Lookup
 
-親 Widget が値を pre-order の `provides` フックで publish し、子孫が `inject` で受け取る。
+親 Widget が値を pre-order の `exposes` フックで publish し、子孫が `lookup` で受け取る。
 
-### provide
+### expose
 
 ```ruby
 class App < Grainet::Widget
-  def provides
+  def exposes
     @theme = signal("light")
     @user  = signal(nil)
-    provide :theme, @theme
-    provide :user,  @user
+    expose :theme, @theme
+    expose :user,  @user
   end
 
   def setup
@@ -934,12 +934,12 @@ class App < Grainet::Widget
 end
 ```
 
-### inject
+### lookup
 
 ```ruby
 class Toolbar < Grainet::Widget
   def setup
-    @theme = inject(:theme)            # 見つからなければ raise
+    @theme = lookup(:theme)            # 見つからなければ raise
     bind root, class: { "is-dark" => computed { @theme.value == "dark" } }
   end
 end
@@ -948,19 +948,19 @@ end
 オプション形:
 
 ```ruby
-inject(:theme, "default")             # 見つからなければ default
-inject(:theme) { signal("default") }  # 見つからなければ block 評価
+lookup(:theme, "default")             # 見つからなければ default
+lookup(:theme) { signal("default") }  # 見つからなければ block 評価
 ```
 
 ### lookup ルール
 
-- ancestor を `@_parent` リンクで上に辿り、最初に見つかった provider の値を返す
-- 中間で同じ key を override 可能 (近い provider が勝つ)
+- ancestor を親リンクで上に辿り、最初に見つかった expose の値を返す
+- 中間で同じ key を override 可能 (近い祖先が勝つ)
 - root まで遡って見つからなければ default または raise
 
 ### 順序の保証
 
-`provides` は **pre-order**、`setup` は **post-order**。よって子の `setup` 内 `inject(:theme)` が実行されるとき、親の `provides` は既に走っている。
+`exposes` は **pre-order**、`setup` は **post-order**。よって子の `setup` 内 `lookup(:theme)` が実行されるとき、親の `exposes` は既に走っている。
 
 動的 mount (MutationObserver 経由) でも、新しいサブツリーに対して同じ2フェーズが走るので問題なく動作する。
 
@@ -1181,14 +1181,14 @@ Widget 内部の JS handle nil チェックには bare `nil?` ではなく `js_n
 
 | 操作 | 順序 |
 |---|---|
-| Pass 1: instantiate + provides | pre-order (親→子) |
+| Pass 1: instantiate + exposes | pre-order (親→子) |
 | Pass 2: setup | post-order (子→親) |
-| `__unmount__` | top-down (親→子)、ただし親の cleanup callback は子 unmount より**前**に実行 |
+| `unmount` | top-down (親→子)、ただし親の cleanup callback は子 unmount より**前**に実行 |
 
 これにより:
 - 親の `setup` で `refs.x.widget.method` を呼ぶ時、子は既に setup 済み
 - 親の `cleanup` で `refs.x.widget` への最終操作ができる (子は生きている)
-- 子の `setup` で `inject(:key)` を呼ぶ時、親の `provides` は既に走っている
+- 子の `setup` で `lookup(:key)` を呼ぶ時、親の `exposes` は既に走っている
 
 ### 子 Widget instance への access
 
@@ -1212,7 +1212,7 @@ refs.right.widget.start
 |---|---|
 | 子 → 親 | `root.dispatch(:event, bubbles: true)` + 親で `root.on(:event)` |
 | 親 → 子 | `refs.x.widget.method` |
-| 親 → 子孫 (任意の深さ) | `provide` / `inject` |
+| 親 → 子孫 (任意の深さ) | `expose` / `lookup` |
 
 子は親のクラス名を知らない。親は子の public メソッドのみを知る。
 
@@ -1230,7 +1230,7 @@ event[:target].call(:remove)
 
 `Grainet.start` が `document.body` に対して `MutationObserver` を `childList: true, subtree: true` で起動する。
 
-複数要素が同時に追加された場合、入れ子 Widget の mount 順序ルール (pre-order provides + post-order setup) に従う。
+複数要素が同時に追加された場合、入れ子 Widget の mount 順序ルール (pre-order exposes + post-order setup) に従う。
 
 ---
 
@@ -1269,10 +1269,10 @@ Widget unmount 時に解放されるもの:
 Grainet::Error: Missing ref: submit in SignupForm
 ```
 
-### `inject` の provider 不在
+### `lookup` の値不在
 
 ```text
-Grainet::Error: inject: no provider for :theme in Toolbar
+Grainet::Error: lookup: no exposed value for :theme in Toolbar
 ```
 
 ### `setup` 内例外
@@ -1310,18 +1310,18 @@ class App < Grainet::Widget
 end
 ```
 
-**重要: 子孫 widget の `setup` 例外を捕えたいなら `provides` で登録すること**。Grainet の mount 順序は:
+**重要: 子孫 widget の `setup` 例外を捕えたいなら `exposes` で登録すること**。Grainet の mount 順序は:
 
-1. **`provides` フェーズ**: pre-order (親→子)
+1. **`exposes` フェーズ**: pre-order (親→子)
 2. **`setup` フェーズ**: post-order (子→親)
 
-つまり子の `setup` は親の `setup` より**先**に走る。親が `setup` で `on_error` を登録すると、その時点で既に子の `setup` 例外は走って終わっており、bubbling しても親のハンドラはまだ未登録。`provides` フェーズなら親の登録が先に走るので、子 setup 例外を捕える保証ができる:
+つまり子の `setup` は親の `setup` より**先**に走る。親が `setup` で `on_error` を登録すると、その時点で既に子の `setup` 例外は走って終わっており、bubbling しても親のハンドラはまだ未登録。`exposes` フェーズなら親の登録が先に走るので、子 setup 例外を捕える保証ができる:
 
 ```ruby
 class App < Grainet::Widget
-  def provides
+  def exposes
     @error_message = signal(nil)
-    # provides は親→子の順なので、子の setup 前に handler が立つ。
+    # exposes は親→子の順なので、子の setup 前に handler が立つ。
     # この時点では `refs` がまだ nil なので、DOM 直書きではなく
     # signal 更新 + bind 経由で表示する。
     on_error do |label, error|
@@ -1336,7 +1336,7 @@ end
 
 #### `error_boundary` クラスマクロ (推奨)
 
-`provides` 内で `on_error` を呼び忘れると子の setup 例外が漏れるのは罠なので、クラスレベルで宣言できるショートカットを用意:
+`exposes` 内で `on_error` を呼び忘れると子の setup 例外が漏れるのは罠なので、クラスレベルで宣言できるショートカットを用意:
 
 ```ruby
 class App < Grainet::Widget
@@ -1348,15 +1348,15 @@ end
 ```
 
 - ブロックは widget instance 文脈で `instance_exec` される (`@ivars` がインスタンスを指す)
-- `__provide_phase__` の冒頭で自動的に `on_error` 経由で登録されるので、自身の `provides` 例外と子孫の `setup` 例外を両方拾える
+- `expose_phase` の冒頭で自動的に `on_error` 経由で登録されるので、自身の `exposes` 例外と子孫の `setup` 例外を両方拾える
 - サブクラスは親クラスの宣言を継承する (super class chain を method dispatch で resolve)
 - インスタンスで `on_error` を呼ぶと後勝ちで上書きされる
 
-子の setup 例外が発火した時点で**自 widget の `__mount__` はまだ走っていない** (post-order なので) → ハンドラ内では `refs` が `nil`。DOM への直接書き込みではなく、`@error_message` のような signal を更新して `bind` 経由で表示するパターンを使う。`examples/grainet-kanban.html` の `KanbanBoard` がこの形。
+子の setup 例外が発火した時点で**自 widget の `mount` はまだ走っていない** (post-order なので) → ハンドラ内では `refs` が `nil`。DOM への直接書き込みではなく、`@error_message` のような signal を更新して `bind` 経由で表示するパターンを使う。`examples/grainet-kanban.html` の `KanbanBoard` がこの形。
 
 バブリング規則:
 
-1. 例外が発生 (effect 本体 / Widget#provides / #setup / cleanup / listener teardown のいずれか) すると、ソース widget の `on_error` がまず呼ばれる
+1. 例外が発生 (effect 本体 / Widget#exposes / #setup / cleanup / listener teardown のいずれか) すると、ソース widget の `on_error` がまず呼ばれる
 2. ハンドラの戻り値が真なら処理完了 (バブリング停止)
 3. 偽 or 未登録なら親 widget へ。親が真を返すまで、または root に達するまで上昇
 4. すべて未処理なら `Grainet.logger` (未設定なら `STDERR`) へフォールバック
@@ -1370,7 +1370,7 @@ end
 | 発生源 | バブリング |
 |---|---|
 | `effect` 本体での raise (Widget#effect / bind / model / bind_list 経由) | ✅ ソース widget からバブル |
-| `Widget#provides` での raise | ✅ 自 widget からバブル |
+| `Widget#exposes` での raise | ✅ 自 widget からバブル |
 | `Widget#setup` での raise | ✅ 自 widget からバブル |
 | `cleanup` ブロックでの raise (unmount 時) | ✅ 自 widget からバブル |
 | event listener (`RefElement#on`) ブロックでの raise | ✅ 自 widget からバブル (label: `listener (event)`) |
@@ -1420,7 +1420,7 @@ end
 報告対象 (現状):
 
 - `:warn` — update/mutate 誤用検知 (`MutationGuard::WARNINGS`), bind_list の重複 key, 未登録 widget 名
-- `:error` — Effect 本体での raise, Widget#provides / #setup での raise, listener teardown / cleanup の失敗
+- `:error` — Effect 本体での raise, Widget#exposes / #setup での raise, listener teardown / cleanup の失敗
 
 ---
 
@@ -1522,13 +1522,13 @@ class TodoList < Grainet::Widget
 end
 ```
 
-### Theme switcher (provide / inject)
+### Theme switcher (expose / lookup)
 
 ```ruby
 class ThemeApp < Grainet::Widget
-  def provides
+  def exposes
     @theme = signal("light")
-    provide :theme, @theme
+    expose :theme, @theme
   end
 
   def setup
@@ -1540,7 +1540,7 @@ end
 
 class ThemeCard < Grainet::Widget
   def setup
-    theme = inject(:theme)
+    theme = lookup(:theme)
     bind root, class: { "is-dark" => computed { theme.value == "dark" } }
   end
 end
@@ -1555,7 +1555,7 @@ end
 | メソッド | 説明 |
 |---|---|
 | `setup` | override 主フック (post-order) |
-| `provides` | override 任意フック (pre-order)、子孫に値を publish |
+| `exposes` | override 任意フック (pre-order)、子孫に値を publish |
 | `root` | RefElement (Widget のルート要素) |
 | `refs.x` / `refs[:x]` | RefElement (data-ref で指定された要素) |
 | `ref(js_element)` | 任意の `JS::Object` DOM 要素を RefElement に wrap (auto-cleanup tracking 付き) |
@@ -1568,7 +1568,7 @@ end
 | `each_frame { |ts| ... }` | rAF でフレーム毎にブロックを実行 (unmount で自動 cancel、error_boundary 連携) |
 | `cleanup { ... }` | unmount 時に走る callback を登録 |
 | `on_error { |label, error| ... }` | error boundary handler を登録 (truthy 戻りで bubbling 停止) |
-| `error_boundary { |label, error| ... }` (class macro) | クラスレベルで error boundary を宣言 (provides/子 setup 例外も拾える) |
+| `error_boundary { |label, error| ... }` (class macro) | クラスレベルで error boundary を宣言 (exposes/子 setup 例外も拾える) |
 | `bind ref, prop: signal, ...` | 一方向 DOM 反映 |
 | `bind ref, :prop do ... end` | block 形 |
 | `bind ref, class: { ... }` | class toggle |
@@ -1578,8 +1578,8 @@ end
 | `bind_list ref, signal, key: "id" do |it, prev| ... end` | block-controlled (条件付き再生成等) |
 | `model ref, signal, property: :value` | 双方向 DOM ↔ Signal |
 | `template(name)` / `template(name) { |refs| ... }` | `<template data-template>` をクローン (戻り値は `Grainet::Template`) |
-| `provide(key, value)` | provides 内で公開 |
-| `inject(key, default = NOT_FOUND, &block)` | 親から受け取る |
+| `expose(key, value)` | exposes 内で公開 |
+| `lookup(key, default = NOT_FOUND, &block)` | 親から受け取る |
 
 ### RefElement
 

@@ -104,7 +104,7 @@
 class Receipt < Grainet::Widget
   HASH_PREFIX = "#state="
 
-  def provides
+  def exposes
     @items = signal(load_from_url || default_items)
     @next_id = signal((@items.value.map { |it| it["id"] }.max || 0) + 1)
   end

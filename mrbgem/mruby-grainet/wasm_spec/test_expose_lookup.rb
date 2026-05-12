@@ -1,5 +1,5 @@
-Spec.describe "provide / inject" do
-  Spec.assert "child injects ancestor's provided value" do
+Spec.describe "expose / lookup" do
+  Spec.assert "child looks up an ancestor's exposed value" do
     doc = JS.global[:document]
     body = doc[:body]
     body[:innerHTML] = <<~HTML
@@ -12,14 +12,14 @@ Spec.describe "provide / inject" do
 
     parent_klass = Class.new(Grainet::Widget) do
       attr_reader :theme
-      define_method(:provides) do
+      define_method(:exposes) do
         @theme = signal("light")
-        provide :theme, @theme
+        expose :theme, @theme
       end
     end
     leaf_klass = Class.new(Grainet::Widget) do
       define_method(:setup) do
-        theme = inject(:theme)
+        theme = lookup(:theme)
         bind refs.label, :text do
           theme.value
         end
@@ -33,7 +33,7 @@ Spec.describe "provide / inject" do
     label = doc.call(:querySelector, "[data-ref='label']")
     Spec.assert_equal "light", label[:textContent].to_s
 
-    # Mutating the provided signal updates the descendant via inject
+    # Mutating the exposed signal updates the descendant via lookup
     parent_el = doc.call(:querySelector, "[data-widget='pi-app']")
     parent_inst = Grainet.find_for_element(parent_el)
     parent_inst.theme.value = "dark"
@@ -42,7 +42,7 @@ Spec.describe "provide / inject" do
     body[:innerHTML] = ""
   end
 
-  Spec.assert "intermediate ancestor's provide overrides outer one" do
+  Spec.assert "intermediate ancestor's expose overrides outer one" do
     doc = JS.global[:document]
     body = doc[:body]
     body[:innerHTML] = <<~HTML
@@ -56,14 +56,14 @@ Spec.describe "provide / inject" do
     HTML
 
     outer_klass = Class.new(Grainet::Widget) do
-      define_method(:provides) { provide :name, "outer" }
+      define_method(:exposes) { expose :name, "outer" }
     end
     inner_klass = Class.new(Grainet::Widget) do
-      define_method(:provides) { provide :name, "inner" }
+      define_method(:exposes) { expose :name, "inner" }
     end
     grand_klass = Class.new(Grainet::Widget) do
       attr_reader :seen
-      define_method(:setup) { @seen = inject(:name) }
+      define_method(:setup) { @seen = lookup(:name) }
     end
 
     Grainet.register "pi-outer", outer_klass
@@ -78,7 +78,7 @@ Spec.describe "provide / inject" do
     body[:innerHTML] = ""
   end
 
-  Spec.assert "inject without a provider raises with a helpful message" do
+  Spec.assert "lookup without an exposed value raises with a helpful message" do
     doc = JS.global[:document]
     body = doc[:body]
     body[:innerHTML] = '<div data-widget="pi-orphan"><span data-ref="x"></span></div>'
@@ -87,7 +87,7 @@ Spec.describe "provide / inject" do
     klass = Class.new(Grainet::Widget) do
       define_method(:setup) do
         begin
-          inject(:missing)
+          lookup(:missing)
         rescue Grainet::Error => e
           @err = e.message
         end
@@ -100,19 +100,19 @@ Spec.describe "provide / inject" do
     el = doc.call(:querySelector, "[data-widget='pi-orphan']")
     inst = Grainet.find_for_element(el)
     Spec.assert_true inst.err.include?("missing")
-    Spec.assert_true inst.err.include?("inject")
+    Spec.assert_true inst.err.include?("lookup")
 
     body[:innerHTML] = ""
   end
 
-  Spec.assert "inject(:key, default) returns the default if not provided" do
+  Spec.assert "lookup(:key, default) returns the default if not exposed" do
     doc = JS.global[:document]
     body = doc[:body]
     body[:innerHTML] = '<div data-widget="pi-default"></div>'
 
     klass = Class.new(Grainet::Widget) do
       attr_reader :v
-      define_method(:setup) { @v = inject(:flag, "fallback") }
+      define_method(:setup) { @v = lookup(:flag, "fallback") }
     end
     Grainet.register "pi-default", klass
     Grainet.start
@@ -124,7 +124,7 @@ Spec.describe "provide / inject" do
     body[:innerHTML] = ""
   end
 
-  Spec.assert "inject with block uses block as lazy default" do
+  Spec.assert "lookup with block uses block as lazy default" do
     doc = JS.global[:document]
     body = doc[:body]
     body[:innerHTML] = '<div data-widget="pi-block"></div>'
@@ -133,7 +133,7 @@ Spec.describe "provide / inject" do
     klass = Class.new(Grainet::Widget) do
       attr_reader :v
       define_method(:setup) do
-        @v = inject(:thing) do
+        @v = lookup(:thing) do
           factory_calls += 1
           "made-fresh"
         end
@@ -150,7 +150,7 @@ Spec.describe "provide / inject" do
     body[:innerHTML] = ""
   end
 
-  Spec.assert "provides runs pre-order before any descendant setup" do
+  Spec.assert "exposes runs pre-order before any descendant setup" do
     doc = JS.global[:document]
     body = doc[:body]
     body[:innerHTML] = <<~HTML
@@ -163,16 +163,16 @@ Spec.describe "provide / inject" do
 
     log = []
     parent_klass = Class.new(Grainet::Widget) do
-      define_method(:provides) { log << :parent_provides }
-      define_method(:setup)    { log << :parent_setup }
+      define_method(:exposes) { log << :parent_exposes }
+      define_method(:setup)   { log << :parent_setup }
     end
     child_klass = Class.new(Grainet::Widget) do
-      define_method(:provides) { log << :child_provides }
-      define_method(:setup)    { log << :child_setup }
+      define_method(:exposes) { log << :child_exposes }
+      define_method(:setup)   { log << :child_setup }
     end
     grand_klass = Class.new(Grainet::Widget) do
-      define_method(:provides) { log << :grand_provides }
-      define_method(:setup)    { log << :grand_setup }
+      define_method(:exposes) { log << :grand_exposes }
+      define_method(:setup)   { log << :grand_setup }
     end
 
     Grainet.register "pi-order-parent", parent_klass
@@ -181,26 +181,26 @@ Spec.describe "provide / inject" do
     Grainet.start
 
     Spec.assert_equal(
-      [:parent_provides, :child_provides, :grand_provides,
-       :grand_setup,    :child_setup,    :parent_setup],
+      [:parent_exposes, :child_exposes, :grand_exposes,
+       :grand_setup,   :child_setup,   :parent_setup],
       log
     )
 
     body[:innerHTML] = ""
   end
 
-  Spec.assert "dynamic mount via MO runs provides for the new subtree" do
+  Spec.assert "dynamic mount via MO runs exposes for the new subtree" do
     doc = JS.global[:document]
     body = doc[:body]
     body[:innerHTML] = '<div data-widget="pi-dyn-host"><div id="slot"></div></div>'
 
     host_klass = Class.new(Grainet::Widget) do
-      define_method(:provides) { provide :token, "host-token" }
+      define_method(:exposes) { expose :token, "host-token" }
     end
     captured = nil
     inserted_klass = Class.new(Grainet::Widget) do
       define_method(:setup) do
-        captured = inject(:token)
+        captured = lookup(:token)
       end
     end
 

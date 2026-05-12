@@ -2,7 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <title>Grainet — provide/inject theme demo</title>
+    <title>Grainet — expose/lookup theme demo</title>
     <style>
       :root {
         --bg: #fafafa; --panel: #fff; --border: #e5e5e5;
@@ -44,7 +44,7 @@
     </style>
   </head>
   <body>
-    <h1>Grainet — provide / inject theme demo</h1>
+    <h1>Grainet — expose / lookup theme demo</h1>
     <p class="lede">
       A shared theme switcher that updates multiple cards at once.
     </p>
@@ -74,11 +74,11 @@
 
     <script type="text/ruby" id="ruby-source">
 class ThemeApp < Grainet::Widget
-  # provides runs in pre-order — before any descendant's setup. By the
-  # time a child calls inject(:theme), this signal is already in scope.
-  def provides
+  # exposes runs in pre-order — before any descendant's setup. By the
+  # time a child calls lookup(:theme), this signal is already in scope.
+  def exposes
     @theme = signal("light")
-    provide :theme, @theme
+    expose :theme, @theme
   end
 
   def setup
@@ -94,7 +94,7 @@ end
 
 class ThemeCard < Grainet::Widget
   def setup
-    @theme = inject(:theme)
+    @theme = lookup(:theme)
 
     # bind on root: the widget's own DOM root gets the .is-dark class
     # whenever the inherited theme is "dark".
@@ -104,7 +104,7 @@ end
 
 class ThemeBadge < Grainet::Widget
   def setup
-    @theme = inject(:theme)
+    @theme = lookup(:theme)
 
     bind root, :text do
       @theme.value == "dark" ? "🌙 dark" : "☀️ light"

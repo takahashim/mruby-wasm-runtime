@@ -647,7 +647,7 @@ module Grainet
       # table, `start` installs listeners + first render. Per-call
       # operations (`path`, `navigate`, `params`, ...) are intentionally
       # NOT exposed here — those should be reached via Widget#router
-      # (auto-tracked through `inject(:router)`) or
+      # (auto-tracked through `lookup(:router)`) or
       # `Grainet::Router.default_context` directly, so sub-contexts
       # remain a clean override path.
       def draw(outlet:, &block)
@@ -666,7 +666,7 @@ module Grainet
     # opt-in: Widget gains `bind_link` only when this gem is required.
     module WidgetMixin
       def router
-        inject(:router) { Grainet::Router.default_context }
+        lookup(:router) { Grainet::Router.default_context }
       end
 
       def bind_link(el, href:, match: nil, active_class: "active", inactive_class: nil, exact: false)

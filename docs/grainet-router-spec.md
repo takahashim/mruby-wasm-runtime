@@ -63,7 +63,7 @@ Router を導入するのは:
 |---|---|
 | Boot コード (script トップレベル等、`draw`/`start` のみ) | `Grainet::Router.draw` / `Grainet::Router.start` の short-cut で default_context に forward |
 | Boot コードでそれ以外を呼ぶ場合 | `Grainet::Router.default_context` を経由 (テストや低レベル操作) |
-| Widget 内 (`setup` etc.) | `Grainet::Router::WidgetMixin` が `router` instance method を提供。`inject(:router)` 経由で取得するため、親 widget が `provide :router, sub_ctx` で sub-context を注入できる |
+| Widget 内 (`setup` etc.) | `Grainet::Router::WidgetMixin` が `router` instance method を提供。`lookup(:router)` 経由で取得するため、親 widget が `expose :router, sub_ctx` で sub-context を注入できる |
 | 追加 Context (sub-router など) | `Grainet::Router.new_context` で別 instance を生成 |
 
 ```ruby
@@ -109,7 +109,7 @@ Module-level に提供される shortcut は **default context 限定**、かつ
 `Grainet::Router` Module は **factory + namespace + 限定的 lifecycle shortcut** のみを提供し、状態は持たない。実際の状態は `Context` instance に閉じ込められている。これにより:
 
 - `router.foo` と書いたとき `router` が **真にインスタンス** = Ruby 慣習通り (小文字 = instance/method-return)
-- `inject(:router)` で widget tree に sub-context を注入できる素地 (`provide :router, sub_ctx`)
+- `lookup(:router)` で widget tree に sub-context を注入できる素地 (`expose :router, sub_ctx`)
 - 複数 Context を共存させた multi-tenant SPA / sub-router の将来拡張余地
 - テストごとの分離 (`new_context` で独立 Router を生成可能)
 
@@ -117,7 +117,7 @@ Module-level に提供される shortcut は **default context 限定**、かつ
 
 ### 将来の拡張余地
 
-- **Sub-router**: 子 widget tree に独自 Context を注入 (`provide :router, Grainet::Router.new_context`) すると、その subtree の `router.path` 等は別 Context を見る。outlet を sub-context に紐付ければネスト route が実現可能 (v2 候補)
+- **Sub-router**: 子 widget tree に独自 Context を注入 (`expose :router, Grainet::Router.new_context`) すると、その subtree の `router.path` 等は別 Context を見る。outlet を sub-context に紐付ければネスト route が実現可能 (v2 候補)
 - **複数の独立 Router**: 1 HTML 内に独立した複数 SPA がある稀なケースで `Grainet::Router.new_context` を使う
 
 v1 の API は現状のシングル context 利用に最適化されているが、内部構造は instance-based なので **後方互換を保ったまま** 上記拡張を後付けできる。
@@ -240,7 +240,7 @@ end
 Grainet::Router.start
 ```
 
-`Grainet::Router.draw` / `start` は default context への lifecycle shortcut。Widget 内では `Grainet::Router::WidgetMixin` が同じ Context を `inject(:router)` 経由で `router` として expose する (= 後述の Widget 内 API と一貫)。
+`Grainet::Router.draw` / `start` は default context への lifecycle shortcut。Widget 内では `Grainet::Router::WidgetMixin` が同じ Context を `lookup(:router)` 経由で `router` として公開する (= 後述の Widget 内 API と一貫)。
 
 `draw` は route 宣言のみ。実際の listener 起動・初回マッチ評価は `start` で行う。順序は `draw` → `start` を推奨 (start 時に route 表ができていれば最初の outlet 描画が正しく行える)。
 
@@ -695,7 +695,7 @@ end
 ```ruby
 class App < Grainet::Widget
   def setup
-    @user = inject(:current_user)
+    @user = lookup(:current_user)
 
     effect do
       protected = [:dashboard, :settings]

@@ -140,7 +140,7 @@
       </div>
 
       <!-- User notice overlay: validation 等の予測される user message。
-           黄系の枠で system error と区別。@notice signal を inject 経由で
+           黄系の枠で system error と区別。@notice signal を lookup 経由で
            子 widget が直接書き換える。 -->
       <div data-ref="notice_overlay" class="overlay notice-overlay" hidden>
         <div class="dialog" role="dialog" aria-labelledby="notice-title">
@@ -211,8 +211,8 @@ end
 
 class KanbanColumn < Grainet::Widget
   def setup
-    @cards = inject(:cards)
-    @notice = inject(:notice)
+    @cards = lookup(:cards)
+    @notice = lookup(:notice)
     status = root.data(:status)
 
     @filtered = computed { @cards.value.select { |c| c["status"] == status } }
@@ -273,15 +273,15 @@ end
 class KanbanBoard < Grainet::Widget
   STORAGE_KEY = "grainet-kanban-cards"
 
-  # Class-level boundary auto-registers in the provides phase, so even
-  # errors in this widget's own provides body or in any descendant's
+  # Class-level boundary auto-registers in the expose phase, so even
+  # errors in this widget's own exposes body or in any descendant's
   # setup are routed here.
   error_boundary do |label, error|
     @error_message.value = "#{label}\n#{error.class}: #{error.message}"
     true
   end
 
-  def provides
+  def exposes
     # Init error_message first so the boundary block can use it even
     # if the lines below raise.
     @error_message = signal(nil)
@@ -294,8 +294,8 @@ class KanbanBoard < Grainet::Widget
     # reset to defaults instead of crashing every dependent expression.
     @cards.value = default_cards unless @cards.value.is_a?(Array)
     @next_id = signal((@cards.value.map { |c| c["id"] }.max || 0) + 1)
-    provide :cards, @cards
-    provide :notice, @notice
+    expose :cards, @cards
+    expose :notice, @notice
   end
 
   def setup
