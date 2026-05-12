@@ -85,7 +85,7 @@ module Grainet
     def __error__(label, error, source: nil)
       current = source
       while current
-        return if current.__handle_error__(label, error)
+        return if current.handle_error(label, error)
         current = current.parent
       end
       if @logger

@@ -376,8 +376,8 @@ Spec.describe "Grainet::Router link helpers" do
     end.new(doc.call(:createElement, "div"))
     child = Class.new(Grainet::Widget).new(doc.call(:createElement, "div"))
 
-    parent.__provide_phase__
-    child.__set_parent__(parent)
+    parent.provide_phase
+    parent.add_child(child)
     Spec.assert_true child.router.equal?(custom_router)
   end
 

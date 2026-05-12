@@ -65,13 +65,13 @@ module Grainet
         return if existing && same_item?(existing[:item], item)
         prev_t = existing && existing[:mode] == :template ? existing[:template] : nil
         existing[:scope].dispose if existing && existing[:scope]
-        scope = @host.__new_scope__
+        scope = @host.new_scope
         if @template_name
           t = prev_t || @host.template(@template_name)
-          @host.__with_scope__(scope) { @item_proc.call(item, t) }
+          @host.with_scope(scope) { @item_proc.call(item, t) }
           apply_template(k, existing, t, scope, item)
         else
-          result = @host.__with_scope__(scope) { @item_proc.call(item, prev_t) }
+          result = @host.with_scope(scope) { @item_proc.call(item, prev_t) }
           case result
           when Template
             apply_template(k, existing, result, scope, item)
@@ -240,7 +240,7 @@ module Grainet
 
     # See docs/grainet-spec.md "Template helper".
     def template(name, &block)
-      Template.from_document(name, __owner_target__, &block)
+      Template.from_document(name, current_owner, &block)
     end
 
     private

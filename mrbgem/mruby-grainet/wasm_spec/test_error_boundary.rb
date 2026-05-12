@@ -147,7 +147,7 @@ Spec.describe "Widget#on_error (error boundary)" do
 
     parent = Class.new(Grainet::Widget) do
       # Boundary fires during the post-order setup pass — before this
-      # widget's own __mount__ runs — so refs aren't ready. Test uses
+      # widget's own `mount` runs — so refs aren't ready. Test uses
       # a closure capture instead of touching the DOM.
       error_boundary do |label, err|
         captured_local << [label, err.message]

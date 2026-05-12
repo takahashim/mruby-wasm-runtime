@@ -146,16 +146,16 @@ module Grainet
       # overrides the class-level boundary for that instance.
       def error_boundary(&block)
         raise ArgumentError, "block required" unless block
-        @__error_boundary_block__ = block
+        @error_boundary_block = block
       end
 
       # Walk the superclass chain via method dispatch (mruby's
       # Class#instance_variable_get isn't available, so we resolve
       # inheritance through method calls instead).
-      def __error_boundary_block__
-        return @__error_boundary_block__ if @__error_boundary_block__
+      def error_boundary_block
+        return @error_boundary_block if @error_boundary_block
         sc = superclass
-        sc.respond_to?(:__error_boundary_block__) ? sc.__error_boundary_block__ : nil
+        sc.respond_to?(:error_boundary_block) ? sc.error_boundary_block : nil
       end
     end
 
@@ -194,7 +194,7 @@ module Grainet
     def inject(key, default = NOT_FOUND, &block)
       current = self
       while current
-        val = current.__provided_for__(key)
+        val = current.provided_for(key)
         return val unless val.equal?(NOT_FOUND)
         current = current.parent
       end
@@ -210,7 +210,7 @@ module Grainet
     # querySelector result, etc.) and want the framework's ergonomic
     # API (`attr`, `data`, `on` with auto-cleanup, `text=` etc.) on it.
     def ref(js_element)
-      RefElement.new(js_element, __owner_target__)
+      RefElement.new(js_element, current_owner)
     end
 
     def signal(initial)
@@ -250,13 +250,13 @@ module Grainet
 
     def computed(equals: nil, on: nil, &block)
       m = Computed.new(equals: equals, on: on, &block)
-      __owner_target__.register_computed(m)
+      current_owner.register_computed(m)
       m
     end
 
     def effect(label: nil, &block)
       e = Effect.new(label: label, source: self, &block)
-      __owner_target__.register_effect(e)
+      current_owner.register_effect(e)
       e
     end
 
@@ -287,7 +287,7 @@ module Grainet
 
     def cleanup(&block)
       raise ArgumentError, "block required" unless block
-      __owner_target__.register_cleanup(block)
+      current_owner.register_cleanup(block)
     end
 
     # See docs/grainet-spec.md "Error Boundary".
@@ -296,7 +296,7 @@ module Grainet
       @_error_handler = block
     end
 
-    def __handle_error__(label, error)
+    def handle_error(label, error)
       return false unless @_error_handler
       begin
         !!@_error_handler.call(label, error)
@@ -306,15 +306,15 @@ module Grainet
       end
     end
 
-    # ---- Internal API used by Registry -----------------------------
+    # ---- Framework-internal: tree + scope plumbing -----------------
     # register_cleanup / register_effect / register_computed /
     # register_disposable / track_listener come from ResourceOwner.
 
-    def __new_scope__
+    def new_scope
       Scope.new(self)
     end
 
-    def __with_scope__(scope)
+    def with_scope(scope)
       @_scope_stack ||= []
       @_scope_stack << scope
       yield
@@ -322,12 +322,16 @@ module Grainet
       @_scope_stack.pop
     end
 
-    def __track_child__(child_widget)
+    # Add a child widget to this Widget's subtree. Registry calls this
+    # during mount; wires the child's `parent` reverse-pointer.
+    def add_child(child_widget)
       @_children << child_widget
-      child_widget.__set_parent__(self)
+      child_widget.assign_parent(self)
     end
 
-    def __set_parent__(parent_widget)
+    # Framework-internal: pair with `add_child` on the parent.
+    # User code should not re-parent widgets.
+    def assign_parent(parent_widget)
       @_parent = parent_widget
     end
 
@@ -335,16 +339,22 @@ module Grainet
       @_parent
     end
 
-    def __provided_for__(key)
+    def provided_for(key)
       @_provides.key?(key) ? @_provides[key] : NOT_FOUND
     end
 
+    # ---- Lifecycle hooks (framework-internal) ----------------------
+    # Driven by Registry; user code should override `provides` / `setup`
+    # / `on_error` / `cleanup` (the user-facing hooks) instead of these.
+    # If a subclass really needs to extend one of the lifecycle methods
+    # below, override and call `super`.
+
     # Run the `provides` hook exactly once, before any descendant's
-    # setup runs. Called by Registry in the pre-order phase.
-    def __provide_phase__
+    # `setup` runs. Called by Registry in the pre-order phase.
+    def provide_phase
       return if @_provided
       @_provided = true
-      if (boundary = self.class.__error_boundary_block__)
+      if (boundary = self.class.error_boundary_block)
         @_error_handler = ->(label, error) { instance_exec(label, error, &boundary) }
       end
       begin
@@ -354,7 +364,7 @@ module Grainet
       end
     end
 
-    def __mount__
+    def mount
       return if @_mounted
       @refs = Refs.new(self)
       begin
@@ -365,16 +375,20 @@ module Grainet
       @_mounted = true
     end
 
-    def __unmount__
+    def unmount
       return if @_unmounted
       @_unmounted = true
       @resources.dispose
-      @_children.each { |c| @resources.safe_release("child unmount") { c.__unmount__ } }
+      @_children.each { |c| @resources.safe_release("child unmount") { c.unmount } }
     end
 
     private
 
-    def __owner_target__
+    # Return the current resource-owning target — the active Scope when
+    # inside a `bind_list` block, else self (the Widget). Used by
+    # `effect`/`computed`/`cleanup`/`ref` to attach to whichever scope
+    # is current.
+    def current_owner
       stack = @_scope_stack
       (stack && stack.last) || self
     end

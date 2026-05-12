@@ -56,7 +56,7 @@ module Grainet
     end
 
     def reset!
-      @widgets.each_value(&:__unmount__)
+      @widgets.each_value(&:unmount)
       @widgets = {}
       @widget_classes = {}
       @next_widget_id = 0
@@ -77,10 +77,10 @@ module Grainet
         instance = instantiate_widget(el_js)
         next unless instance
         instances << instance
-        instance.__provide_phase__
+        instance.provide_phase
       end
 
-      instances.reverse_each(&:__mount__)
+      instances.reverse_each(&:mount)
     end
 
     def unmount_subtree(root_js)
@@ -93,7 +93,7 @@ module Grainet
         id = wid.to_s.to_i
         instance = @widgets.delete(id)
         next unless instance
-        instance.__unmount__
+        instance.unmount
         begin
           el_js.call(:removeAttribute, WIDGET_ID_ATTR)
         rescue StandardError
@@ -140,7 +140,7 @@ module Grainet
       instance = klass.new(el_js)
       @widgets[id] = instance
       parent = nearest_ancestor_widget(el_js)
-      parent.__track_child__(instance) if parent
+      parent.add_child(instance) if parent
       instance
     end
 
@@ -205,7 +205,7 @@ module Grainet
       end
       stale.each do |id|
         instance = @widgets.delete(id)
-        instance&.__unmount__
+        instance&.unmount
       end
     end
   end
