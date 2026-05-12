@@ -476,13 +476,52 @@ end
 |---|---|
 | スケジュール | 内部で `requestAnimationFrame` を再帰スケジュール (1 つの `JS.callback` を再利用) |
 | Widget unmount | 自動で `cancelAnimationFrame` + `JS.release_callback` (cleanup ブロック経由) |
-| ブロック内 raise | `Grainet.__error__("each_frame", err, source: self)` で error_boundary に流れる |
+| ブロック内 raise | `Grainet.logger.error("each_frame", err, source: self)` で error_boundary に流れる |
 | 戻り値 | `nil` (`effect` と同じ; ハンドルは返さない) |
 | 多重呼び出し | 1 widget で複数回 `each_frame` を呼ぶと、それぞれ独立した rAF ループとして動く |
 
 `effect` との違い: `effect` は signal の依存変化で再実行されるが、`each_frame` は signal とは独立にフレーム駆動で連続実行される。**signal の値を変えた結果として** DOM を更新する用途は `effect` / `bind`、**フレームに同期して連続的に signal を更新する** 用途 (物理シム、ゲームループ) は `each_frame`。
 
 実例: `examples/grainet-breakout.html` のゲームループ。
+
+### timeout / every
+
+`setTimeout` / `setInterval` のラッパー。Widget の lifecycle に紐付き、**unmount で自動 cancel** + raise は **error_boundary に bubble** する。戻り値 `Grainet::Timer` の `.stop` で早期キャンセルも可能:
+
+```ruby
+# 一回限り。3 秒後に通知を消す。
+@notice.value = "Saved!"
+timeout(3000) { @notice.value = nil }
+
+# 繰り返し。100ms ごとにアニメ tick。
+every(100) { @tick.value += 1 }
+
+# debounce: 前回をキャンセルして張り直す
+@search_timer&.stop
+@search_timer = timeout(300) { do_search(@query.value) }
+
+# 条件達成で自己停止
+@countdown = nil
+@countdown = every(1000) do
+  @sec.value -= 1
+  @countdown.stop if @sec.value <= 0
+end
+```
+
+挙動:
+
+| 観点 | `timeout(ms)` | `every(ms)` |
+|---|---|---|
+| 元 JS API | `setTimeout` | `setInterval` |
+| 起動 | 即 schedule、`ms` 後に 1 回 | 即 schedule、`ms` ごとに発火 |
+| Widget unmount | `clearTimeout` + `JS.release_callback` (`Timer#stop` 経由) | `clearInterval` + `JS.release_callback` |
+| ブロック内 raise | `Grainet.logger.error("timeout", ...)` で error_boundary 経由 | 同上 (`"every"` ラベル)。**raise しても interval は止まらない** (subsequent tick も発火) |
+| 戻り値 | `Grainet::Timer` (`.stop` / `.stopped?`) | `Grainet::Timer` |
+| 多重呼び出し | 各 call が独立。複数 timer を並列に持てる | 同左 |
+
+`Timer#stop` は **idempotent** — 手動 `stop` した後で unmount しても、unmount cleanup でもう一度 `stop` を呼んで二重キャンセルになる事故は起きない。
+
+`each_frame` との違い: `each_frame` は **rAF 駆動 (画面 refresh に同期、~16ms 間隔)**、`every` は **wall-clock 駆動 (指定 ms)**。`each_frame` はアニメーション、`every` は polling やバックグラウンド tick に使う。
 
 #### Canvas との組み合わせ
 
@@ -1566,6 +1605,8 @@ end
 | `selector(source, equals: nil)` | O(1) per-key reactive 選択 (`Grainet::Selector`) |
 | `effect(label: nil) { ... }` | Effect を作成 (Widget lifecycle に紐付き) |
 | `each_frame { |ts| ... }` | rAF でフレーム毎にブロックを実行 (unmount で自動 cancel、error_boundary 連携) |
+| `timeout(ms) { ... }` | `setTimeout` 一回限り (unmount で自動 cancel、error_boundary 連携、戻り値 `Grainet::Timer`) |
+| `every(ms) { ... }` | `setInterval` 繰り返し (unmount で自動 cancel、error_boundary 連携、戻り値 `Grainet::Timer`) |
 | `cleanup { ... }` | unmount 時に走る callback を登録 |
 | `on_error { |label, error| ... }` | error boundary handler を登録 (truthy 戻りで bubbling 停止) |
 | `error_boundary { |label, error| ... }` (class macro) | クラスレベルで error boundary を宣言 (prepare_setup/子 setup 例外も拾える) |

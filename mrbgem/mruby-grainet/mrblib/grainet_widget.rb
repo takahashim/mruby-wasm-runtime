@@ -109,6 +109,27 @@ module Grainet
     end
   end
 
+  # Handle for `Widget#timeout` / `Widget#every`. The block passed in is
+  # the underlying `clearTimeout` / `clearInterval` + `release_callback`
+  # pair; `Timer` adds the idempotent gate so `stop` is safe to call
+  # multiple times and pairs cleanly with the widget's unmount cleanup.
+  class Timer
+    def initialize(&stopper)
+      @stopper = stopper
+      @stopped = false
+    end
+
+    def stop
+      return if @stopped
+      @stopped = true
+      @stopper.call
+    end
+
+    def stopped?
+      @stopped
+    end
+  end
+
   # The user-inheritable base. Users write `class Counter < Grainet::Widget`.
   class Widget
     # A bag of lifecycle resources associated with a sub-scope (e.g.
@@ -283,6 +304,51 @@ module Grainet
         JS.release_callback(cb)
       end
       nil
+    end
+
+    # One-shot `setTimeout` with auto-cancel on widget unmount and
+    # raises routed through `error_boundary`. `ms` is the delay in
+    # milliseconds. Returns a `Grainet::Timer` — call `.stop` on it to
+    # cancel before it fires (e.g. for debounce / cancellation flows).
+    def timeout(ms, &block)
+      raise ArgumentError, "block required" unless block
+      cb = JS.callback do
+        begin
+          block.call
+        rescue => e
+          Grainet.logger.error("timeout", e, source: self)
+        end
+      end
+      timer_id = JS.global.call(:setTimeout, cb, ms.to_i)
+      timer = Timer.new do
+        JS.global.call(:clearTimeout, timer_id)
+        JS.release_callback(cb)
+      end
+      cleanup { timer.stop }
+      timer
+    end
+
+    # Repeating `setInterval` with auto-cancel on widget unmount and
+    # raises routed through `error_boundary`. `ms` is the interval in
+    # milliseconds. Raises don't stop the interval (matches `setInterval`
+    # and `each_frame` semantics) — subsequent ticks keep firing.
+    # Returns a `Grainet::Timer`; call `.stop` to stop early.
+    def every(ms, &block)
+      raise ArgumentError, "block required" unless block
+      cb = JS.callback do
+        begin
+          block.call
+        rescue => e
+          Grainet.logger.error("every", e, source: self)
+        end
+      end
+      timer_id = JS.global.call(:setInterval, cb, ms.to_i)
+      timer = Timer.new do
+        JS.global.call(:clearInterval, timer_id)
+        JS.release_callback(cb)
+      end
+      cleanup { timer.stop }
+      timer
     end
 
     def cleanup(&block)
