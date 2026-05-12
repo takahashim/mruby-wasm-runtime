@@ -78,6 +78,37 @@ module Grainet
     end
   end
 
+  # Role mixin: a class that "owns" a DisposableSet of lifecycle
+  # resources (effects, computeds, listeners, cleanups, labeled
+  # disposables). Widget and its inner Scope both include this, so the
+  # user-facing helpers (`effect { ... }`, `cleanup { ... }`,
+  # `resource(...)`, `RefElement#on`, ...) can target either through a
+  # single uniform API.
+  #
+  # Contract: the including class must set `@resources = DisposableSet.new(self)`
+  # before any registration call.
+  module ResourceOwner
+    def register_cleanup(cleanup)
+      @resources.register_cleanup(cleanup)
+    end
+
+    def register_effect(effect)
+      @resources.register_effect(effect)
+    end
+
+    def register_computed(computed)
+      @resources.register_computed(computed)
+    end
+
+    def register_disposable(label, disposable)
+      @resources.register_disposable(label, disposable)
+    end
+
+    def track_listener(target_js, event_str, callback_js)
+      @resources.track_listener(target_js, event_str, callback_js)
+    end
+  end
+
   # The user-inheritable base. Users write `class Counter < Grainet::Widget`.
   class Widget
     # A bag of lifecycle resources associated with a sub-scope (e.g.
@@ -85,28 +116,10 @@ module Grainet
     # or the host Widget unmounts; the API mirrors Widget's
     # `__register_*__` so the same helpers can target either.
     class Scope
+      include ResourceOwner
+
       def initialize(source_widget)
         @resources = DisposableSet.new(source_widget)
-      end
-
-      def __track_listener__(target_js, event_str, callback_js)
-        @resources.track_listener(target_js, event_str, callback_js)
-      end
-
-      def __register_effect__(effect)
-        @resources.register_effect(effect)
-      end
-
-      def __register_computed__(computed)
-        @resources.register_computed(computed)
-      end
-
-      def __register_disposable__(label, disposable)
-        @resources.register_disposable(label, disposable)
-      end
-
-      def __register_cleanup__(cleanup)
-        @resources.register_cleanup(cleanup)
       end
 
       def dispose
@@ -119,6 +132,7 @@ module Grainet
     NOT_FOUND = Object.new.freeze
 
     include Bindable
+    include ResourceOwner
 
     class << self
       # Class-level error boundary declaration. The block runs in the
@@ -150,7 +164,7 @@ module Grainet
     def initialize(root_element)
       @root = RefElement.new(root_element, self, name: "(root)")
       @refs = nil
-      @_resources = DisposableSet.new(self)
+      @resources = DisposableSet.new(self)
       @_children = []
       @_parent = nil
       @_provides = {}
@@ -236,13 +250,13 @@ module Grainet
 
     def computed(equals: nil, on: nil, &block)
       m = Computed.new(equals: equals, on: on, &block)
-      __owner_target__.__register_computed__(m)
+      __owner_target__.register_computed(m)
       m
     end
 
     def effect(label: nil, &block)
       e = Effect.new(label: label, source: self, &block)
-      __owner_target__.__register_effect__(e)
+      __owner_target__.register_effect(e)
       e
     end
 
@@ -273,7 +287,7 @@ module Grainet
 
     def cleanup(&block)
       raise ArgumentError, "block required" unless block
-      __owner_target__.__register_cleanup__(block)
+      __owner_target__.register_cleanup(block)
     end
 
     # See docs/grainet-spec.md "Error Boundary".
@@ -293,26 +307,8 @@ module Grainet
     end
 
     # ---- Internal API used by Registry -----------------------------
-
-    def __track_listener__(target_js, event_str, callback_js)
-      @_resources.track_listener(target_js, event_str, callback_js)
-    end
-
-    def __register_effect__(effect)
-      @_resources.register_effect(effect)
-    end
-
-    def __register_computed__(computed)
-      @_resources.register_computed(computed)
-    end
-
-    def __register_disposable__(label, disposable)
-      @_resources.register_disposable(label, disposable)
-    end
-
-    def __register_cleanup__(cleanup)
-      @_resources.register_cleanup(cleanup)
-    end
+    # register_cleanup / register_effect / register_computed /
+    # register_disposable / track_listener come from ResourceOwner.
 
     def __new_scope__
       Scope.new(self)
@@ -372,8 +368,8 @@ module Grainet
     def __unmount__
       return if @_unmounted
       @_unmounted = true
-      @_resources.dispose
-      @_children.each { |c| @_resources.safe_release("child unmount") { c.__unmount__ } }
+      @resources.dispose
+      @_children.each { |c| @resources.safe_release("child unmount") { c.__unmount__ } }
     end
 
     private

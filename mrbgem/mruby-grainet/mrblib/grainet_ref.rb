@@ -62,7 +62,7 @@ module Grainet
       else
         @js.call(:addEventListener, evt, cb)
       end
-      @widget.__track_listener__(@js, evt, cb) if @widget
+      @widget.track_listener(@js, evt, cb) if @widget
       cb
     end
 

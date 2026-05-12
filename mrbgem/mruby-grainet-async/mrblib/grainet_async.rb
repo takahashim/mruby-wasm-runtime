@@ -7,13 +7,13 @@ module Grainet
   module AsyncExtensions
     def resource(initial: nil, defer: false, keep_value: true, &block)
       r = Resource.new(initial: initial, defer: defer, keep_value: keep_value, &block)
-      __register_disposable__("resource", r)
+      register_disposable("resource", r)
       r
     end
 
     def selector(source, equals: nil)
       s = Selector.new(source, equals: equals)
-      __register_disposable__("selector", s)
+      register_disposable("selector", s)
       s
     end
   end
