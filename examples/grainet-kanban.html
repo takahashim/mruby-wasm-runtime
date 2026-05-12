@@ -273,15 +273,15 @@ end
 class KanbanBoard < Grainet::Widget
   STORAGE_KEY = "grainet-kanban-cards"
 
-  # Class-level boundary auto-registers in the expose phase, so even
-  # errors in this widget's own exposes body or in any descendant's
-  # setup are routed here.
+  # Class-level boundary auto-registers in the prepare_setup phase, so
+  # even errors in this widget's own prepare_setup body or in any
+  # descendant's setup are routed here.
   error_boundary do |label, error|
     @error_message.value = "#{label}\n#{error.class}: #{error.message}"
     true
   end
 
-  def exposes
+  def prepare_setup
     # Init error_message first so the boundary block can use it even
     # if the lines below raise.
     @error_message = signal(nil)

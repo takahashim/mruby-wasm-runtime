@@ -38,8 +38,9 @@ module Grainet
     # Mount all data-widget elements under `root_js` in two passes:
     #
     #   1. Pre-order: instantiate, register, link parent, run
-    #      `exposes`. After this all exposed values in this subtree are
-    #      populated, so any `lookup` called in pass 2 finds them.
+    #      `prepare_setup`. After this all exposed values in this
+    #      subtree are populated, so any `lookup` called in pass 2
+    #      finds them.
     #
     #   2. Post-order: run `setup`. Children before parents, so
     #      `refs.x.widget.method` from a parent's setup sees its
@@ -77,7 +78,7 @@ module Grainet
         instance = instantiate_widget(el_js)
         next unless instance
         instances << instance
-        instance.expose_phase
+        instance.prepare_setup_phase
       end
 
       instances.reverse_each(&:mount)

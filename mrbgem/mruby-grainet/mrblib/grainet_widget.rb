@@ -1,7 +1,7 @@
 # grainet_widget.rb — Grainet::Widget base class.
 #
 # Users write `class Counter < Grainet::Widget`. Owns lifecycle
-# (exposes / setup / cleanup), reactive helpers (signal / computed /
+# (prepare_setup / setup / cleanup), reactive helpers (signal / computed /
 # effect / persistent_signal), error boundary, and expose / lookup.
 #
 # Bindable mixin (in grainet_bindable.rb) supplies bind / model /
@@ -138,11 +138,11 @@ module Grainet
       # Class-level error boundary declaration. The block runs in the
       # widget instance's context (instance_exec), so `@ivars` resolve
       # to the instance, and is auto-installed at the START of the
-      # expose phase — early enough to catch errors in `exposes` itself
-      # and in any descendant's setup.
+      # prepare_setup phase — early enough to catch errors in
+      # `prepare_setup` itself and in any descendant's setup.
       #
       # Subclasses inherit a parent class's boundary unless they
-      # declare their own. Calling `on_error` in `exposes`/`setup`
+      # declare their own. Calling `on_error` in `prepare_setup`/`setup`
       # overrides the class-level boundary for that instance.
       def error_boundary(&block)
         raise ArgumentError, "block required" unless block
@@ -168,7 +168,7 @@ module Grainet
       @children = []
       @parent = nil
       @exposed = {}
-      @expose_phase_done = false
+      @prepare_setup_phase_done = false
       @mounted = false
       @unmounted = false
       @error_handler = nil
@@ -176,7 +176,7 @@ module Grainet
 
     # Override to publish values to descendants. Runs in pre-order
     # (parent first) before any descendant's `setup`.
-    def exposes
+    def prepare_setup
     end
 
     # Override for the main lifecycle. Runs in post-order (children
@@ -340,23 +340,23 @@ module Grainet
     end
 
     # ---- Lifecycle hooks (framework-internal) ----------------------
-    # Driven by Registry; user code should override `exposes` / `setup`
-    # / `on_error` / `cleanup` (the user-facing hooks) instead of these.
-    # If a subclass really needs to extend one of the lifecycle methods
-    # below, override and call `super`.
+    # Driven by Registry; user code should override `prepare_setup` /
+    # `setup` / `on_error` / `cleanup` (the user-facing hooks) instead
+    # of these. If a subclass really needs to extend one of the
+    # lifecycle methods below, override and call `super`.
 
-    # Run the `exposes` hook exactly once, before any descendant's
+    # Run the `prepare_setup` hook exactly once, before any descendant's
     # `setup` runs. Called by Registry in the pre-order phase.
-    def expose_phase
-      return if @expose_phase_done
-      @expose_phase_done = true
+    def prepare_setup_phase
+      return if @prepare_setup_phase_done
+      @prepare_setup_phase_done = true
       if (boundary = self.class.error_boundary_block)
         @error_handler = ->(label, error) { instance_exec(label, error, &boundary) }
       end
       begin
-        exposes
+        prepare_setup
       rescue => e
-        Grainet.logger.error("#{self.class.name}#exposes", e, source: self)
+        Grainet.logger.error("#{self.class.name}#prepare_setup", e, source: self)
       end
     end
 

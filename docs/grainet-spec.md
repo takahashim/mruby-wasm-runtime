@@ -132,18 +132,18 @@ Grainet.register "counter", Counter
 
 | フック | 実行タイミング | 順序 |
 |---|---|---|
-| `exposes`  | mount 時 | **pre-order (親→子)** |
+| `prepare_setup`  | mount 時 | **pre-order (親→子)** |
 | `setup`    | mount 時 | **post-order (子→親)** |
 | `cleanup` ブロック | unmount 時 | 登録の **逆順 (LIFO)**, 子 unmount より**前** |
 | `unmount`  | unmount 時 | top-down (親→子) |
 
 **2フェーズ mount** が肝心:
 
-1. Pass 1 (pre-order): 各 widget をインスタンス化、親子関係を確立、`exposes` 実行
+1. Pass 1 (pre-order): 各 widget をインスタンス化、親子関係を確立、`prepare_setup` 実行
 2. Pass 2 (post-order): 各 widget の `setup` 実行
 
 これにより:
-- `exposes` で publish した値は、子の `setup` 内 `lookup` から見える
+- `prepare_setup` で publish した値は、子の `setup` 内 `lookup` から見える
 - `setup` 内 `refs.x.widget.method` で子インスタンスを呼べる (子は既に setup 済み)
 
 ### `setup`
@@ -158,18 +158,18 @@ def setup
 end
 ```
 
-### `exposes`
+### `prepare_setup`
 
 オプションフック。子孫に値を publish する時のみ override。
 
 ```ruby
-def exposes
+def prepare_setup
   @theme = signal("light")
   expose :theme, @theme
 end
 ```
 
-`exposes` 内で生成した `@theme` 等は `setup` でも参照できる (同一インスタンスの ivar)。
+`prepare_setup` 内で生成した `@theme` 等は `setup` でも参照できる (同一インスタンスの ivar)。
 
 ### `root`
 
@@ -915,13 +915,13 @@ block が返す HTML に `data-widget` 属性を含めると、bind_list が DOM
 
 ## Expose / Lookup
 
-親 Widget が値を pre-order の `exposes` フックで publish し、子孫が `lookup` で受け取る。
+親 Widget が値を pre-order の `prepare_setup` フックで publish し、子孫が `lookup` で受け取る。
 
 ### expose
 
 ```ruby
 class App < Grainet::Widget
-  def exposes
+  def prepare_setup
     @theme = signal("light")
     @user  = signal(nil)
     expose :theme, @theme
@@ -960,7 +960,7 @@ lookup(:theme) { signal("default") }  # 見つからなければ block 評価
 
 ### 順序の保証
 
-`exposes` は **pre-order**、`setup` は **post-order**。よって子の `setup` 内 `lookup(:theme)` が実行されるとき、親の `exposes` は既に走っている。
+`prepare_setup` は **pre-order**、`setup` は **post-order**。よって子の `setup` 内 `lookup(:theme)` が実行されるとき、親の `prepare_setup` は既に走っている。
 
 動的 mount (MutationObserver 経由) でも、新しいサブツリーに対して同じ2フェーズが走るので問題なく動作する。
 
@@ -1181,14 +1181,14 @@ Widget 内部の JS handle nil チェックには bare `nil?` ではなく `js_n
 
 | 操作 | 順序 |
 |---|---|
-| Pass 1: instantiate + exposes | pre-order (親→子) |
+| Pass 1: instantiate + prepare_setup | pre-order (親→子) |
 | Pass 2: setup | post-order (子→親) |
 | `unmount` | top-down (親→子)、ただし親の cleanup callback は子 unmount より**前**に実行 |
 
 これにより:
 - 親の `setup` で `refs.x.widget.method` を呼ぶ時、子は既に setup 済み
 - 親の `cleanup` で `refs.x.widget` への最終操作ができる (子は生きている)
-- 子の `setup` で `lookup(:key)` を呼ぶ時、親の `exposes` は既に走っている
+- 子の `setup` で `lookup(:key)` を呼ぶ時、親の `prepare_setup` は既に走っている
 
 ### 子 Widget instance への access
 
@@ -1230,7 +1230,7 @@ event[:target].call(:remove)
 
 `Grainet.start` が `document.body` に対して `MutationObserver` を `childList: true, subtree: true` で起動する。
 
-複数要素が同時に追加された場合、入れ子 Widget の mount 順序ルール (pre-order exposes + post-order setup) に従う。
+複数要素が同時に追加された場合、入れ子 Widget の mount 順序ルール (pre-order prepare_setup + post-order setup) に従う。
 
 ---
 
@@ -1310,18 +1310,18 @@ class App < Grainet::Widget
 end
 ```
 
-**重要: 子孫 widget の `setup` 例外を捕えたいなら `exposes` で登録すること**。Grainet の mount 順序は:
+**重要: 子孫 widget の `setup` 例外を捕えたいなら `prepare_setup` で登録すること**。Grainet の mount 順序は:
 
-1. **`exposes` フェーズ**: pre-order (親→子)
+1. **`prepare_setup` フェーズ**: pre-order (親→子)
 2. **`setup` フェーズ**: post-order (子→親)
 
-つまり子の `setup` は親の `setup` より**先**に走る。親が `setup` で `on_error` を登録すると、その時点で既に子の `setup` 例外は走って終わっており、bubbling しても親のハンドラはまだ未登録。`exposes` フェーズなら親の登録が先に走るので、子 setup 例外を捕える保証ができる:
+つまり子の `setup` は親の `setup` より**先**に走る。親が `setup` で `on_error` を登録すると、その時点で既に子の `setup` 例外は走って終わっており、bubbling しても親のハンドラはまだ未登録。`prepare_setup` フェーズなら親の登録が先に走るので、子 setup 例外を捕える保証ができる:
 
 ```ruby
 class App < Grainet::Widget
-  def exposes
+  def prepare_setup
     @error_message = signal(nil)
-    # exposes は親→子の順なので、子の setup 前に handler が立つ。
+    # prepare_setup は親→子の順なので、子の setup 前に handler が立つ。
     # この時点では `refs` がまだ nil なので、DOM 直書きではなく
     # signal 更新 + bind 経由で表示する。
     on_error do |label, error|
@@ -1336,7 +1336,7 @@ end
 
 #### `error_boundary` クラスマクロ (推奨)
 
-`exposes` 内で `on_error` を呼び忘れると子の setup 例外が漏れるのは罠なので、クラスレベルで宣言できるショートカットを用意:
+`prepare_setup` 内で `on_error` を呼び忘れると子の setup 例外が漏れるのは罠なので、クラスレベルで宣言できるショートカットを用意:
 
 ```ruby
 class App < Grainet::Widget
@@ -1348,7 +1348,7 @@ end
 ```
 
 - ブロックは widget instance 文脈で `instance_exec` される (`@ivars` がインスタンスを指す)
-- `expose_phase` の冒頭で自動的に `on_error` 経由で登録されるので、自身の `exposes` 例外と子孫の `setup` 例外を両方拾える
+- `prepare_setup_phase` の冒頭で自動的に `on_error` 経由で登録されるので、自身の `prepare_setup` 例外と子孫の `setup` 例外を両方拾える
 - サブクラスは親クラスの宣言を継承する (super class chain を method dispatch で resolve)
 - インスタンスで `on_error` を呼ぶと後勝ちで上書きされる
 
@@ -1356,7 +1356,7 @@ end
 
 バブリング規則:
 
-1. 例外が発生 (effect 本体 / Widget#exposes / #setup / cleanup / listener teardown のいずれか) すると、ソース widget の `on_error` がまず呼ばれる
+1. 例外が発生 (effect 本体 / Widget#prepare_setup / #setup / cleanup / listener teardown のいずれか) すると、ソース widget の `on_error` がまず呼ばれる
 2. ハンドラの戻り値が真なら処理完了 (バブリング停止)
 3. 偽 or 未登録なら親 widget へ。親が真を返すまで、または root に達するまで上昇
 4. すべて未処理なら `Grainet.logger` (未設定なら `STDERR`) へフォールバック
@@ -1370,7 +1370,7 @@ end
 | 発生源 | バブリング |
 |---|---|
 | `effect` 本体での raise (Widget#effect / bind / model / bind_list 経由) | ✅ ソース widget からバブル |
-| `Widget#exposes` での raise | ✅ 自 widget からバブル |
+| `Widget#prepare_setup` での raise | ✅ 自 widget からバブル |
 | `Widget#setup` での raise | ✅ 自 widget からバブル |
 | `cleanup` ブロックでの raise (unmount 時) | ✅ 自 widget からバブル |
 | event listener (`RefElement#on`) ブロックでの raise | ✅ 自 widget からバブル (label: `listener (event)`) |
@@ -1420,7 +1420,7 @@ end
 報告対象 (現状):
 
 - `:warn` — update/mutate 誤用検知 (`MutationGuard::WARNINGS`), bind_list の重複 key, 未登録 widget 名
-- `:error` — Effect 本体での raise, Widget#exposes / #setup での raise, listener teardown / cleanup の失敗
+- `:error` — Effect 本体での raise, Widget#prepare_setup / #setup での raise, listener teardown / cleanup の失敗
 
 ---
 
@@ -1526,7 +1526,7 @@ end
 
 ```ruby
 class ThemeApp < Grainet::Widget
-  def exposes
+  def prepare_setup
     @theme = signal("light")
     expose :theme, @theme
   end
@@ -1555,7 +1555,7 @@ end
 | メソッド | 説明 |
 |---|---|
 | `setup` | override 主フック (post-order) |
-| `exposes` | override 任意フック (pre-order)、子孫に値を publish |
+| `prepare_setup` | override 任意フック (pre-order)、子孫に値を publish |
 | `root` | RefElement (Widget のルート要素) |
 | `refs.x` / `refs[:x]` | RefElement (data-ref で指定された要素) |
 | `ref(js_element)` | 任意の `JS::Object` DOM 要素を RefElement に wrap (auto-cleanup tracking 付き) |
@@ -1568,7 +1568,7 @@ end
 | `each_frame { |ts| ... }` | rAF でフレーム毎にブロックを実行 (unmount で自動 cancel、error_boundary 連携) |
 | `cleanup { ... }` | unmount 時に走る callback を登録 |
 | `on_error { |label, error| ... }` | error boundary handler を登録 (truthy 戻りで bubbling 停止) |
-| `error_boundary { |label, error| ... }` (class macro) | クラスレベルで error boundary を宣言 (exposes/子 setup 例外も拾える) |
+| `error_boundary { |label, error| ... }` (class macro) | クラスレベルで error boundary を宣言 (prepare_setup/子 setup 例外も拾える) |
 | `bind ref, prop: signal, ...` | 一方向 DOM 反映 |
 | `bind ref, :prop do ... end` | block 形 |
 | `bind ref, class: { ... }` | class toggle |
@@ -1578,7 +1578,7 @@ end
 | `bind_list ref, signal, key: "id" do |it, prev| ... end` | block-controlled (条件付き再生成等) |
 | `model ref, signal, property: :value` | 双方向 DOM ↔ Signal |
 | `template(name)` / `template(name) { |refs| ... }` | `<template data-template>` をクローン (戻り値は `Grainet::Template`) |
-| `expose(key, value)` | exposes 内で公開 |
+| `expose(key, value)` | prepare_setup 内で公開 |
 | `lookup(key, default = NOT_FOUND, &block)` | 親から受け取る |
 
 ### RefElement

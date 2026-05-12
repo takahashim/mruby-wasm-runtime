@@ -74,9 +74,9 @@
 
     <script type="text/ruby" id="ruby-source">
 class ThemeApp < Grainet::Widget
-  # exposes runs in pre-order — before any descendant's setup. By the
+  # prepare_setup runs in pre-order — before any descendant's setup. By the
   # time a child calls lookup(:theme), this signal is already in scope.
-  def exposes
+  def prepare_setup
     @theme = signal("light")
     expose :theme, @theme
   end

@@ -372,11 +372,11 @@ Spec.describe "Grainet::Router link helpers" do
     doc = JS.global[:document]
     custom_router = Object.new
     parent = Class.new(Grainet::Widget) do
-      define_method(:exposes) { expose :router, custom_router }
+      define_method(:prepare_setup) { expose :router, custom_router }
     end.new(doc.call(:createElement, "div"))
     child = Class.new(Grainet::Widget).new(doc.call(:createElement, "div"))
 
-    parent.expose_phase
+    parent.prepare_setup_phase
     parent.add_child(child)
     Spec.assert_true child.router.equal?(custom_router)
   end
