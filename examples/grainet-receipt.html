@@ -217,7 +217,7 @@ puts "receipt demo mounted"
       import { createVM } from "../mrbgem/mruby-wasm-js/js/index.js";
       const boot = document.getElementById("boot");
       try {
-        const vm = await createVM({ wasm: "../build/mruby-js.wasm" });
+        const vm = await createVM({ wasm: "../build/mruby-js-grainet-full.wasm" });
         vm.evalScript("#receipt-source");
         boot.textContent = "ready — qty / unit_price を編集して URL bar の #state を確認、別タブにコピペで復元";
       } catch (err) {

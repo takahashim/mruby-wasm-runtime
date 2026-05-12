@@ -123,7 +123,7 @@ puts "theme demo mounted"
       import { createVM } from "../mrbgem/mruby-wasm-js/js/index.js";
       const boot = document.getElementById("boot");
       try {
-        const vm = await createVM({ wasm: "../build/mruby-js.wasm" });
+        const vm = await createVM({ wasm: "../build/mruby-js-grainet-full.wasm" });
         vm.evalScript("#ruby-source");
         boot.textContent = "ready — click 'Toggle theme'";
       } catch (err) {

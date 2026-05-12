@@ -536,7 +536,7 @@ puts "racer demo mounted"
       import { createVM } from "../mrbgem/mruby-wasm-js/js/index.js";
       const boot = document.getElementById("boot");
       try {
-        const vm = await createVM({ wasm: "../build/mruby-js.wasm" });
+        const vm = await createVM({ wasm: "../build/mruby-js-grainet-full.wasm" });
         // Expose for the Ruby side to sample WASM linear memory and
         // JS-side handle count for the stats overlay.
         globalThis.__racer_vm = vm;

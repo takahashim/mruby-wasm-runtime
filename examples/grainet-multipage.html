@@ -269,7 +269,7 @@ puts "multipage SPA mounted"
       import { createVM } from "../mrbgem/mruby-wasm-js/js/index.js";
       const status = document.getElementById("status");
       try {
-        const vm = await createVM({ wasm: "../build/mruby-js.wasm" });
+        const vm = await createVM({ wasm: "../build/mruby-js-grainet-full.wasm" });
         vm.evalScript("#ruby-source");
         status.textContent = "ready";
       } catch (err) {
