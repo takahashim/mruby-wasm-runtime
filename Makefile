@@ -60,6 +60,9 @@ CLANG := $(WASI_SDK_DIR)/bin/clang
 SYSROOT := $(WASI_SDK_DIR)/share/wasi-sysroot
 TARGET := wasm32-wasip1
 
+# Extra linker flags for release builds.
+JS_WASM_RELEASE_LDFLAGS := -Wl,--strip-debug
+
 # ── upstream mruby (cloned, gitignored) ──────────────────────────────────
 MRUBY_DIR := $(CURDIR)/mruby
 MRUBY_REPO := https://github.com/mruby/mruby.git
@@ -67,25 +70,57 @@ MRUBY_REPO := https://github.com/mruby/mruby.git
 # (e.g. mruby-regexp's String#split breakage).
 MRUBY_TAG := 4.0.0
 
-MRUBY_CONFIG_JS  := $(CURDIR)/build_config/wasi-js.rb
-MRUBY_CONFIG_CMD := $(CURDIR)/build_config/wasi-cmd.rb
-LIBMRUBY_JS         := $(MRUBY_DIR)/build/wasi-js/lib/libmruby.a
-LIBMRUBY_JS_RELEASE := $(MRUBY_DIR)/build/wasi-js-release/lib/libmruby.a
-LIBMRUBY_CMD := $(MRUBY_DIR)/build/wasi-cmd/lib/libmruby.a
+# ── build_config / libmruby.a / wasm paths per variant ──────────────────
+# 4 JS-host variants (cf. build_config/*.rb headers for the matrix):
+#   js              — general mruby, no Grainet
+#   grainet-min     — no compiler, Grainet core only (production)
+#   grainet-small   — compiler, Grainet core only
+#   grainet-full    — compiler, Grainet core + async + router + form
+# plus the CLI variant `cmd`.
+MRUBY_CONFIG_JS            := $(CURDIR)/build_config/wasi-js.rb
+MRUBY_CONFIG_GRAINET_MIN   := $(CURDIR)/build_config/wasi-js-grainet-min.rb
+MRUBY_CONFIG_GRAINET_SMALL := $(CURDIR)/build_config/wasi-js-grainet-small.rb
+MRUBY_CONFIG_GRAINET_FULL  := $(CURDIR)/build_config/wasi-js-grainet-full.rb
+MRUBY_CONFIG_CMD           := $(CURDIR)/build_config/wasi-cmd.rb
+
+LIBMRUBY_JS                    := $(MRUBY_DIR)/build/wasi-js/lib/libmruby.a
+LIBMRUBY_JS_RELEASE            := $(MRUBY_DIR)/build/wasi-js-release/lib/libmruby.a
+LIBMRUBY_GRAINET_MIN           := $(MRUBY_DIR)/build/wasi-js-grainet-min/lib/libmruby.a
+LIBMRUBY_GRAINET_MIN_RELEASE   := $(MRUBY_DIR)/build/wasi-js-grainet-min-release/lib/libmruby.a
+LIBMRUBY_GRAINET_SMALL         := $(MRUBY_DIR)/build/wasi-js-grainet-small/lib/libmruby.a
+LIBMRUBY_GRAINET_SMALL_RELEASE := $(MRUBY_DIR)/build/wasi-js-grainet-small-release/lib/libmruby.a
+LIBMRUBY_GRAINET_FULL          := $(MRUBY_DIR)/build/wasi-js-grainet-full/lib/libmruby.a
+LIBMRUBY_GRAINET_FULL_RELEASE  := $(MRUBY_DIR)/build/wasi-js-grainet-full-release/lib/libmruby.a
+LIBMRUBY_CMD                   := $(MRUBY_DIR)/build/wasi-cmd/lib/libmruby.a
 
 # ── outputs ─────────────────────────────────────────────────────────────
 BUILD_DIR := $(CURDIR)/build
-BUILD_WASM_JS         := $(BUILD_DIR)/mruby-js.wasm
-BUILD_WASM_JS_RELEASE := $(BUILD_DIR)/mruby-js.release.wasm
-BUILD_WASM_CMD        := $(BUILD_DIR)/mruby-cmd.wasm
+BUILD_WASM_JS                    := $(BUILD_DIR)/mruby-js.wasm
+BUILD_WASM_JS_RELEASE            := $(BUILD_DIR)/mruby-js.release.wasm
+BUILD_WASM_GRAINET_MIN           := $(BUILD_DIR)/mruby-js-grainet-min.wasm
+BUILD_WASM_GRAINET_MIN_RELEASE   := $(BUILD_DIR)/mruby-js-grainet-min.release.wasm
+BUILD_WASM_GRAINET_SMALL         := $(BUILD_DIR)/mruby-js-grainet-small.wasm
+BUILD_WASM_GRAINET_SMALL_RELEASE := $(BUILD_DIR)/mruby-js-grainet-small.release.wasm
+BUILD_WASM_GRAINET_FULL          := $(BUILD_DIR)/mruby-js-grainet-full.wasm
+BUILD_WASM_GRAINET_FULL_RELEASE  := $(BUILD_DIR)/mruby-js-grainet-full.release.wasm
+BUILD_WASM_CMD                   := $(BUILD_DIR)/mruby-cmd.wasm
 
 GEM_DIR := $(CURDIR)/mrbgem/mruby-wasm-js
-DIST_DIR_JS  := $(CURDIR)/dist/mruby-wasm-js
-DIST_DIR_CMD := $(CURDIR)/dist/mruby-wasm-cmd
+DIST_DIR_JS               := $(CURDIR)/dist/mruby-wasm-js
+DIST_DIR_GRAINET_MIN      := $(CURDIR)/dist/mruby-grainet-min
+DIST_DIR_GRAINET_SMALL    := $(CURDIR)/dist/mruby-grainet-small
+DIST_DIR_GRAINET_FULL     := $(CURDIR)/dist/mruby-grainet-full
+DIST_DIR_CMD              := $(CURDIR)/dist/mruby-wasm-cmd
 DIST_VERSION := 0.1.0
 
-.PHONY: all wasi-sdk js js-release cmd serve test node-deps \
-        dist-js dist-cmd dist \
+.PHONY: all wasi-sdk \
+        js js-release \
+        js-grainet-min js-grainet-min-release \
+        js-grainet-small js-grainet-small-release \
+        js-grainet-full js-grainet-full-release \
+        js-all js-all-release \
+        cmd serve test node-deps \
+        dist-js dist-grainet-min dist-grainet-small dist-grainet-full dist-cmd dist \
         smoke-cmd smoke-cmd-wasmtime smoke-all \
         clean distclean print-version
 
@@ -114,7 +149,7 @@ wasi-sdk:
 	@echo "Using external wasi-sdk at $(WASI_SDK_PATH)"
 endif
 
-# ── mruby clone + libmruby.a builds (one per build_config) ──────────────
+# ── mruby clone + libmruby.a builds (one per build_config × release) ────
 $(MRUBY_DIR)/.git:
 	@echo "cloning mruby $(MRUBY_TAG) into $(MRUBY_DIR)..."
 	git clone --depth 1 --branch $(MRUBY_TAG) $(MRUBY_REPO) $(MRUBY_DIR)
@@ -125,6 +160,25 @@ $(LIBMRUBY_JS): | wasi-sdk $(MRUBY_DIR)/.git
 $(LIBMRUBY_JS_RELEASE): | wasi-sdk $(MRUBY_DIR)/.git
 	cd $(MRUBY_DIR) && MRUBY_WASM_RELEASE=1 rake MRUBY_CONFIG=$(MRUBY_CONFIG_JS)
 
+# grainet-min disables the runtime compiler — see build_config header.
+$(LIBMRUBY_GRAINET_MIN): | wasi-sdk $(MRUBY_DIR)/.git
+	cd $(MRUBY_DIR) && MRUBY_WASM_NO_COMPILER=1 rake MRUBY_CONFIG=$(MRUBY_CONFIG_GRAINET_MIN)
+
+$(LIBMRUBY_GRAINET_MIN_RELEASE): | wasi-sdk $(MRUBY_DIR)/.git
+	cd $(MRUBY_DIR) && MRUBY_WASM_NO_COMPILER=1 MRUBY_WASM_RELEASE=1 rake MRUBY_CONFIG=$(MRUBY_CONFIG_GRAINET_MIN)
+
+$(LIBMRUBY_GRAINET_SMALL): | wasi-sdk $(MRUBY_DIR)/.git
+	cd $(MRUBY_DIR) && rake MRUBY_CONFIG=$(MRUBY_CONFIG_GRAINET_SMALL)
+
+$(LIBMRUBY_GRAINET_SMALL_RELEASE): | wasi-sdk $(MRUBY_DIR)/.git
+	cd $(MRUBY_DIR) && MRUBY_WASM_RELEASE=1 rake MRUBY_CONFIG=$(MRUBY_CONFIG_GRAINET_SMALL)
+
+$(LIBMRUBY_GRAINET_FULL): | wasi-sdk $(MRUBY_DIR)/.git
+	cd $(MRUBY_DIR) && rake MRUBY_CONFIG=$(MRUBY_CONFIG_GRAINET_FULL)
+
+$(LIBMRUBY_GRAINET_FULL_RELEASE): | wasi-sdk $(MRUBY_DIR)/.git
+	cd $(MRUBY_DIR) && MRUBY_WASM_RELEASE=1 rake MRUBY_CONFIG=$(MRUBY_CONFIG_GRAINET_FULL)
+
 $(LIBMRUBY_CMD): | wasi-sdk $(MRUBY_DIR)/.git
 	cd $(MRUBY_DIR) && rake MRUBY_CONFIG=$(MRUBY_CONFIG_CMD)
 
@@ -132,42 +186,66 @@ $(LIBMRUBY_CMD): | wasi-sdk $(MRUBY_DIR)/.git
 $(BUILD_DIR):
 	mkdir -p $(BUILD_DIR)
 
-# ── JS-host wasm ────────────────────────────────────────────────────────
-# Two flavours:
-#   js          → debug build at build/mruby-js.wasm (~4MB, .debug_*
-#                 sections preserved). Used by `make test` and local
-#                 development for readable browser-DevTools stack traces.
-#   js-release  → optimised at build/mruby-js.release.wasm (~1MB, -Os
-#                 + --strip-debug). Consumed by `dist-js` for the
-#                 published artifact.
+# ── JS-host wasm (link libmruby.a into a reactor module) ────────────────
+# Each variant has a debug build (.wasm) and a release build (.release.wasm,
+# -Os + --strip-debug). The CLANG link line is identical across variants;
+# `LINK_JS_WASM` factors it out so adding a variant is one rule + one
+# library dependency.
+#
+# Variant matrix:
+#   js              — general mruby, no Grainet                  → mruby-js.wasm
+#   grainet-min     — no compiler, Grainet core only             → mruby-js-grainet-min.wasm
+#   grainet-small   — compiler, Grainet core only                → mruby-js-grainet-small.wasm
+#   grainet-full    — compiler, Grainet core+async+router+form   → mruby-js-grainet-full.wasm
+define LINK_JS_WASM
+$(CLANG) --target=$(TARGET) --sysroot=$(SYSROOT) \
+  $(1) \
+  -mexec-model=reactor \
+  -Wl,--allow-undefined \
+  $(2) \
+  -Wl,--export=js_invoke_proc \
+  -Wl,--export=js_eval_handle \
+  -Wl,--export=js_load_irep_handle \
+  -Wl,--whole-archive $(3) -Wl,--no-whole-archive \
+  -o $(4) \
+  -lsetjmp
+@echo "Built $(4) ($$(du -h $(4) | cut -f1))"
+endef
+
 js: $(BUILD_WASM_JS)
 js-release: $(BUILD_WASM_JS_RELEASE)
+js-grainet-min: $(BUILD_WASM_GRAINET_MIN)
+js-grainet-min-release: $(BUILD_WASM_GRAINET_MIN_RELEASE)
+js-grainet-small: $(BUILD_WASM_GRAINET_SMALL)
+js-grainet-small-release: $(BUILD_WASM_GRAINET_SMALL_RELEASE)
+js-grainet-full: $(BUILD_WASM_GRAINET_FULL)
+js-grainet-full-release: $(BUILD_WASM_GRAINET_FULL_RELEASE)
+js-all: js js-grainet-min js-grainet-small js-grainet-full
+js-all-release: js-release js-grainet-min-release js-grainet-small-release js-grainet-full-release
 
 $(BUILD_WASM_JS): $(LIBMRUBY_JS) | $(BUILD_DIR)
-	$(CLANG) --target=$(TARGET) --sysroot=$(SYSROOT) \
-	  -mexec-model=reactor \
-	  -Wl,--allow-undefined \
-	  -Wl,--export=js_invoke_proc \
-	  -Wl,--export=js_eval_handle \
-	  -Wl,--export=js_load_irep_handle \
-	  -Wl,--whole-archive $(LIBMRUBY_JS) -Wl,--no-whole-archive \
-	  -o $(BUILD_WASM_JS) \
-	  -lsetjmp
-	@echo "Built $(BUILD_WASM_JS) ($$(du -h $(BUILD_WASM_JS) | cut -f1))"
+	$(call LINK_JS_WASM,,,$(LIBMRUBY_JS),$(BUILD_WASM_JS))
 
 $(BUILD_WASM_JS_RELEASE): $(LIBMRUBY_JS_RELEASE) | $(BUILD_DIR)
-	$(CLANG) --target=$(TARGET) --sysroot=$(SYSROOT) \
-	  -Os \
-	  -mexec-model=reactor \
-	  -Wl,--allow-undefined \
-	  -Wl,--strip-debug \
-	  -Wl,--export=js_invoke_proc \
-	  -Wl,--export=js_eval_handle \
-	  -Wl,--export=js_load_irep_handle \
-	  -Wl,--whole-archive $(LIBMRUBY_JS_RELEASE) -Wl,--no-whole-archive \
-	  -o $(BUILD_WASM_JS_RELEASE) \
-	  -lsetjmp
-	@echo "Built $(BUILD_WASM_JS_RELEASE) ($$(du -h $(BUILD_WASM_JS_RELEASE) | cut -f1))"
+	$(call LINK_JS_WASM,-Os,$(JS_WASM_RELEASE_LDFLAGS),$(LIBMRUBY_JS_RELEASE),$(BUILD_WASM_JS_RELEASE))
+
+$(BUILD_WASM_GRAINET_MIN): $(LIBMRUBY_GRAINET_MIN) | $(BUILD_DIR)
+	$(call LINK_JS_WASM,,,$(LIBMRUBY_GRAINET_MIN),$(BUILD_WASM_GRAINET_MIN))
+
+$(BUILD_WASM_GRAINET_MIN_RELEASE): $(LIBMRUBY_GRAINET_MIN_RELEASE) | $(BUILD_DIR)
+	$(call LINK_JS_WASM,-Os,$(JS_WASM_RELEASE_LDFLAGS),$(LIBMRUBY_GRAINET_MIN_RELEASE),$(BUILD_WASM_GRAINET_MIN_RELEASE))
+
+$(BUILD_WASM_GRAINET_SMALL): $(LIBMRUBY_GRAINET_SMALL) | $(BUILD_DIR)
+	$(call LINK_JS_WASM,,,$(LIBMRUBY_GRAINET_SMALL),$(BUILD_WASM_GRAINET_SMALL))
+
+$(BUILD_WASM_GRAINET_SMALL_RELEASE): $(LIBMRUBY_GRAINET_SMALL_RELEASE) | $(BUILD_DIR)
+	$(call LINK_JS_WASM,-Os,$(JS_WASM_RELEASE_LDFLAGS),$(LIBMRUBY_GRAINET_SMALL_RELEASE),$(BUILD_WASM_GRAINET_SMALL_RELEASE))
+
+$(BUILD_WASM_GRAINET_FULL): $(LIBMRUBY_GRAINET_FULL) | $(BUILD_DIR)
+	$(call LINK_JS_WASM,,,$(LIBMRUBY_GRAINET_FULL),$(BUILD_WASM_GRAINET_FULL))
+
+$(BUILD_WASM_GRAINET_FULL_RELEASE): $(LIBMRUBY_GRAINET_FULL_RELEASE) | $(BUILD_DIR)
+	$(call LINK_JS_WASM,-Os,$(JS_WASM_RELEASE_LDFLAGS),$(LIBMRUBY_GRAINET_FULL_RELEASE),$(BUILD_WASM_GRAINET_FULL_RELEASE))
 
 # ── command wasm (mruby-bin-mruby) ──────────────────────────────────────
 cmd: $(BUILD_WASM_CMD)
@@ -181,8 +259,10 @@ node_modules: package.json
 	npm install --no-audit --no-fund --silent
 	@touch node_modules
 
-test: js node_modules
-	MRUBY_WASM_PATH=$(BUILD_WASM_JS) node mrbgem/mruby-wasm-js/wasm_spec/runner.mjs
+# Tests cover the full Grainet stack (core + async + router + form), so
+# they need the grainet-full variant.
+test: js-grainet-full node_modules
+	MRUBY_WASM_PATH=$(BUILD_WASM_GRAINET_FULL) node mrbgem/mruby-wasm-js/wasm_spec/runner.mjs
 
 smoke-cmd: cmd
 	@node --experimental-wasi-unstable-preview1 --experimental-wasm-exnref --no-warnings \
@@ -239,7 +319,11 @@ serve:
 	# (live clock + greeter + click counter).
 
 clean:
-	rm -rf $(MRUBY_DIR)/build/wasi-js $(MRUBY_DIR)/build/wasi-cmd
+	rm -rf $(MRUBY_DIR)/build/wasi-js $(MRUBY_DIR)/build/wasi-js-release
+	rm -rf $(MRUBY_DIR)/build/wasi-js-grainet-min $(MRUBY_DIR)/build/wasi-js-grainet-min-release
+	rm -rf $(MRUBY_DIR)/build/wasi-js-grainet-small $(MRUBY_DIR)/build/wasi-js-grainet-small-release
+	rm -rf $(MRUBY_DIR)/build/wasi-js-grainet-full $(MRUBY_DIR)/build/wasi-js-grainet-full-release
+	rm -rf $(MRUBY_DIR)/build/wasi-cmd
 	rm -rf $(BUILD_DIR) $(CURDIR)/dist
 
 distclean: clean

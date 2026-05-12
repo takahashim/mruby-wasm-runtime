@@ -1,20 +1,13 @@
-# mruby cross-build for the JS-host variant — general purpose mruby
-# without the Grainet stack. Produces `mruby-js.wasm` (npm package
-# `@takahashim/mruby-wasm-js`).
+# mruby cross-build for the Grainet "full" variant — compiler + all
+# Grainet gems (core / async / router / form). Produces
+# `mruby-js-grainet-full.wasm` (npm `@takahashim/mruby-grainet-full`).
 #
-# For builds that include Grainet, see:
-#   build_config/wasi-js-grainet-min.rb    — no compiler, Grainet core
-#   build_config/wasi-js-grainet-small.rb  — compiler, Grainet core
-#   build_config/wasi-js-grainet-full.rb   — compiler, Grainet core + async + router + form
+# Sibling configs:
+#   build_config/wasi-js.rb                — general mruby, no Grainet
+#   build_config/wasi-js-grainet-min.rb    — no compiler, Grainet core only
+#   build_config/wasi-js-grainet-small.rb  — compiler, Grainet core only
 #
-# Build mode (debug vs release) is selected via MRUBY_WASM_RELEASE:
-#
-#   unset / "0"  → debug build (default for `make js` / `make test`).
-#                  Includes .debug_* sections (~3MB) for readable stack
-#                  traces and DWARF-style debugging in browser DevTools.
-#                  No optimisation flags; matches mruby core's defaults.
-#   "1"          → release build (used by `make js-release` / `dist-js`).
-#                  -Os + --strip-debug. Roughly 1/4 the byte size.
+# Build mode (debug vs release) is selected via MRUBY_WASM_RELEASE.
 
 wasi_sdk = ENV.fetch("WASI_SDK_PATH") { abort "Set WASI_SDK_PATH" }
 sysroot = "#{wasi_sdk}/share/wasi-sysroot"
@@ -23,7 +16,7 @@ ar = "#{wasi_sdk}/bin/llvm-ar"
 target = "wasm32-wasip1"
 
 release = ENV["MRUBY_WASM_RELEASE"] == "1"
-build_name = release ? "wasi-js-release" : "wasi-js"
+build_name = release ? "wasi-js-grainet-full-release" : "wasi-js-grainet-full"
 mrbgem_root = File.expand_path("../mrbgem", __dir__)
 
 MRuby::CrossBuild.new(build_name) do |conf|
@@ -49,8 +42,20 @@ MRuby::CrossBuild.new(build_name) do |conf|
   conf.cxx.flags.concat(common_flags + size_flags + sjlj_flags + stub_flags)
   conf.linker.flags.concat(common_flags)
 
+  # Allow undefined imports (we declare them via __attribute__((import_module)))
   conf.linker.flags << "-Wl,--allow-undefined"
+
+  # In release mode, drop `.debug_*` custom sections at link time. They
+  # make up ~75% of the unstripped artifact and are unused at runtime.
+  # The `name` section is preserved so wasm stack traces still show
+  # function names.
   conf.linker.flags << "-Wl,--strip-debug" if release
+
+  # Reactor module: export `_initialize` (runs ctors, then returns)
+  # instead of `_start`. The JS host keeps the instance alive and drives
+  # execution by calling exports. The mruby VM is brought up by a
+  # __attribute__((constructor)) inside the gem (callback.c), so no
+  # separate main.c is needed.
   conf.linker.flags << "-mexec-model=reactor"
 
   conf.linker.libraries << "setjmp"
@@ -70,9 +75,15 @@ MRuby::CrossBuild.new(build_name) do |conf|
   conf.gem core: "mruby-metaprog"
 
   conf.gem "#{mrbgem_root}/mruby-wasm-js"
+  conf.gem "#{mrbgem_root}/mruby-grainet"
+  conf.gem "#{mrbgem_root}/mruby-grainet-async"
+  conf.gem "#{mrbgem_root}/mruby-grainet-router"
+  conf.gem "#{mrbgem_root}/mruby-grainet-form"
   # Ruby surface for WASI primitives that mruby core doesn't ship.
   conf.gem "#{mrbgem_root}/mruby-wasi-dir"
   conf.gem "#{mrbgem_root}/mruby-wasi-env"
 
+  # No CLI entry point — the gem's constructor calls mrb_open from
+  # _initialize, so libmruby.a is all we need to link.
   conf.bins = []
 end

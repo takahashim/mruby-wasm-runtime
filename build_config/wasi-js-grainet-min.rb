@@ -21,6 +21,7 @@ target = "wasm32-wasip1"
 release = ENV["MRUBY_WASM_RELEASE"] == "1"
 build_name = "wasi-js-grainet-min"
 build_name += "-release" if release
+mrbgem_root = File.expand_path("../mrbgem", __dir__)
 
 MRuby::CrossBuild.new(build_name) do |conf|
   conf.toolchain :clang
@@ -32,7 +33,7 @@ MRuby::CrossBuild.new(build_name) do |conf|
 
   common_flags = ["--target=#{target}", "--sysroot=#{sysroot}"]
   sjlj_flags = ["-mllvm", "-wasm-enable-sjlj"]
-  shim_dir = File.expand_path("../mrbgem/hal-wasi-io/include", __dir__)
+  shim_dir = "#{mrbgem_root}/hal-wasi-io/include"
   stub_flags = ["-isystem", shim_dir, "-include", "#{shim_dir}/wasi-shims.h"]
   size_flags = release ? ["-Os"] : []
 
@@ -67,8 +68,8 @@ MRuby::CrossBuild.new(build_name) do |conf|
   conf.gem core: "mruby-error"       # NoMethodError refinements
   conf.gem core: "mruby-sprintf"     # Kernel#sprintf, "%s" % ...
 
-  conf.gem File.expand_path("../mrbgem/mruby-wasm-js", __dir__)
-  conf.gem File.expand_path("../mrbgem/mruby-grainet", __dir__)
+  conf.gem "#{mrbgem_root}/mruby-wasm-js"
+  conf.gem "#{mrbgem_root}/mruby-grainet"
 
   conf.bins = []
 end
