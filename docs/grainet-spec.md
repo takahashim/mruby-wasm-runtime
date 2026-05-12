@@ -14,7 +14,7 @@ mruby.wasm 上で動く軽量な「既存 HTML に Ruby の状態・イベント
 - Ruby はイベント・状態・DOM 更新を担当する
 - HTML に Ruby のメソッド名を書かない
 - 状態は signal で持つ
-- DOM 更新は bind/model/bind_list で細粒度に接続する
+- DOM 更新は bind/bind_input/bind_list で細粒度に接続する
 - Widget 破棄時にイベントリスナ・effect・cleanup を自動解放する
 
 ## 非目標
@@ -148,7 +148,7 @@ Grainet.register "counter", Counter
 
 ### `setup`
 
-サブクラスで override する主フック。signal、event listener、bind、model、cleanup の登録はここで行う。
+サブクラスで override する主フック。signal、event listener、bind、bind_input、cleanup の登録はここで行う。
 
 ```ruby
 def setup
@@ -378,7 +378,7 @@ Widget 破棄時に解放されるリソース:
 - イベントリスナ (`removeEventListener` + `JS.release_callback`)
 - effect (`dispose`)
 - computed (`dispose`)
-- bind / model 由来の effect (effect として登録されているので同上)
+- bind / bind_input 由来の effect (effect として登録されているので同上)
 - cleanup callback (登録の逆順で実行)
 
 各ステップは `safe_release` で囲まれているため、1ステップで例外が出ても後続の解放は走る。
@@ -753,14 +753,14 @@ bind ブロック内で例外が発生すると effect の rescue で STDERR に
 
 ---
 
-## Model (双方向 DOM ↔ Signal)
+## bind_input (双方向 DOM ↔ Signal)
 
 ```ruby
 @email = signal("")
-model refs.email, @email                          # text input
+bind_input refs.email, @email                          # text input
 
 @accepted = signal(false)
-model refs.cb, @accepted, property: :checked      # checkbox
+bind_input refs.cb, @accepted, property: :checked      # checkbox
 ```
 
 | property | DOM event | normalize |
@@ -772,7 +772,7 @@ model refs.cb, @accepted, property: :checked      # checkbox
 - signal → DOM 方向: 値が同じなら DOM 書き込みをスキップ (input フォーカス・カーソル位置を保持)
 - DOM → signal 方向: input/change イベントで `signal.value = el.<prop>`
 
-`bind value:` を暗黙に双方向化はしない (一方向は bind、双方向は model と明確に分ける)。
+`bind value:` を暗黙に双方向化はしない (一方向は bind、双方向は bind_input と明確に分ける)。
 
 ---
 
@@ -838,9 +838,9 @@ end
 - block は `(item, t)` を受け取り、`t` を mutate するだけ。**戻り値は無視**される (戻り値忘れバグが構造的に起きない)
 - DOM は同一ノードのまま、テキスト/属性のみ更新 → ネストした子 widget の identity も保たれる
 
-#### per-row `model` で双方向 binding
+#### per-row `bind_input` で双方向 binding
 
-item を **「id + 子 Signal の Hash」** として持てば、block 内で `model` を貼って各 input を個別 Signal に直結できる:
+item を **「id + 子 Signal の Hash」** として持てば、block 内で `bind_input` を貼って各 input を個別 Signal に直結できる:
 
 ```ruby
 @items = signal([
@@ -848,16 +848,16 @@ item を **「id + 子 Signal の Hash」** として持てば、block 内で `m
 ])
 
 bind_list refs.rows, @items, key: "id", template: "line-row" do |it, t|
-  model t.refs.qty,        it["qty"]
-  model t.refs.unit_price, it["unit_price"]
-  bind  t.refs.line_total, text: computed {
+  bind_input t.refs.qty,        it["qty"]
+  bind_input t.refs.unit_price, it["unit_price"]
+  bind       t.refs.line_total, text: computed {
     it["qty"].value.to_i * it["unit_price"].value.to_i
   }
 end
 ```
 
 - 行の追加削除は `@items.update` で配列を入れ替える (key が一致する row は再利用、新規 key は新規 row)
-- 各 cell が独立した Signal なので、編集が他行を再 render しない (model のスコープが行内に閉じる)
+- 各 cell が独立した Signal なので、編集が他行を再 render しない (bind_input のスコープが行内に閉じる)
 - 集約 computed (`computed { @items.value.sum { |it| it["qty"].value.to_i * ... } }`) は配列内の全 cell signal を traverse 中に依存登録される
 - 行削除時、block 内で作った effect / computed / bind は行ごとの `Scope` で管理されており、row が prune されると自動的に dispose される。per-row state の leak はない
 
@@ -1252,7 +1252,7 @@ Widget 破棄時に登録の逆順 (LIFO) で実行。
 Widget unmount 時に解放されるもの:
 
 - `cleanup` ブロック (LIFO)
-- `effect` (dispose、bind / model / bind_list 由来含む)
+- `effect` (dispose、bind / bind_input / bind_list 由来含む)
 - `computed` (dispose)
 - イベントリスナ (`removeEventListener` + `JS.release_callback`)
 - 子 Widget (再帰)
@@ -1369,7 +1369,7 @@ end
 
 | 発生源 | バブリング |
 |---|---|
-| `effect` 本体での raise (Widget#effect / bind / model / bind_list 経由) | ✅ ソース widget からバブル |
+| `effect` 本体での raise (Widget#effect / bind / bind_input / bind_list 経由) | ✅ ソース widget からバブル |
 | `Widget#prepare_setup` での raise | ✅ 自 widget からバブル |
 | `Widget#setup` での raise | ✅ 自 widget からバブル |
 | `cleanup` ブロックでの raise (unmount 時) | ✅ 自 widget からバブル |
@@ -1464,7 +1464,7 @@ class SignupForm < Grainet::Widget
     @dirty = signal(false)
     @valid = computed { @email.value.include?("@") }
 
-    model refs.email, @email
+    bind_input refs.email, @email
     refs.email.on(:blur) { @dirty.value = true }
 
     bind refs.field, class: {
@@ -1576,7 +1576,7 @@ end
 | `bind_list ref, signal, key: "id" do |it| ... end` | リスト差分 (key は String shortcut or Proc) |
 | `bind_list ref, signal, key: "id", template: "row" do |it, t| ... end` | managed template mode (in-place 更新の標準形) |
 | `bind_list ref, signal, key: "id" do |it, prev| ... end` | block-controlled (条件付き再生成等) |
-| `model ref, signal, property: :value` | 双方向 DOM ↔ Signal |
+| `bind_input ref, signal, property: :value` | 双方向 DOM ↔ Signal |
 | `template(name)` / `template(name) { |refs| ... }` | `<template data-template>` をクローン (戻り値は `Grainet::Template`) |
 | `expose(key, value)` | prepare_setup 内で公開 |
 | `lookup(key, default = NOT_FOUND, &block)` | 親から受け取る |

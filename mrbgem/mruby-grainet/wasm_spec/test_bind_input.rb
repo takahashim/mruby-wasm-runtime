@@ -1,9 +1,9 @@
-Spec.describe "model (two-way binding)" do
+Spec.describe "bind_input (two-way binding)" do
   Spec.assert "text input syncs both directions" do
     doc = JS.global[:document]
     body = doc[:body]
     body[:innerHTML] = <<~HTML
-      <div data-widget="model-text">
+      <div data-widget="bi-text">
         <input data-ref="email" type="email">
       </div>
     HTML
@@ -12,13 +12,13 @@ Spec.describe "model (two-way binding)" do
       attr_reader :email
       define_method(:setup) do
         @email = signal("init@example.com")
-        model refs.email, @email
+        bind_input refs.email, @email
       end
     end
-    Grainet.register "model-text", klass
+    Grainet.register "bi-text", klass
     Grainet.start
 
-    el = doc.call(:querySelector, "[data-widget='model-text']")
+    el = doc.call(:querySelector, "[data-widget='bi-text']")
     inst = Grainet.find_for_element(el)
     input = doc.call(:querySelector, "input[data-ref='email']")
 
@@ -38,11 +38,11 @@ Spec.describe "model (two-way binding)" do
     body[:innerHTML] = ""
   end
 
-  Spec.assert "checkbox model uses checked property" do
+  Spec.assert "checkbox bind_input uses checked property" do
     doc = JS.global[:document]
     body = doc[:body]
     body[:innerHTML] = <<~HTML
-      <div data-widget="model-cb">
+      <div data-widget="bi-cb">
         <input data-ref="cb" type="checkbox">
       </div>
     HTML
@@ -51,13 +51,13 @@ Spec.describe "model (two-way binding)" do
       attr_reader :flag
       define_method(:setup) do
         @flag = signal(false)
-        model refs.cb, @flag, property: :checked
+        bind_input refs.cb, @flag, property: :checked
       end
     end
-    Grainet.register "model-cb", klass
+    Grainet.register "bi-cb", klass
     Grainet.start
 
-    el = doc.call(:querySelector, "[data-widget='model-cb']")
+    el = doc.call(:querySelector, "[data-widget='bi-cb']")
     inst = Grainet.find_for_element(el)
     cb = doc.call(:querySelector, "[data-ref='cb']")
 

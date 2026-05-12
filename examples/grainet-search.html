@@ -94,8 +94,8 @@ class CountryPicker < Grainet::Widget
     end
 
     # Two-way bind for both inputs.
-    model refs.query,  @query
-    model refs.region, @region
+    bind_input refs.query,  @query
+    bind_input refs.region, @region
 
     # Filter computed from @items + @query + @region. computed skips
     # downstream notifies when the result is the same Array (== check),

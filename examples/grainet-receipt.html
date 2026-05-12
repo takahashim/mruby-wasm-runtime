@@ -122,10 +122,10 @@ class Receipt < Grainet::Widget
 
     bind_list refs.rows, @items, key: "id", template: "line-row" do |it, t|
       # この block が demo の中核 — bind_list の row template に対して
-      # model を貼ると、各 input が個別 signal に直結する。
-      model t.refs.description, it["description"]
-      model t.refs.qty,         it["qty"]
-      model t.refs.unit_price,  it["unit_price"]
+      # bind_input を貼ると、各 input が個別 signal に直結する。
+      bind_input t.refs.description, it["description"]
+      bind_input t.refs.qty,         it["qty"]
+      bind_input t.refs.unit_price,  it["unit_price"]
 
       bind t.refs.line_total, text: computed {
         format_yen(it["qty"].value.to_i * it["unit_price"].value.to_i)

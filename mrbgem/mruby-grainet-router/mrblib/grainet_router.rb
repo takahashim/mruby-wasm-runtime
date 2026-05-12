@@ -661,7 +661,7 @@ module Grainet
 
     # Mixed into `Grainet::Widget` so users can write `bind_link refs.x,
     # href: ..., match: ...` directly inside `setup`, alongside the other
-    # binding helpers (`bind`, `bind_list`, `model`). Same pattern as the
+    # binding helpers (`bind`, `bind_list`, `bind_input`). Same pattern as the
     # Form Builder's `Grainet::FormBuilder` mixin — keeps the Router gem
     # opt-in: Widget gains `bind_link` only when this gem is required.
     module WidgetMixin

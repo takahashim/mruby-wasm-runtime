@@ -1,6 +1,6 @@
 # grainet_bindable.rb — Bindable mixin + nested ListReconciler engine.
 #
-# Bindable is the DOM-binding DSL (`bind` / `model` / `bind_list`) that
+# Bindable is the DOM-binding DSL (`bind` / `bind_input` / `bind_list`) that
 # Widget mixes in. `Bindable::ListReconciler` is the key-based diff
 # engine that powers `bind_list`; nested under Bindable because it has
 # no purpose outside that context.
@@ -10,7 +10,7 @@
 # alphabetically without breaking parse-time class hierarchy.
 
 module Grainet
-  # DOM-binding DSL (`bind` / `model` / `bind_list`) as a reusable
+  # DOM-binding DSL (`bind` / `bind_input` / `bind_list`) as a reusable
   # mixin. Pulled out of Widget so future host classes can opt in
   # without inheriting the full Widget lifecycle. The host class is
   # required to provide:
@@ -176,7 +176,7 @@ module Grainet
       end
     end
     # property -> { event: ..., normalize: ->(value) { ... } }
-    MODEL_PROPS = {
+    BIND_INPUT_PROPS = {
       value:   { event: :input,  normalize: ->(v) { v.to_s } },
       checked: { event: :change, normalize: ->(v) { !!v } },
     }.freeze
@@ -218,12 +218,12 @@ module Grainet
       nil
     end
 
-    def model(ref, signal, property: :value)
+    def bind_input(ref, signal, property: :value)
       el = coerce_ref(ref)
       prop = property.to_sym
-      config = MODEL_PROPS[prop] ||
-        raise(Grainet::Error, "Unsupported model property: #{prop}")
-      label = "model(#{el.name || "?"}, :#{prop})"
+      config = BIND_INPUT_PROPS[prop] ||
+        raise(Grainet::Error, "Unsupported bind_input property: #{prop}")
+      label = "bind_input(#{el.name || "?"}, :#{prop})"
 
       # signal -> DOM (skip if equal, to keep input cursor / focus)
       effect(label: label) do

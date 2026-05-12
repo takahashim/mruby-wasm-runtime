@@ -4,7 +4,7 @@
 # (prepare_setup / setup / cleanup), reactive helpers (signal / computed /
 # effect / persistent_signal), error boundary, and expose / lookup.
 #
-# Bindable mixin (in grainet_bindable.rb) supplies bind / model /
+# Bindable mixin (in grainet_bindable.rb) supplies bind / bind_input /
 # bind_list. Registry (in grainet_registry.rb) drives mount / unmount.
 
 module Grainet

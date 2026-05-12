@@ -3,7 +3,7 @@
 Signal-based **Form Builder** for [Grainet](../mruby-grainet/). Headless
 (no HTML generation) — provides per-field reactive state (`value` /
 `dirty` / `touched` / `error` / `valid?`) and submit orchestration on
-top of Grainet's existing `model` two-way binding.
+top of Grainet's existing `bind_input` two-way binding.
 
 Optional gem. Add it to `build_config/wasi-js.rb` after
 `mruby-grainet`.
@@ -79,7 +79,7 @@ widget ivars, and widget methods remain accessible.
 
 ### `Grainet::Form#field(name, ref:, initial:, type: :text, &validator)`
 
-Declare a field. This sets up 2-way binding via `model(ref, signal,
+Declare a field. This sets up 2-way binding via `bind_input(ref, signal,
 property:)`, a blur listener for `touched`, and a derived error computed
 from the optional validator block.
 

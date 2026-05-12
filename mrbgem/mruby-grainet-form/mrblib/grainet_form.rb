@@ -12,7 +12,7 @@
 # See `mrbgem/mruby-grainet-form/README.md` for usage.
 module Grainet
   class Form
-    # Maps field type → which DOM property `model` should bind.
+    # Maps field type → which DOM property `bind_input` should bind.
     TYPE_TO_PROPERTY = {
       text:     :value,
       checkbox: :checked,
@@ -32,7 +32,7 @@ module Grainet
         property = TYPE_TO_PROPERTY[type] || :value
 
         @value_signal = widget.signal(initial)
-        widget.model(ref, @value_signal, property: property)
+        widget.bind_input(ref, @value_signal, property: property)
 
         # dirty: latches true once value diverges from initial.
         @dirty_signal = widget.signal(false)
