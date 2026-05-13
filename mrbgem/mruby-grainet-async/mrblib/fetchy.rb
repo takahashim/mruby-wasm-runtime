@@ -105,7 +105,11 @@ class Fetchy
       json(opts.delete(:json)) if opts.key?(:json)
       body(opts.delete(:body)) if opts.key?(:body)
       timeout(opts.delete(:timeout)) if opts.key?(:timeout)
-      signal(opts.delete(:signal)) if opts.key?(:signal)
+      if opts.key?(:signal)
+        signal(opts.delete(:signal))
+      elsif (run = Grainet::Resource.current_run)
+        signal(run.abort_signal)
+      end
       base(opts.delete(:base)) if opts.key?(:base)
       accept(opts.delete(:accept)) if opts.key?(:accept)
       content_type(opts.delete(:content_type)) if opts.key?(:content_type)

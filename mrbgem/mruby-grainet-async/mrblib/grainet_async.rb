@@ -142,6 +142,34 @@ module Grainet
   end
 
   class Resource
+    # Per-fiber currently-executing `ResourceRun`, set by `start_run`
+    # around the user block. Read by `Fetchy::Builder` to default
+    # `signal:` when not explicitly provided, so a `Fetchy.json(url)`
+    # call inside a `resource { }` block auto-aborts on resource
+    # cancellation. Fiber-id keyed (like `Reactive::TRACKER`) so
+    # concurrent fibers don't trample each other.
+    CURRENT_RUNS = {}
+
+    def self.current_run
+      CURRENT_RUNS[fiber_key]
+    end
+
+    def self.fiber_key
+      fiber = ::Fiber.current
+      fiber ? fiber.__id__ : :main
+    end
+
+    # Set `run` as the current run for the duration of `yield`, then
+    # restore the previous value (or remove the entry if none).
+    def self.with_current_run(run)
+      key = fiber_key
+      prev = CURRENT_RUNS[key]
+      CURRENT_RUNS[key] = run
+      yield
+    ensure
+      prev.nil? ? CURRENT_RUNS.delete(key) : CURRENT_RUNS[key] = prev
+    end
+
     def initialize(initial:, defer:, keep_value:, &block)
       raise ArgumentError, "block required" unless block
       @block = block
@@ -247,11 +275,13 @@ module Grainet
       end
 
       JS.__run_in_fiber__ do
-        begin
-          result = Reactive.track(observer) { @block.call(run) }
-          settle_success(observer, run, result)
-        rescue => e
-          settle_error(observer, run, e)
+        Resource.with_current_run(run) do
+          begin
+            result = Reactive.track(observer) { @block.call(run) }
+            settle_success(observer, run, result)
+          rescue => e
+            settle_error(observer, run, e)
+          end
         end
       end
     end
