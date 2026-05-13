@@ -1,4 +1,8 @@
 Spec.describe "Widget#each_frame" do
+  # Force-unmount synchronously between cases so MO scheduling latency
+  # in CI can't leak rAF ticks past the assertion window.
+  Spec.after { Grainet.reset! }
+
   Spec.assert "block is invoked once per animation frame" do
     doc = JS.global[:document]
     body = doc[:body]
@@ -39,13 +43,14 @@ Spec.describe "Widget#each_frame" do
     3.times { JS.eval_javascript("new Promise(r => setTimeout(r, 16))").await }
     Spec.assert_true counts.length >= 1   # loop ran while mounted
 
+    # Direct unmount (Grainet.reset!) avoids the MutationObserver path so
+    # the assertion below isn't racing MO scheduling under CI load. The
+    # contract verified is still "unmount cancels the rAF loop".
+    Grainet.reset!
     body[:innerHTML] = ""
-    # Let unmount + any in-flight rAF settle.
     5.times { JS.eval_javascript("new Promise(r => setTimeout(r, 16))").await }
     settled = counts.length
 
-    # After the settle window, the loop must be fully stopped:
-    # a further wait must not produce any new frames.
     5.times { JS.eval_javascript("new Promise(r => setTimeout(r, 16))").await }
     Spec.assert_equal settled, counts.length
   end

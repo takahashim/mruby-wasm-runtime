@@ -1,4 +1,6 @@
 Spec.describe "Nested widgets" do
+  Spec.after { Grainet.reset! }
+
   Spec.assert "refs do not cross widget boundaries" do
     doc = JS.global[:document]
     body = doc[:body]
@@ -117,7 +119,9 @@ Spec.describe "Nested widgets" do
 
     el = doc.call(:querySelector, "[data-widget='td-parent']")
     el.call(:remove)
-    JS.eval_javascript("new Promise(r => setTimeout(r, 0))").await
+    # Drain several macrotask boundaries — CI runners need more than one
+    # turn before the MO callback fires the cascading unmount.
+    5.times { JS.eval_javascript("new Promise(r => setTimeout(r, 0))").await }
 
     Spec.assert_equal [:parent_cleanup, :child_cleanup], log
 

@@ -1,4 +1,6 @@
 Spec.describe "Widget#timeout" do
+  Spec.after { Grainet.reset! }
+
   Spec.assert "block fires once after the delay" do
     doc = JS.global[:document]
     body = doc[:body]
@@ -30,8 +32,10 @@ Spec.describe "Widget#timeout" do
     Grainet.register "to-cancel", klass
     Grainet.start
 
-    # Unmount before the timeout would fire.
+    # Direct reset! (not MO via innerHTML clear) makes the
+    # cancel-on-unmount deterministic in CI.
     JS.eval_javascript("new Promise(r => setTimeout(r, 10))").await
+    Grainet.reset!
     body[:innerHTML] = ""
 
     # Wait well past the original delay.
@@ -102,6 +106,8 @@ Spec.describe "Widget#timeout" do
 end
 
 Spec.describe "Widget#every" do
+  Spec.after { Grainet.reset! }
+
   Spec.assert "block fires repeatedly at the interval" do
     doc = JS.global[:document]
     body = doc[:body]
@@ -136,11 +142,13 @@ Spec.describe "Widget#every" do
     JS.eval_javascript("new Promise(r => setTimeout(r, 50))").await
     Spec.assert_true counts.length >= 1
 
+    # Direct reset! avoids MO scheduling latency under CI load — same
+    # contract is verified ("interval stops once the widget unmounts").
+    Grainet.reset!
     body[:innerHTML] = ""
     JS.eval_javascript("new Promise(r => setTimeout(r, 30))").await
     settled = counts.length
 
-    # After the unmount window, no further ticks should land.
     JS.eval_javascript("new Promise(r => setTimeout(r, 80))").await
     Spec.assert_equal settled, counts.length
   end

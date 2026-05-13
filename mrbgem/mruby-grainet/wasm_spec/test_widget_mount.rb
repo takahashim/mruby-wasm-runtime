@@ -1,4 +1,8 @@
 Spec.describe "Widget mount + refs + events" do
+  # CI: force-unmount between cases so a slow MutationObserver from a
+  # previous case can't leak ticks/cleanups into the next assertion.
+  Spec.after { Grainet.reset! }
+
   Spec.assert "Counter mounts and click updates count" do
     doc = JS.global[:document]
     body = doc[:body]
@@ -81,8 +85,9 @@ Spec.describe "Widget mount + refs + events" do
 
     el = doc.call(:querySelector, "[data-widget='cleanup-test']")
     el.call(:remove)
-    # Allow MutationObserver microtask to flush.
-    JS.eval_javascript("new Promise(r => setTimeout(r, 0))").await
+    # Allow MutationObserver microtask to flush. CI runners under load
+    # need several drains before the MO callback actually fires.
+    5.times { JS.eval_javascript("new Promise(r => setTimeout(r, 0))").await }
 
     Spec.assert_equal [:ran], cleaned
 
