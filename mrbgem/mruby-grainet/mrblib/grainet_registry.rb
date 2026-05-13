@@ -105,6 +105,22 @@ module Grainet
 
     private
 
+    # Resolve a `data-widget` name to a class. Explicit `Grainet.register`
+    # always wins; otherwise delegate name → constant lookup to
+    # `Grainet::WidgetName` and validate the result is a Widget subclass.
+    def resolve_widget_class(name)
+      explicit = @widget_classes[name]
+      return explicit if explicit
+      klass = WidgetName.find_class(name)
+      return nil unless klass
+      unless klass.is_a?(Class) && klass < Grainet::Widget
+        raise Error, "data-widget=#{name.inspect} resolved to #{klass}, " \
+                     "which is not a Grainet::Widget subclass. " \
+                     "Rename the class or call Grainet.register with a different name."
+      end
+      klass
+    end
+
     def collect_widgets(root_js, out)
       stack = [root_js]
       until stack.empty?
@@ -130,9 +146,9 @@ module Grainet
       return nil if !existing_attr.js_null?
       name = el_js.call(:getAttribute, "data-widget")
       return nil if name.js_null?
-      klass = @widget_classes[name.to_s]
+      klass = resolve_widget_class(name.to_s)
       unless klass
-        Grainet.logger.warn("No widget registered for name: #{name.to_s.inspect}")
+        Grainet.logger.warn("No widget registered or resolvable for name: #{name.to_s.inspect}")
         return nil
       end
       @next_widget_id += 1
