@@ -239,17 +239,26 @@ module JS
   # `JS.release_callback(cb)` only frees the Proc half, which is the
   # historical footgun this class exists to close.
   class Subscription
-    def initialize(target, event, callback)
+    def initialize(target, event, callback, options = nil)
       @target = target
       @event = event
       @callback = callback
+      @options = options
       @off = false
     end
 
     def off
       return if @off
       @off = true
-      @target.call(:removeEventListener, @event, @callback)
+      # Forward options so capture-phase listeners
+      # (`addEventListener(..., {capture: true})`) are matched correctly.
+      # Per spec, `removeEventListener` only reads `capture` — `once` /
+      # `passive` / `signal` are ignored.
+      if @options
+        @target.call(:removeEventListener, @event, @callback, @options)
+      else
+        @target.call(:removeEventListener, @event, @callback)
+      end
       JS.release_callback(@callback)
     end
 
@@ -309,6 +318,7 @@ module JS
     #   listener.off   # removeEventListener + JS.release_callback
     # Pass options via the second arg, e.g. JS.object(once: true).
     def on(event, options = nil, &block)
+      raise ArgumentError, "block required" unless block
       cb = JS.callback(&block)
       evt = event.to_s
       if options
@@ -316,7 +326,7 @@ module JS
       else
         call(:addEventListener, evt, cb)
       end
-      JS::Subscription.new(self, evt, cb)
+      JS::Subscription.new(self, evt, cb, options)
     end
 
     # method_missing: forward unknown method calls to JS.

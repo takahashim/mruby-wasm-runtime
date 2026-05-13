@@ -53,6 +53,22 @@ Spec.describe "block-as-callback / on / then" do
     Spec.assert_true sub.off?
   end
 
+  Spec.assert "Subscription#off matches capture-phase listeners" do
+    target = JS.eval_javascript("new EventTarget()")
+    fired = []
+    sub = target.on(:tick, JS.object(capture: true)) { |_ev| fired << :hit }
+    target.dispatchEvent(JS.eval_javascript("new Event('tick')"))
+    Spec.assert_equal 1, fired.length
+    sub.off
+    target.dispatchEvent(JS.eval_javascript("new Event('tick')"))
+    Spec.assert_equal 1, fired.length  # capture listener was removed
+  end
+
+  Spec.assert "on without a block raises ArgumentError" do
+    target = JS.eval_javascript("new EventTarget()")
+    Spec.assert_raises(ArgumentError) { target.on(:tick) }
+  end
+
   Spec.assert "Promise.then via method_missing with block" do
     log = []
     JS.global[:Promise].resolve(7).then { |v| log << v.to_i }
