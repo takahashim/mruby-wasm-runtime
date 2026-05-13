@@ -6,6 +6,7 @@
 module Grainet
   module AsyncExtensions
     def resource(initial: nil, defer: false, keep_value: true, &block)
+      raise ArgumentError, "block required" unless block
       r = Resource.new(initial: initial, defer: defer, keep_value: keep_value, &block)
       register_disposable("resource", r)
       r
@@ -224,6 +225,7 @@ module Grainet
     end
 
     def mutate(&block)
+      raise ArgumentError, "block required" unless block
       ret = @value_signal.update(&block)
       @has_value = true
       ret

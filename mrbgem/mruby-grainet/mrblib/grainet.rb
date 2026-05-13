@@ -207,6 +207,7 @@ module Grainet
       end
 
       def track(observer, &block)
+        raise ArgumentError, "block required" unless block
         stack = tracker_stack
         stack.push(observer)
         begin
@@ -316,6 +317,7 @@ module Grainet
   # module-level facade.
   class << self
     def batch(&block)
+      raise ArgumentError, "block required" unless block
       Reactive.batch(&block)
     end
   end

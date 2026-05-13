@@ -271,12 +271,14 @@ module Grainet
     end
 
     def computed(equals: nil, on: nil, &block)
+      raise ArgumentError, "block required" unless block
       m = Computed.new(equals: equals, on: on, &block)
       current_owner.register_computed(m)
       m
     end
 
     def effect(label: nil, &block)
+      raise ArgumentError, "block required" unless block
       e = Effect.new(label: label, source: self, &block)
       current_owner.register_effect(e)
       e
