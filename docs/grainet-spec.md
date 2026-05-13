@@ -523,6 +523,82 @@ end
 
 `each_frame` との違い: `each_frame` は **rAF 駆動 (画面 refresh に同期、~16ms 間隔)**、`every` は **wall-clock 駆動 (指定 ms)**。`each_frame` はアニメーション、`every` は polling やバックグラウンド tick に使う。
 
+### Lifecycle Abort (`Grainet::Aborted`)
+
+`Widget#sleep` などの await を含む処理は、await 中に widget が unmount すると、resume 時に死んだ widget の `refs` / DOM を触って事故る危険がある。これを防ぐため:
+
+- `Widget#sleep` は **`Kernel#sleep` を override** していて、await 前後で unmount を検出すると `Grainet::Aborted` を raise する
+- `Grainet::Aborted < StandardError` — framework の既存 `rescue => e` 境界 (`RefElement#on` / `mount` / `each_frame` / `timeout` / `every` / `Effect#run` / `cleanup`) が自動で拾う
+- `Grainet::Logger#error` は冒頭で `Aborted` を **silent skip** するので、`on_error` ハンドラにも届かず stderr にも出ない
+
+ユーザコードは通常ガード不要:
+
+```ruby
+refs.btn.on(:click) do
+  show_loading
+  sleep(0.5)
+  hide_loading                  # ← unmount 済みならここまで来ない (silent abort)
+end
+```
+
+#### `Widget#alive?` で post-await guard
+
+非 sleep 系の await (cooperative pattern):
+
+```ruby
+data = Fetchy.json(url).await
+return unless alive?            # widget gone, skip the rest
+refs.status.text = data["msg"]
+```
+
+#### `Widget#abort_signal` で early-cancellation
+
+JS `AbortController.signal` を lazy 生成。unmount で abort される。`signal:` を受ける API (Fetchy, Resource, 自前 Promise) と組み合わせると、unmount 即座に setTimeout / fetch がキャンセルされる:
+
+```ruby
+data = Fetchy.json(url, signal: abort_signal).await
+# unmount すると上記 await が即座に rejection → Aborted-like 例外
+```
+
+注: Fetchy 側は AbortError を raise する (Aborted そのものではない)。Aborted-like silencing が欲しい場合は自分で rescue + 再 raise する。
+
+#### Caveat: ユーザの bare `rescue => e` は Aborted を拾う
+
+```ruby
+sleep(0.5)
+do_more
+rescue => e
+  show_error(e)   # ← unmount-during-sleep の場合、Aborted がここに来る
+```
+
+`Aborted < StandardError` のため、bare `rescue => e` で拾われる。framework まで silence させるには明示的に再 raise する:
+
+```ruby
+sleep(0.5)
+do_more
+rescue Grainet::Aborted
+  raise              # framework に silence させる
+rescue => e
+  show_error(e)
+```
+
+通常の widget code は bare `rescue => e` を書かないので影響は限定的。書く場合のみ意識する。
+
+#### Framework 境界の自動 silence 一覧
+
+下記の `rescue => e` ブロックが Aborted を Logger に渡し、Logger が静かに捨てる:
+
+| 場所 | 対象 |
+|---|---|
+| `RefElement#on` | event listener callback 内 |
+| `Widget#mount` | `setup` 本体 |
+| `Widget#each_frame` | rAF tick block |
+| `Widget#timeout` / `Widget#every` | timer block |
+| `Effect#run` | effect body (effect 内で `sleep` 呼ぶ稀ケース) |
+| `DisposableSet#safe_release` | cleanup callback |
+
+新しい framework 境界を追加するときも、既存の `rescue => e` を残しておけば Aborted は自動で silent になる。
+
 #### Canvas との組み合わせ
 
 Pixel-level な描画 (擬似 3D、パーティクル、heavy plotting) は signal-driven な `bind` / `bind_list` 経由ではなく、**`each_frame` の中から直接 Canvas 2D context に imperative に描く** のが現実的:
@@ -1607,6 +1683,9 @@ end
 | `each_frame { |ts| ... }` | rAF でフレーム毎にブロックを実行 (unmount で自動 cancel、error_boundary 連携) |
 | `timeout(ms) { ... }` | `setTimeout` 一回限り (unmount で自動 cancel、error_boundary 連携、戻り値 `Grainet::Timer`) |
 | `every(ms) { ... }` | `setInterval` 繰り返し (unmount で自動 cancel、error_boundary 連携、戻り値 `Grainet::Timer`) |
+| `sleep(seconds)` | Non-blocking sleep (override of `Kernel#sleep`)。unmount 中なら `Grainet::Aborted` を raise |
+| `alive?` | mount 済み (`!unmounted`) を返す。await 後の guard に |
+| `abort_signal` | JS `AbortSignal` (lazy)。unmount で abort される。`Fetchy(...,  signal: abort_signal)` 等に渡す |
 | `cleanup { ... }` | unmount 時に走る callback を登録 |
 | `on_error { |label, error| ... }` | error boundary handler を登録 (truthy 戻りで bubbling 停止) |
 | `error_boundary { |label, error| ... }` (class macro) | クラスレベルで error boundary を宣言 (prepare_setup/子 setup 例外も拾える) |

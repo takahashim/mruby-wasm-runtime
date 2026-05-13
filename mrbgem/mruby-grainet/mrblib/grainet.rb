@@ -19,6 +19,17 @@
 module Grainet
   class Error < StandardError; end
 
+  # Raised by `Widget#sleep` (and other lifecycle-aware awaits) when
+  # the owning widget has unmounted during the await — keeps the
+  # resuming fiber from operating on a dead widget. `StandardError`
+  # parent (a la `Timeout::Error`) so the framework's existing
+  # `rescue => e` boundaries catch it; `Logger#error` silently drops
+  # Aborted at the top, bypassing `on_error` and stderr.
+  #
+  # Caveat: user-side bare `rescue => e` also catches Aborted —
+  # re-raise it explicitly inside such a rescue to keep silence.
+  class Aborted < StandardError; end
+
   # Validated name for HTML data-* attribute values that Grainet uses
   # as keys (data-widget / data-template / data-ref). The pattern
   # `[A-Za-z][A-Za-z0-9_-]*` matches identifier-like tokens that
@@ -112,6 +123,8 @@ module Grainet
     end
 
     def error(label, error, source: nil)
+      # Lifecycle aborts are control-flow signals, not errors.
+      return if error.is_a?(Grainet::Aborted)
       current = source
       while current
         return if current.handle_error(label, error)

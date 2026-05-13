@@ -193,6 +193,7 @@ module Grainet
       @mounted = false
       @unmounted = false
       @error_handler = nil
+      @abort_controller = nil
     end
 
     # Override to publish values to descendants. Runs in pre-order
@@ -356,6 +357,33 @@ module Grainet
       current_owner.register_cleanup(block)
     end
 
+    # ---- Lifecycle abort -------------------------------------------
+
+    # True between mount and unmount. Useful as a post-await guard
+    # when not using `Grainet::Aborted` flow.
+    def alive?
+      !@unmounted
+    end
+
+    # Lazy JS `AbortController.signal` that fires on widget unmount.
+    # Pass to `Fetchy` / `Resource` / any `signal:`-aware API for
+    # early-cancellation.
+    def abort_signal
+      @abort_controller ||= JS.global[:AbortController].new
+      @abort_controller[:signal]
+    end
+
+    # Override of `Kernel#sleep` with unmount guards on both sides of
+    # the yield. Raises `Grainet::Aborted` (silenced by framework) if
+    # the widget unmounts before or during the wait, so user code can
+    # write `sleep(0.5); do_more` without explicit guards.
+    def sleep(seconds)
+      raise Aborted if @unmounted
+      super
+      raise Aborted if @unmounted
+      seconds
+    end
+
     # See docs/grainet-spec.md "Error Boundary".
     def on_error(&block)
       raise ArgumentError, "block required" unless block
@@ -440,6 +468,7 @@ module Grainet
     def unmount
       return if @unmounted
       @unmounted = true
+      @abort_controller&.call(:abort)
       @resources.dispose
       @children.each { |c| @resources.safe_release("child unmount") { c.unmount } }
     end
