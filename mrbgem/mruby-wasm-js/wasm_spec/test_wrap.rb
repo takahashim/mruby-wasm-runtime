@@ -45,7 +45,7 @@ Spec.describe "JS.wrap / try_convert / object / array / #to_js" do
   end
 
   Spec.assert "wrap JS::Object passes through" do
-    v = JS.eval("42")
+    v = JS.eval_javascript("42")
     Spec.assert_true v == JS.wrap(v)
   end
 
@@ -89,18 +89,18 @@ Spec.describe "JS.wrap / try_convert / object / array / #to_js" do
   end
 
   Spec.assert "JS::Object#to_js is identity" do
-    v = JS.eval("[]")
+    v = JS.eval_javascript("[]")
     Spec.assert_true v.equal?(v.to_js)
   end
 
   Spec.assert "[]= with Hash on the right" do
-    target = JS.eval("({})")
+    target = JS.eval_javascript("({})")
     target[:opts] = { once: true }
     Spec.assert_equal "true", target[:opts][:once].to_s
   end
 
   Spec.assert "[]= with Array on the right" do
-    target = JS.eval("({})")
+    target = JS.eval_javascript("({})")
     target[:items] = [1, 2, 3]
     Spec.assert_equal 3, target[:items].length
   end

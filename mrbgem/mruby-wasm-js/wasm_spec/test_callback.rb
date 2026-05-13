@@ -2,30 +2,55 @@
 
 Spec.describe "block-as-callback / on / then" do
   Spec.assert "addEventListener via call dispatches block" do
-    target = JS.eval("new EventTarget()")
+    target = JS.eval_javascript("new EventTarget()")
     fired = []
-    cb = target.on(:tick) { |_ev| fired << :hit }
-    target.dispatchEvent(JS.eval("new Event('tick')"))
-    target.dispatchEvent(JS.eval("new Event('tick')"))
+    sub = target.on(:tick) { |_ev| fired << :hit }
+    target.dispatchEvent(JS.eval_javascript("new Event('tick')"))
+    target.dispatchEvent(JS.eval_javascript("new Event('tick')"))
     Spec.assert_equal 2, fired.length
-    cb # keep alive — referenced for GC rooting via @callbacks pattern
+    sub # Subscription holds @callback ivar — keeps the Proc rooted
   end
 
   Spec.assert "on with options { once: true } fires only once" do
-    target = JS.eval("new EventTarget()")
+    target = JS.eval_javascript("new EventTarget()")
     fired = 0
     target.on(:tick, JS.object(once: true)) { |_ev| fired += 1 }
-    target.dispatchEvent(JS.eval("new Event('tick')"))
-    target.dispatchEvent(JS.eval("new Event('tick')"))
+    target.dispatchEvent(JS.eval_javascript("new Event('tick')"))
+    target.dispatchEvent(JS.eval_javascript("new Event('tick')"))
     Spec.assert_equal 1, fired
   end
 
   Spec.assert "callback receives event arg as JS::Object" do
-    target = JS.eval("new EventTarget()")
+    target = JS.eval_javascript("new EventTarget()")
     captured_type = nil
     target.on(:hello) { |ev| captured_type = ev[:type].to_s }
-    target.dispatchEvent(JS.eval("new Event('hello')"))
+    target.dispatchEvent(JS.eval_javascript("new Event('hello')"))
     Spec.assert_equal "hello", captured_type
+  end
+
+  Spec.assert "on returns a JS::Subscription, off removes listener + releases callback" do
+    target = JS.eval_javascript("new EventTarget()")
+    fired = []
+    sub = target.on(:tick) { |_ev| fired << :hit }
+    Spec.assert_true sub.is_a?(JS::Subscription)
+    Spec.assert_false sub.off?
+
+    target.dispatchEvent(JS.eval_javascript("new Event('tick')"))
+    Spec.assert_equal 1, fired.length
+
+    sub.off
+    Spec.assert_true sub.off?
+
+    target.dispatchEvent(JS.eval_javascript("new Event('tick')"))
+    Spec.assert_equal 1, fired.length  # listener removed, no further fires
+  end
+
+  Spec.assert "Subscription#off is idempotent" do
+    target = JS.eval_javascript("new EventTarget()")
+    sub = target.on(:tick) { |_ev| nil }
+    sub.off
+    sub.off  # second call should be a no-op, not double-release
+    Spec.assert_true sub.off?
   end
 
   Spec.assert "Promise.then via method_missing with block" do
@@ -60,7 +85,7 @@ Spec.describe "block-as-callback / on / then" do
 
   Spec.assert "Promise.then chain propagates JS::Object return value" do
     log = []
-    JS.global[:Promise].resolve(JS.eval("({n: 5})"))
+    JS.global[:Promise].resolve(JS.eval_javascript("({n: 5})"))
       .then { |obj| obj[:n] }
       .then { |n| log << n.to_i }
     flush_microtasks.call

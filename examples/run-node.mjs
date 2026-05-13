@@ -33,7 +33,7 @@ doc = JS.global[:document]
 doc.title = 'BasicObject OK'
 puts "1. title = #{doc[:title].to_s}"
 
-n = JS.eval('1.5 + 2.25')
+n = JS.eval_javascript('1.5 + 2.25')
 puts "2. float = #{n.to_f}"
 
 opts = JS.object(once: true)
@@ -44,9 +44,9 @@ puts "4. nil? = #{missing.nil?}"
 
 JS.global[:Promise].resolve(7).then { |v| puts "5. promise resolved: #{v.to_i}" }
 
-target = JS.eval('new EventTarget()')
+target = JS.eval_javascript('new EventTarget()')
 target.on(:ready, JS.object(once: true)) { |_ev| puts '6. ready event fired' }
-evt = JS.eval("new Event('ready')")
+evt = JS.eval_javascript("new Event('ready')")
 target.dispatchEvent(evt)
 target.dispatchEvent(evt)
 

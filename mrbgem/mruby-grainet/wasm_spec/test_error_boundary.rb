@@ -36,7 +36,7 @@ Spec.describe "Widget#on_error (error boundary)" do
 
     Grainet.logger = nil
     body[:innerHTML] = ""
-    JS.eval("new Promise(r => setTimeout(r, 0))").await
+    JS.eval_javascript("new Promise(r => setTimeout(r, 0))").await
   end
 
   Spec.assert "bubbles to a parent widget when child has no handler" do
@@ -81,7 +81,7 @@ Spec.describe "Widget#on_error (error boundary)" do
 
     Grainet.logger = nil
     body[:innerHTML] = ""
-    JS.eval("new Promise(r => setTimeout(r, 0))").await
+    JS.eval_javascript("new Promise(r => setTimeout(r, 0))").await
   end
 
   Spec.assert "handler returning false continues to global logger" do
@@ -112,7 +112,7 @@ Spec.describe "Widget#on_error (error boundary)" do
 
     Grainet.logger = nil
     body[:innerHTML] = ""
-    JS.eval("new Promise(r => setTimeout(r, 0))").await
+    JS.eval_javascript("new Promise(r => setTimeout(r, 0))").await
   end
 
   Spec.assert "no source widget falls back directly to global logger" do
@@ -170,7 +170,7 @@ Spec.describe "Widget#on_error (error boundary)" do
 
     Grainet.logger = nil
     body[:innerHTML] = ""
-    JS.eval("new Promise(r => setTimeout(r, 0))").await
+    JS.eval_javascript("new Promise(r => setTimeout(r, 0))").await
   end
 
   Spec.assert "class-level boundary block runs in instance context (@ivars resolve)" do
@@ -193,7 +193,7 @@ Spec.describe "Widget#on_error (error boundary)" do
       body.call(:querySelector, "[data-ref=out]")[:textContent].to_s
 
     body[:innerHTML] = ""
-    JS.eval("new Promise(r => setTimeout(r, 0))").await
+    JS.eval_javascript("new Promise(r => setTimeout(r, 0))").await
   end
 
   Spec.assert "instance on_error overrides class-level error_boundary" do
@@ -227,7 +227,7 @@ Spec.describe "Widget#on_error (error boundary)" do
       body.call(:querySelector, "[data-ref=out]")[:textContent].to_s
 
     body[:innerHTML] = ""
-    JS.eval("new Promise(r => setTimeout(r, 0))").await
+    JS.eval_javascript("new Promise(r => setTimeout(r, 0))").await
   end
 
   Spec.assert "subclass inherits parent class's error_boundary" do
@@ -251,7 +251,7 @@ Spec.describe "Widget#on_error (error boundary)" do
       body.call(:querySelector, "[data-ref=out]")[:textContent].to_s
 
     body[:innerHTML] = ""
-    JS.eval("new Promise(r => setTimeout(r, 0))").await
+    JS.eval_javascript("new Promise(r => setTimeout(r, 0))").await
   end
 
   Spec.assert "listener block raise routes to error boundary" do
@@ -277,7 +277,7 @@ Spec.describe "Widget#on_error (error boundary)" do
 
     btn = doc.call(:querySelector, "[data-ref=btn]")
     btn.call(:click)
-    JS.eval("new Promise(r => setTimeout(r, 0))").await
+    JS.eval_javascript("new Promise(r => setTimeout(r, 0))").await
 
     Spec.assert_equal 1, captured_local.length
     label, msg = captured_local.first
@@ -287,7 +287,7 @@ Spec.describe "Widget#on_error (error boundary)" do
 
     Grainet.logger = nil
     body[:innerHTML] = ""
-    JS.eval("new Promise(r => setTimeout(r, 0))").await
+    JS.eval_javascript("new Promise(r => setTimeout(r, 0))").await
   end
 
   Spec.assert "raise inside handler is reported to global logger (no infinite loop)" do
@@ -324,6 +324,6 @@ Spec.describe "Widget#on_error (error boundary)" do
 
     Grainet.logger = nil
     body[:innerHTML] = ""
-    JS.eval("new Promise(r => setTimeout(r, 0))").await
+    JS.eval_javascript("new Promise(r => setTimeout(r, 0))").await
   end
 end

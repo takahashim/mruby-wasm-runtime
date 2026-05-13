@@ -44,7 +44,7 @@ After `make js-all` / `make cmd`:
 | File | Built by | Contents |
 |---|---|---|
 | `build/mruby-js.wasm` | `make js` | Reactor module — plain mruby + `JS::Object`. No Grainet, no compiler-less optimisations. |
-| `build/mruby-js-grainet-min.wasm` | `make js-grainet-min` | Compiler-less reactor — Grainet core only, bytecode-load path (`vm.loadIrep`). Smallest variant. |
+| `build/mruby-js-grainet-min.wasm` | `make js-grainet-min` | Compiler-less reactor — Grainet core only, bytecode-load path (`vm.loadBytecode`). Smallest variant. |
 | `build/mruby-js-grainet-small.wasm` | `make js-grainet-small` | Compiler + Grainet core only. `vm.eval` works; async / router / form gems excluded. |
 | `build/mruby-js-grainet-full.wasm` | `make js-grainet-full` | Compiler + Grainet core + async + router + form. What every `examples/grainet-*.html` currently loads. |
 | `build/mruby-cmd.wasm` | `make cmd` | WASI command module. Runs on wasmtime (≥37 with `-W exceptions=y`), Node WASI (with `--experimental-wasm-exnref`), and other modern-EH-aware preview1 hosts. |

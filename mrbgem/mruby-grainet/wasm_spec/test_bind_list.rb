@@ -195,14 +195,14 @@ Spec.describe "bind_list" do
     Grainet.register "bl-leaf", leaf_klass
     Grainet.register "bl-host", host_klass
     Grainet.start
-    JS.eval("new Promise(r => setTimeout(r, 0))").await
+    JS.eval_javascript("new Promise(r => setTimeout(r, 0))").await
 
     el = doc.call(:querySelector, "[data-widget='bl-host']")
     inst = Grainet.find_for_element(el)
 
     # Drop the first item; its leaf widget should run cleanup.
     inst.items.update { |arr| arr.reject { |it| it[:id] == 1 } }
-    JS.eval("new Promise(r => setTimeout(r, 0))").await
+    JS.eval_javascript("new Promise(r => setTimeout(r, 0))").await
 
     Spec.assert_equal ["alpha"], cleaned
 

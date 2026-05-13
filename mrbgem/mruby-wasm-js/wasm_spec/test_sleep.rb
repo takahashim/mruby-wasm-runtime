@@ -40,7 +40,7 @@ Spec.describe "Kernel#sleep" do
     p1.resume
     p2.resume
     # Wait long enough for both to wake up.
-    JS.eval("new Promise(r => setTimeout(r, 80))").await
+    JS.eval_javascript("new Promise(r => setTimeout(r, 80))").await
     # p2 (shorter sleep) wakes first.
     Spec.assert_equal [:p1_pre, :p2_pre, :p2_post, :p1_post], log
   end

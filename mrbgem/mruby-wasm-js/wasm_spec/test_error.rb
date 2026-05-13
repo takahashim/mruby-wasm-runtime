@@ -7,7 +7,7 @@ Spec.describe "JS::Error propagation" do
 
   Spec.assert "Error#exception_object exposes original JS Error object" do
     err = Spec.assert_raises(JS::Error) do
-      JS.eval("(()=>{ throw new TypeError('typed') })()")
+      JS.eval_javascript("(()=>{ throw new TypeError('typed') })()")
     end
     Spec.assert_equal "TypeError", err.exception_object[:name].to_s
     Spec.assert_equal "typed", err.exception_object[:message].to_s
@@ -15,21 +15,21 @@ Spec.describe "JS::Error propagation" do
 
   Spec.assert "Error#name forwards to JS error property" do
     err = Spec.assert_raises(JS::Error) do
-      JS.eval("(()=>{ throw new TypeError('typed') })()")
+      JS.eval_javascript("(()=>{ throw new TypeError('typed') })()")
     end
     Spec.assert_equal "TypeError", err.name.to_s
   end
 
   Spec.assert "Error#stack forwards to JS error property" do
     err = Spec.assert_raises(JS::Error) do
-      JS.eval("(()=>{ throw new Error('boom') })()")
+      JS.eval_javascript("(()=>{ throw new Error('boom') })()")
     end
     Spec.assert_true err.stack.to_s.include?("boom")
   end
 
   Spec.assert "Error#message stays on Ruby side (StandardError)" do
     err = Spec.assert_raises(JS::Error) do
-      JS.eval("(()=>{ throw new Error('boom') })()")
+      JS.eval_javascript("(()=>{ throw new Error('boom') })()")
     end
     # #message is defined on Exception — should NOT forward.
     Spec.assert_equal String, err.message.class
@@ -38,21 +38,21 @@ Spec.describe "JS::Error propagation" do
 
   Spec.assert "Error#respond_to? returns true while exception_object set" do
     err = Spec.assert_raises(JS::Error) do
-      JS.eval("(()=>{ throw new TypeError('x') })()")
+      JS.eval_javascript("(()=>{ throw new TypeError('x') })()")
     end
     Spec.assert_true err.respond_to?(:any_unknown_method)
   end
 
   Spec.assert "Error#exception_object preserves custom attributes" do
     err = Spec.assert_raises(JS::Error) do
-      JS.eval("(()=>{ const e = new Error('x'); e.code = 'OOPS'; throw e })()")
+      JS.eval_javascript("(()=>{ const e = new Error('x'); e.code = 'OOPS'; throw e })()")
     end
     Spec.assert_equal "OOPS", err.exception_object[:code].to_s
   end
 
   Spec.assert "non-Error throw gets wrapped" do
     err = Spec.assert_raises(JS::Error) do
-      JS.eval("(()=>{ throw 42 })()")
+      JS.eval_javascript("(()=>{ throw 42 })()")
     end
     Spec.assert_equal "Error", err.exception_object[:name].to_s
     Spec.assert_equal "42", err.message
@@ -60,51 +60,51 @@ Spec.describe "JS::Error propagation" do
 
   Spec.assert "eval throw → JS::Error" do
     err = Spec.assert_raises(JS::Error) do
-      JS.eval("(()=>{ throw new Error('boom') })()")
+      JS.eval_javascript("(()=>{ throw new Error('boom') })()")
     end
     Spec.assert_true err.message.include?("boom")
   end
 
   Spec.assert "method call throw → JS::Error" do
     Spec.assert_raises(JS::Error) do
-      JS.eval("[]").nope_does_not_exist
+      JS.eval_javascript("[]").nope_does_not_exist
     end
   end
 
   Spec.assert "constructor throw → JS::Error" do
     Spec.assert_raises(JS::Error) do
-      JS.global[:Date].new(JS.eval("(()=>{throw new Error('ctor exp')})()"))
+      JS.global[:Date].new(JS.eval_javascript("(()=>{throw new Error('ctor exp')})()"))
     end
   end
 
   Spec.assert "[] on null → JS::Error" do
     Spec.assert_raises(JS::Error) do
-      JS.eval("null")[:foo]
+      JS.eval_javascript("null")[:foo]
     end
   end
 
   Spec.assert "[]= on null → JS::Error" do
     Spec.assert_raises(JS::Error) do
-      JS.eval("null")[:foo] = 1
+      JS.eval_javascript("null")[:foo] = 1
     end
   end
 
   Spec.assert "system continues to work after caught error" do
     begin
-      JS.eval("(()=>{throw new Error('x')})()")
+      JS.eval_javascript("(()=>{throw new Error('x')})()")
     rescue JS::Error
       # expected
     end
-    Spec.assert_equal 4, JS.eval("2 + 2").to_i
+    Spec.assert_equal 4, JS.eval_javascript("2 + 2").to_i
   end
 
   Spec.assert "error state cleared between calls" do
     # First triggers + rescues; second should not see the prior error.
     begin
-      JS.eval("(()=>{throw new Error('first')})()")
+      JS.eval_javascript("(()=>{throw new Error('first')})()")
     rescue JS::Error
       # expected
     end
-    Spec.assert_equal "ok", JS.eval("'ok'").to_s
+    Spec.assert_equal "ok", JS.eval_javascript("'ok'").to_s
   end
 end

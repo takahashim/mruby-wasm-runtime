@@ -5,7 +5,7 @@
 
 def install_inject_fetch_stub(map_js)
   JS.global[:__inject_fetch_stub__] = map_js
-  JS.eval(<<~JS)
+  JS.eval_javascript(<<~JS)
     (() => {
       globalThis.fetch = (url, init) => {
         const entry = globalThis.__inject_fetch_stub__[url];
@@ -34,7 +34,7 @@ def install_inject_fetch_stub(map_js)
 end
 
 def uninstall_inject_fetch_stub
-  JS.eval('(() => { delete globalThis.fetch; delete globalThis.__inject_fetch_stub__; })()')
+  JS.eval_javascript('(() => { delete globalThis.fetch; delete globalThis.__inject_fetch_stub__; })()')
 end
 
 def reset_state
@@ -71,14 +71,14 @@ Spec.describe "Grainet::Resource.current_run + Fetchy signal injection" do
     Grainet.start
 
     inst = Grainet.find_for_element(doc.call(:querySelector, "[data-widget='inject-basic']"))
-    JS.eval("new Promise(r => setTimeout(r, 60))").await
+    JS.eval_javascript("new Promise(r => setTimeout(r, 60))").await
     value, state, error = inst.snapshot
     Spec.assert_equal true, value["ok"]
     Spec.assert_equal :ready, state
     Spec.assert_equal nil, error
 
     body[:innerHTML] = ""
-    JS.eval("new Promise(r => setTimeout(r, 0))").await
+    JS.eval_javascript("new Promise(r => setTimeout(r, 0))").await
     uninstall_inject_fetch_stub
   end
 
@@ -111,11 +111,11 @@ Spec.describe "Grainet::Resource.current_run + Fetchy signal injection" do
     # the resource transitions to :errored. If the resource's own
     # signal had been used, the user controller would have no effect.
     user_controller.call(:abort)
-    JS.eval("new Promise(r => setTimeout(r, 50))").await
+    JS.eval_javascript("new Promise(r => setTimeout(r, 50))").await
     Spec.assert_equal :errored, inst.state
 
     body[:innerHTML] = ""
-    JS.eval("new Promise(r => setTimeout(r, 0))").await
+    JS.eval_javascript("new Promise(r => setTimeout(r, 0))").await
     uninstall_inject_fetch_stub
   end
 
@@ -148,12 +148,12 @@ Spec.describe "Grainet::Resource.current_run + Fetchy signal injection" do
     Grainet.register "inject-restore", klass
     Grainet.start
 
-    JS.eval("new Promise(r => setTimeout(r, 20))").await
+    JS.eval_javascript("new Promise(r => setTimeout(r, 20))").await
     Spec.assert_equal 1, seen_inside.length
     Spec.assert_true seen_inside.first.is_a?(Grainet::ResourceRun)
     Spec.assert_equal nil, Grainet::Resource.current_run
 
     body[:innerHTML] = ""
-    JS.eval("new Promise(r => setTimeout(r, 0))").await
+    JS.eval_javascript("new Promise(r => setTimeout(r, 0))").await
   end
 end

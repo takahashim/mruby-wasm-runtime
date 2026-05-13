@@ -4,7 +4,7 @@
 
 def install_fetch_stub(map_js)
   JS.global[:__fetchy_stub__] = map_js
-  JS.eval(<<~JS)
+  JS.eval_javascript(<<~JS)
     (() => {
       globalThis.__fetch_count__ = 0;
       globalThis.fetch = (url, init) => {
@@ -46,7 +46,7 @@ def install_fetch_stub(map_js)
 end
 
 def uninstall_fetch_stub
-  JS.eval('(() => { delete globalThis.fetch; delete globalThis.__fetchy_stub__; delete globalThis.__last_init__; delete globalThis.__last_url__; delete globalThis.__fetch_count__; delete globalThis.__aborter__; })()')
+  JS.eval_javascript('(() => { delete globalThis.fetch; delete globalThis.__fetchy_stub__; delete globalThis.__last_init__; delete globalThis.__last_url__; delete globalThis.__fetch_count__; delete globalThis.__aborter__; })()')
 end
 
 Spec.describe "Fetchy v2" do
@@ -210,7 +210,7 @@ Spec.describe "Fetchy v2" do
 
     controller = JS.global[:AbortController].new
     JS.global[:__aborter__] = controller
-    JS.eval('(() => { setTimeout(() => globalThis.__aborter__.abort(), 10); return null; })()')
+    JS.eval_javascript('(() => { setTimeout(() => globalThis.__aborter__.abort(), 10); return null; })()')
 
     err = Spec.assert_raises(Fetchy::AbortError) do
       Fetchy.json("/slow", signal: controller[:signal])

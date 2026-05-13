@@ -70,7 +70,7 @@ Spec.describe "leaks: await fiber registry" do
     before = JS.stats[:await_fibers]
     20.times do
       begin
-        JS.global[:Promise].reject(JS.eval("new Error('x')")).await
+        JS.global[:Promise].reject(JS.eval_javascript("new Error('x')")).await
       rescue JS::Error
         # expected — only the rescue path releases the fiber
       end

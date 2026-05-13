@@ -117,7 +117,7 @@ Spec.describe "Nested widgets" do
 
     el = doc.call(:querySelector, "[data-widget='td-parent']")
     el.call(:remove)
-    JS.eval("new Promise(r => setTimeout(r, 0))").await
+    JS.eval_javascript("new Promise(r => setTimeout(r, 0))").await
 
     Spec.assert_equal [:parent_cleanup, :child_cleanup], log
 

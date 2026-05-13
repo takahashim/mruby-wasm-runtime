@@ -17,7 +17,7 @@ Spec.describe "Widget lifecycle abort" do
     Spec.assert_true inst.alive?
 
     body[:innerHTML] = ""
-    JS.eval("new Promise(r => setTimeout(r, 16))").await
+    JS.eval_javascript("new Promise(r => setTimeout(r, 16))").await
     Spec.assert_false inst.alive?
   end
 
@@ -35,7 +35,7 @@ Spec.describe "Widget lifecycle abort" do
     Spec.assert_false sig[:aborted].js_bool
 
     body[:innerHTML] = ""
-    JS.eval("new Promise(r => setTimeout(r, 16))").await
+    JS.eval_javascript("new Promise(r => setTimeout(r, 16))").await
     Spec.assert_true sig[:aborted].js_bool
   end
 
@@ -50,7 +50,7 @@ Spec.describe "Widget lifecycle abort" do
 
     inst = Grainet.find_for_element(doc.call(:querySelector, "[data-widget='ab-pre']"))
     body[:innerHTML] = ""
-    JS.eval("new Promise(r => setTimeout(r, 16))").await
+    JS.eval_javascript("new Promise(r => setTimeout(r, 16))").await
 
     Spec.assert_raises(Grainet::Aborted) { inst.sleep(0.01) }
   end
@@ -79,9 +79,9 @@ Spec.describe "Widget lifecycle abort" do
 
     btn = doc.call(:querySelector, "[data-widget='ab-click'] button")
     btn.call(:click)
-    JS.eval("new Promise(r => setTimeout(r, 20))").await
+    JS.eval_javascript("new Promise(r => setTimeout(r, 20))").await
     body[:innerHTML] = ""
-    JS.eval("new Promise(r => setTimeout(r, 200))").await
+    JS.eval_javascript("new Promise(r => setTimeout(r, 200))").await
 
     Spec.assert_false reached_after_sleep
     Spec.assert_false boundary_fired
@@ -110,9 +110,9 @@ Spec.describe "Widget lifecycle abort" do
     Grainet.register "ab-every", klass
     Grainet.start
 
-    JS.eval("new Promise(r => setTimeout(r, 30))").await
+    JS.eval_javascript("new Promise(r => setTimeout(r, 30))").await
     body[:innerHTML] = ""
-    JS.eval("new Promise(r => setTimeout(r, 300))").await
+    JS.eval_javascript("new Promise(r => setTimeout(r, 300))").await
 
     Spec.assert_equal 0, reached_after_sleep
     Spec.assert_equal 0, captured.count { |(msg, _)| msg.to_s.include?("every") }
@@ -142,9 +142,9 @@ Spec.describe "Widget lifecycle abort" do
 
     btn = doc.call(:querySelector, "[data-widget='ab-on-err'] button")
     btn.call(:click)
-    JS.eval("new Promise(r => setTimeout(r, 20))").await
+    JS.eval_javascript("new Promise(r => setTimeout(r, 20))").await
     body[:innerHTML] = ""
-    JS.eval("new Promise(r => setTimeout(r, 200))").await
+    JS.eval_javascript("new Promise(r => setTimeout(r, 200))").await
 
     Spec.assert_equal [], on_error_invocations
   end
@@ -168,13 +168,13 @@ Spec.describe "Widget lifecycle abort" do
     Grainet.start
 
     doc.call(:querySelector, "[data-widget='ab-regress'] button").call(:click)
-    JS.eval("new Promise(r => setTimeout(r, 16))").await
+    JS.eval_javascript("new Promise(r => setTimeout(r, 16))").await
 
     Spec.assert_true boundary_saw && boundary_saw[1] == "kaboom"
     Spec.assert_equal 0, captured.length
 
     Grainet.logger = nil
     body[:innerHTML] = ""
-    JS.eval("new Promise(r => setTimeout(r, 16))").await
+    JS.eval_javascript("new Promise(r => setTimeout(r, 16))").await
   end
 end

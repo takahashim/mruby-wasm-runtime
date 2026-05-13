@@ -1,6 +1,6 @@
 def install_resource_fetch_stub(map_js)
   JS.global[:__resource_fetch_stub__] = map_js
-  JS.eval(<<~JS)
+  JS.eval_javascript(<<~JS)
     (() => {
       globalThis.fetch = (url, init) => {
         const entry = globalThis.__resource_fetch_stub__[url];
@@ -37,7 +37,7 @@ def install_resource_fetch_stub(map_js)
 end
 
 def uninstall_resource_fetch_stub
-  JS.eval('(() => { delete globalThis.fetch; delete globalThis.__resource_fetch_stub__; })()')
+  JS.eval_javascript('(() => { delete globalThis.fetch; delete globalThis.__resource_fetch_stub__; })()')
 end
 
 # Reset DOM + Grainet registry so each test starts from a clean slate.
@@ -83,7 +83,7 @@ Spec.describe "Widget#resource" do
     Spec.assert_true loading
     Spec.assert_equal nil, error
 
-    JS.eval("new Promise(r => setTimeout(r, 40))").await
+    JS.eval_javascript("new Promise(r => setTimeout(r, 40))").await
     value, state, loading, error = inst.snapshot
     Spec.assert_equal "Alice", value["name"]
     Spec.assert_equal :ready, state
@@ -91,7 +91,7 @@ Spec.describe "Widget#resource" do
     Spec.assert_equal nil, error
 
     body[:innerHTML] = ""
-    JS.eval("new Promise(r => setTimeout(r, 0))").await
+    JS.eval_javascript("new Promise(r => setTimeout(r, 0))").await
     uninstall_resource_fetch_stub
   end
 
@@ -121,18 +121,18 @@ Spec.describe "Widget#resource" do
 
     inst = Grainet.find_for_element(doc.call(:querySelector, "[data-widget='resource-stale']"))
     inst.set_user_id(2)
-    JS.eval("new Promise(r => setTimeout(r, 20))").await
+    JS.eval_javascript("new Promise(r => setTimeout(r, 20))").await
     value, state = inst.snapshot
     Spec.assert_equal "Fast", value["name"]
     Spec.assert_equal :ready, state
 
-    JS.eval("new Promise(r => setTimeout(r, 60))").await
+    JS.eval_javascript("new Promise(r => setTimeout(r, 60))").await
     value, state = inst.snapshot
     Spec.assert_equal "Fast", value["name"]
     Spec.assert_equal :ready, state
 
     body[:innerHTML] = ""
-    JS.eval("new Promise(r => setTimeout(r, 0))").await
+    JS.eval_javascript("new Promise(r => setTimeout(r, 0))").await
     uninstall_resource_fetch_stub
   end
 
@@ -161,7 +161,7 @@ Spec.describe "Widget#resource" do
     Grainet.start
 
     inst = Grainet.find_for_element(doc.call(:querySelector, "[data-widget='resource-refresh']"))
-    JS.eval("new Promise(r => setTimeout(r, 0))").await
+    JS.eval_javascript("new Promise(r => setTimeout(r, 0))").await
     value, state, loading = inst.snapshot
     Spec.assert_equal "Alice", value["name"]
     Spec.assert_equal :ready, state
@@ -173,14 +173,14 @@ Spec.describe "Widget#resource" do
     Spec.assert_equal :refreshing, state
     Spec.assert_true loading
 
-    JS.eval("new Promise(r => setTimeout(r, 80))").await
+    JS.eval_javascript("new Promise(r => setTimeout(r, 80))").await
     value, state, loading = inst.snapshot
     Spec.assert_equal "Bob", value["name"]
     Spec.assert_equal :ready, state
     Spec.assert_false loading
 
     body[:innerHTML] = ""
-    JS.eval("new Promise(r => setTimeout(r, 0))").await
+    JS.eval_javascript("new Promise(r => setTimeout(r, 0))").await
     uninstall_resource_fetch_stub
   end
 
@@ -211,6 +211,6 @@ Spec.describe "Widget#resource" do
     Spec.assert_equal 10, inst.value
 
     body[:innerHTML] = ""
-    JS.eval("new Promise(r => setTimeout(r, 0))").await
+    JS.eval_javascript("new Promise(r => setTimeout(r, 0))").await
   end
 end

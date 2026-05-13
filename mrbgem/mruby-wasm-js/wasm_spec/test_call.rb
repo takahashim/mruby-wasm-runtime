@@ -2,30 +2,30 @@
 
 Spec.describe "JS::Object#call / #apply / method_missing" do
   Spec.assert "call returns a JS::Object" do
-    arr = JS.eval("[1, 2, 3]")
-    result = arr.call(:concat, JS.eval("[4, 5]"))
+    arr = JS.eval_javascript("[1, 2, 3]")
+    result = arr.call(:concat, JS.eval_javascript("[4, 5]"))
     Spec.assert_equal 5, result.length
   end
 
   Spec.assert "method_missing dispatches to JS" do
-    str = JS.eval("'  hello  '")
+    str = JS.eval_javascript("'  hello  '")
     Spec.assert_equal "hello", str.trim.to_s
   end
 
   Spec.assert "predicate ? returns Ruby boolean" do
-    arr = JS.eval("[1, 2, 3]")
+    arr = JS.eval_javascript("[1, 2, 3]")
     Spec.assert_true arr.includes?(2)
     Spec.assert_false arr.includes?(99)
   end
 
   Spec.assert "name= dispatches as []=" do
-    obj = JS.eval("({})")
+    obj = JS.eval_javascript("({})")
     obj.title = "via setter"
     Spec.assert_equal "via setter", obj[:title].to_s
   end
 
   Spec.assert "method chaining" do
-    Spec.assert_equal "ABC", JS.eval("'abc'").toUpperCase.to_s
+    Spec.assert_equal "ABC", JS.eval_javascript("'abc'").toUpperCase.to_s
   end
 
   Spec.assert "apply with array of args" do
@@ -34,7 +34,7 @@ Spec.describe "JS::Object#call / #apply / method_missing" do
   end
 
   Spec.assert "apply with empty array" do
-    arr = JS.eval('[]')
+    arr = JS.eval_javascript('[]')
     Spec.assert_equal "", arr.apply(:toString, []).to_s
   end
 
@@ -44,7 +44,7 @@ Spec.describe "JS::Object#call / #apply / method_missing" do
   end
 
   Spec.assert "call dispatches block-as-callback" do
-    arr = JS.eval("[10, 20, 30]")
+    arr = JS.eval_javascript("[10, 20, 30]")
     sum = 0
     arr.forEach { |v| sum += v.to_i }
     Spec.assert_equal 60, sum

@@ -14,12 +14,12 @@ Spec.describe "Widget#each_frame" do
     Grainet.start
 
     # Drain a few microtasks/macrotasks so rAF can fire.
-    5.times { JS.eval("new Promise(r => setTimeout(r, 16))").await }
+    5.times { JS.eval_javascript("new Promise(r => setTimeout(r, 16))").await }
 
     Spec.assert_true counts.length >= 2
 
     body[:innerHTML] = ""
-    JS.eval("new Promise(r => setTimeout(r, 16))").await
+    JS.eval_javascript("new Promise(r => setTimeout(r, 16))").await
   end
 
   Spec.assert "loop stops after widget unmount" do
@@ -36,17 +36,17 @@ Spec.describe "Widget#each_frame" do
     Grainet.register "ef-stop", klass
     Grainet.start
 
-    3.times { JS.eval("new Promise(r => setTimeout(r, 16))").await }
+    3.times { JS.eval_javascript("new Promise(r => setTimeout(r, 16))").await }
     Spec.assert_true counts.length >= 1   # loop ran while mounted
 
     body[:innerHTML] = ""
     # Let unmount + any in-flight rAF settle.
-    5.times { JS.eval("new Promise(r => setTimeout(r, 16))").await }
+    5.times { JS.eval_javascript("new Promise(r => setTimeout(r, 16))").await }
     settled = counts.length
 
     # After the settle window, the loop must be fully stopped:
     # a further wait must not produce any new frames.
-    5.times { JS.eval("new Promise(r => setTimeout(r, 16))").await }
+    5.times { JS.eval_javascript("new Promise(r => setTimeout(r, 16))").await }
     Spec.assert_equal settled, counts.length
   end
 
@@ -70,7 +70,7 @@ Spec.describe "Widget#each_frame" do
     Grainet.register "ef-err", klass
     Grainet.start
 
-    3.times { JS.eval("new Promise(r => setTimeout(r, 16))").await }
+    3.times { JS.eval_javascript("new Promise(r => setTimeout(r, 16))").await }
 
     locals = captured.select { |row| row[0] == :local }
     Spec.assert_true locals.length >= 1
@@ -81,6 +81,6 @@ Spec.describe "Widget#each_frame" do
 
     Grainet.logger = nil
     body[:innerHTML] = ""
-    JS.eval("new Promise(r => setTimeout(r, 16))").await
+    JS.eval_javascript("new Promise(r => setTimeout(r, 16))").await
   end
 end

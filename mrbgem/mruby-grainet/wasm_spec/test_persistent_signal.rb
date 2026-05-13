@@ -21,7 +21,7 @@ Spec.describe "Widget#persistent_signal" do
     Spec.assert_equal [1, 2, 3], captured
 
     body[:innerHTML] = ""
-    JS.eval("new Promise(r => setTimeout(r, 0))").await
+    JS.eval_javascript("new Promise(r => setTimeout(r, 0))").await
   end
 
   Spec.assert "loads default (kwarg form) when localStorage is empty" do
@@ -44,7 +44,7 @@ Spec.describe "Widget#persistent_signal" do
     Spec.assert_equal "hello", Grainet.find_for_element(el).read
 
     body[:innerHTML] = ""
-    JS.eval("new Promise(r => setTimeout(r, 0))").await
+    JS.eval_javascript("new Promise(r => setTimeout(r, 0))").await
   end
 
   Spec.assert "restores stored value from localStorage" do
@@ -69,7 +69,7 @@ Spec.describe "Widget#persistent_signal" do
 
     JS.global[:localStorage].call(:removeItem, "ps-stored")
     body[:innerHTML] = ""
-    JS.eval("new Promise(r => setTimeout(r, 0))").await
+    JS.eval_javascript("new Promise(r => setTimeout(r, 0))").await
   end
 
   Spec.assert "broken JSON falls back to default and warns" do
@@ -99,7 +99,7 @@ Spec.describe "Widget#persistent_signal" do
     Grainet.logger = nil
     JS.global[:localStorage].call(:removeItem, "ps-broken")
     body[:innerHTML] = ""
-    JS.eval("new Promise(r => setTimeout(r, 0))").await
+    JS.eval_javascript("new Promise(r => setTimeout(r, 0))").await
   end
 
   Spec.assert "writes to localStorage when signal changes" do
@@ -131,6 +131,6 @@ Spec.describe "Widget#persistent_signal" do
 
     JS.global[:localStorage].call(:removeItem, "ps-write")
     body[:innerHTML] = ""
-    JS.eval("new Promise(r => setTimeout(r, 0))").await
+    JS.eval_javascript("new Promise(r => setTimeout(r, 0))").await
   end
 end

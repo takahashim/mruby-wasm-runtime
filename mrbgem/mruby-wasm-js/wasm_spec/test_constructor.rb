@@ -31,7 +31,7 @@ Spec.describe "JS::Object#new (constructor invocation)" do
 
   Spec.assert "new on non-function raises JS::Error" do
     Spec.assert_raises(JS::Error) do
-      JS.eval("42").new
+      JS.eval_javascript("42").new
     end
   end
 

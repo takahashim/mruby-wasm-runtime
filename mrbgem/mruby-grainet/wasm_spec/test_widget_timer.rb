@@ -11,11 +11,11 @@ Spec.describe "Widget#timeout" do
     Grainet.register "to-basic", klass
     Grainet.start
 
-    JS.eval("new Promise(r => setTimeout(r, 60))").await
+    JS.eval_javascript("new Promise(r => setTimeout(r, 60))").await
     Spec.assert_equal [:hit], fired
 
     body[:innerHTML] = ""
-    JS.eval("new Promise(r => setTimeout(r, 16))").await
+    JS.eval_javascript("new Promise(r => setTimeout(r, 16))").await
   end
 
   Spec.assert "auto-cancels when widget unmounts before delay elapses" do
@@ -31,11 +31,11 @@ Spec.describe "Widget#timeout" do
     Grainet.start
 
     # Unmount before the timeout would fire.
-    JS.eval("new Promise(r => setTimeout(r, 10))").await
+    JS.eval_javascript("new Promise(r => setTimeout(r, 10))").await
     body[:innerHTML] = ""
 
     # Wait well past the original delay.
-    JS.eval("new Promise(r => setTimeout(r, 150))").await
+    JS.eval_javascript("new Promise(r => setTimeout(r, 150))").await
     Spec.assert_equal [], fired
   end
 
@@ -59,7 +59,7 @@ Spec.describe "Widget#timeout" do
     Grainet.register "to-err", klass
     Grainet.start
 
-    JS.eval("new Promise(r => setTimeout(r, 40))").await
+    JS.eval_javascript("new Promise(r => setTimeout(r, 40))").await
 
     locals = captured.select { |row| row[0] == :local }
     Spec.assert_equal 1, locals.length
@@ -70,7 +70,7 @@ Spec.describe "Widget#timeout" do
 
     Grainet.logger = nil
     body[:innerHTML] = ""
-    JS.eval("new Promise(r => setTimeout(r, 16))").await
+    JS.eval_javascript("new Promise(r => setTimeout(r, 16))").await
   end
 
   Spec.assert "Timer#stop cancels the pending timeout" do
@@ -93,11 +93,11 @@ Spec.describe "Widget#timeout" do
     captured_timer.stop
     Spec.assert_true captured_timer.stopped?
 
-    JS.eval("new Promise(r => setTimeout(r, 100))").await
+    JS.eval_javascript("new Promise(r => setTimeout(r, 100))").await
     Spec.assert_equal [], fired
 
     body[:innerHTML] = ""
-    JS.eval("new Promise(r => setTimeout(r, 16))").await
+    JS.eval_javascript("new Promise(r => setTimeout(r, 16))").await
   end
 end
 
@@ -114,11 +114,11 @@ Spec.describe "Widget#every" do
     Grainet.register "ev-basic", klass
     Grainet.start
 
-    JS.eval("new Promise(r => setTimeout(r, 80))").await
+    JS.eval_javascript("new Promise(r => setTimeout(r, 80))").await
     Spec.assert_true counts.length >= 2
 
     body[:innerHTML] = ""
-    JS.eval("new Promise(r => setTimeout(r, 30))").await
+    JS.eval_javascript("new Promise(r => setTimeout(r, 30))").await
   end
 
   Spec.assert "interval stops after widget unmount" do
@@ -133,15 +133,15 @@ Spec.describe "Widget#every" do
     Grainet.register "ev-stop", klass
     Grainet.start
 
-    JS.eval("new Promise(r => setTimeout(r, 50))").await
+    JS.eval_javascript("new Promise(r => setTimeout(r, 50))").await
     Spec.assert_true counts.length >= 1
 
     body[:innerHTML] = ""
-    JS.eval("new Promise(r => setTimeout(r, 30))").await
+    JS.eval_javascript("new Promise(r => setTimeout(r, 30))").await
     settled = counts.length
 
     # After the unmount window, no further ticks should land.
-    JS.eval("new Promise(r => setTimeout(r, 80))").await
+    JS.eval_javascript("new Promise(r => setTimeout(r, 80))").await
     Spec.assert_equal settled, counts.length
   end
 
@@ -165,7 +165,7 @@ Spec.describe "Widget#every" do
     Grainet.register "ev-err", klass
     Grainet.start
 
-    JS.eval("new Promise(r => setTimeout(r, 60))").await
+    JS.eval_javascript("new Promise(r => setTimeout(r, 60))").await
 
     locals = captured.select { |row| row[0] == :local }
     Spec.assert_true locals.length >= 2  # interval kept ticking past first raise
@@ -176,7 +176,7 @@ Spec.describe "Widget#every" do
 
     Grainet.logger = nil
     body[:innerHTML] = ""
-    JS.eval("new Promise(r => setTimeout(r, 30))").await
+    JS.eval_javascript("new Promise(r => setTimeout(r, 30))").await
   end
 
   Spec.assert "Timer#stop halts further ticks; double stop is a no-op" do
@@ -194,7 +194,7 @@ Spec.describe "Widget#every" do
     Grainet.register "ev-manual", klass
     Grainet.start
 
-    JS.eval("new Promise(r => setTimeout(r, 50))").await
+    JS.eval_javascript("new Promise(r => setTimeout(r, 50))").await
     Spec.assert_true counts.length >= 1
     captured_timer.stop
     Spec.assert_true captured_timer.stopped?
@@ -202,11 +202,11 @@ Spec.describe "Widget#every" do
     Spec.assert_true captured_timer.stopped?
     settled = counts.length
 
-    JS.eval("new Promise(r => setTimeout(r, 80))").await
+    JS.eval_javascript("new Promise(r => setTimeout(r, 80))").await
     Spec.assert_equal settled, counts.length
 
     # unmount after manual stop must not raise / double-cancel
     body[:innerHTML] = ""
-    JS.eval("new Promise(r => setTimeout(r, 30))").await
+    JS.eval_javascript("new Promise(r => setTimeout(r, 30))").await
   end
 end

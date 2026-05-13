@@ -1,40 +1,40 @@
 Spec.describe "JS::Object#to_ruby" do
   Spec.assert "string → String" do
-    Spec.assert_equal "hello", JS.eval('"hello"').to_ruby
+    Spec.assert_equal "hello", JS.eval_javascript('"hello"').to_ruby
   end
 
   Spec.assert "integer-valued number → Integer" do
-    v = JS.eval('42').to_ruby
+    v = JS.eval_javascript('42').to_ruby
     Spec.assert_equal 42, v
     Spec.assert_equal Integer, v.class.ancestors.include?(Integer) ? Integer : v.class
   end
 
   Spec.assert "fractional number → Float" do
-    Spec.assert_equal 3.14, JS.eval('3.14').to_ruby
+    Spec.assert_equal 3.14, JS.eval_javascript('3.14').to_ruby
   end
 
   Spec.assert "boolean → true / false" do
-    Spec.assert_equal true,  JS.eval('true').to_ruby
-    Spec.assert_equal false, JS.eval('false').to_ruby
+    Spec.assert_equal true,  JS.eval_javascript('true').to_ruby
+    Spec.assert_equal false, JS.eval_javascript('false').to_ruby
   end
 
   Spec.assert "null → nil" do
-    Spec.assert_equal nil, JS.eval('null').to_ruby
+    Spec.assert_equal nil, JS.eval_javascript('null').to_ruby
   end
 
   Spec.assert "array → Ruby Array of converted elements" do
-    Spec.assert_equal [1, 2, 3], JS.eval('[1, 2, 3]').to_ruby
-    Spec.assert_equal ["a", "b"], JS.eval('["a", "b"]').to_ruby
+    Spec.assert_equal [1, 2, 3], JS.eval_javascript('[1, 2, 3]').to_ruby
+    Spec.assert_equal ["a", "b"], JS.eval_javascript('["a", "b"]').to_ruby
   end
 
   Spec.assert "object → Ruby Hash with String keys" do
-    h = JS.eval('({name: "Alice", age: 30})').to_ruby
+    h = JS.eval_javascript('({name: "Alice", age: 30})').to_ruby
     Spec.assert_equal "Alice", h["name"]
     Spec.assert_equal 30,      h["age"]
   end
 
   Spec.assert "deeply nested JSON-like structure" do
-    js = JS.eval(<<~JSON.strip)
+    js = JS.eval_javascript(<<~JSON.strip)
       ([
         {id: 1, tags: ["a", "b"], meta: {deep: true}},
         {id: 2, tags: [], meta: null}
@@ -49,7 +49,7 @@ Spec.describe "JS::Object#to_ruby" do
   end
 
   Spec.assert "default returns deeply frozen tree" do
-    js = JS.eval('([{name: "Alice", tags: ["admin"]}])')
+    js = JS.eval_javascript('([{name: "Alice", tags: ["admin"]}])')
     ruby = js.to_ruby
 
     Spec.assert_true ruby.frozen?
@@ -65,7 +65,7 @@ Spec.describe "JS::Object#to_ruby" do
   end
 
   Spec.assert "freeze: false opts out of freezing" do
-    js = JS.eval('([{name: "Bob", tags: []}])')
+    js = JS.eval_javascript('([{name: "Bob", tags: []}])')
     ruby = js.to_ruby(freeze: false)
 
     Spec.assert_false ruby.frozen?
@@ -83,7 +83,7 @@ Spec.describe "JS::Object#to_ruby" do
   end
 
   Spec.assert "frozen result still works with Signal#update (gets a new dup)" do
-    js = JS.eval('([1, 2, 3])')
+    js = JS.eval_javascript('([1, 2, 3])')
     s = Grainet::Signal.new(js.to_ruby)   # frozen Array
 
     # update receives a frozen view, but `+ [4]` returns a new array,

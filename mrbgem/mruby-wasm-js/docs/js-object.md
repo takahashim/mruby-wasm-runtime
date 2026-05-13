@@ -43,7 +43,7 @@ JS の `true` / `false` を `to_s` 経由で文字列にして比較するだけ
 ## `to_ruby` — JSON ツリーの Ruby 化
 
 ```ruby
-js = JS.eval('({name: "Alice", tags: ["x", "y"], age: 30})')
+js = JS.eval_javascript('({name: "Alice", tags: ["x", "y"], age: 30})')
 js.to_ruby
 # → {"name" => "Alice", "tags" => ["x", "y"], "age" => 30}
 ```

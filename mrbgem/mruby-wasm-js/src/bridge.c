@@ -2,7 +2,7 @@
  * Low-level primitives exposed as `JS._eval`, `JS._global`, `JS._get`,
  * `JS._set`, `JS._call`, `JS._new`, `JS._to_string`, etc. These are 1:1
  * with the WASM imports and operate on raw integer handles. The
- * Ruby-friendly API (JS.global / JS.eval / JS::Object#[] / ...) lives in
+ * Ruby-friendly API (JS.global / JS.eval_javascript / JS::Object#[] / ...) lives in
  * mrblib/js.rb and calls down to these.
  */
 #include "imports.h"

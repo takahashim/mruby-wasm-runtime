@@ -16,19 +16,19 @@
 # allowed, returns the seconds argument) so `sleep(0.5)` carries over
 # from idiomatic Ruby code.
 #
-# Load order: must follow `js.rb` (uses `JS.eval`, `JS.global`,
+# Load order: must follow `js.rb` (uses `JS.eval_javascript`, `JS.global`,
 # `Object#await`). Alphabetically `kernel_sleep` sorts after `js`, so
 # the default mrblib loader handles this without an explicit shim.
 #
-# Min variant note: `JS.eval` is unavailable in compiler-less builds,
+# Min variant note: `JS.eval_javascript` is unavailable in compiler-less builds,
 # so `sleep` raises `NotImplementedError` there. This matches the
-# constraint on any user code that calls `JS.eval`.
+# constraint on any user code that calls `JS.eval_javascript`.
 
 module Kernel
   def sleep(seconds)
     ms = (seconds.to_f * 1000).to_i
     return seconds if ms <= 0
-    JS.eval("new Promise(r => setTimeout(r, #{ms}))").await
+    JS.eval_javascript("new Promise(r => setTimeout(r, #{ms}))").await
     seconds
   end
 end

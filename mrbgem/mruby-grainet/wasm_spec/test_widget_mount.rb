@@ -82,7 +82,7 @@ Spec.describe "Widget mount + refs + events" do
     el = doc.call(:querySelector, "[data-widget='cleanup-test']")
     el.call(:remove)
     # Allow MutationObserver microtask to flush.
-    JS.eval("new Promise(r => setTimeout(r, 0))").await
+    JS.eval_javascript("new Promise(r => setTimeout(r, 0))").await
 
     Spec.assert_equal [:ran], cleaned
 
@@ -130,7 +130,7 @@ Spec.describe "Widget mount + refs + events" do
     Spec.assert_equal "A", captured[:text]
 
     body[:innerHTML] = ""
-    JS.eval("new Promise(r => setTimeout(r, 0))").await
+    JS.eval_javascript("new Promise(r => setTimeout(r, 0))").await
   end
 
   Spec.assert "RefElement#attr reads / writes / removes HTML attributes" do
@@ -163,7 +163,7 @@ Spec.describe "Widget mount + refs + events" do
     Spec.assert_equal "primary", captured[:via_data]
 
     body[:innerHTML] = ""
-    JS.eval("new Promise(r => setTimeout(r, 0))").await
+    JS.eval_javascript("new Promise(r => setTimeout(r, 0))").await
   end
 
   Spec.assert "Widget#selector helper works inside bind/class flows" do
@@ -201,6 +201,6 @@ Spec.describe "Widget mount + refs + events" do
     Spec.assert_true list[:children][2][:classList].call(:contains, "active").js_bool
 
     body[:innerHTML] = ""
-    JS.eval("new Promise(r => setTimeout(r, 0))").await
+    JS.eval_javascript("new Promise(r => setTimeout(r, 0))").await
   end
 end

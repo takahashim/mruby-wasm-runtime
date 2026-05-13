@@ -22,7 +22,7 @@ Spec.describe "JS::Object#await (Fiber-based)" do
   end
 
   Spec.assert "await on real async (setTimeout)" do
-    promise = JS.eval(<<~JS)
+    promise = JS.eval_javascript(<<~JS)
       new Promise((resolve) => setTimeout(() => resolve("delayed"), 20))
     JS
     Spec.assert_equal "delayed", promise.await.to_s
@@ -38,7 +38,7 @@ Spec.describe "JS::Object#await (Fiber-based)" do
   end
 
   Spec.assert "Promise from object literal" do
-    p = JS.eval("Promise.resolve({status: 'ok', code: 200})")
+    p = JS.eval_javascript("Promise.resolve({status: 'ok', code: 200})")
     result = p.await
     Spec.assert_equal "ok", result[:status].to_s
     Spec.assert_equal 200, result[:code].to_i

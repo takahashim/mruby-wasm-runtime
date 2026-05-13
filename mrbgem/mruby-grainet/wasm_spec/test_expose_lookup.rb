@@ -212,7 +212,7 @@ Spec.describe "expose / lookup" do
     new_el = doc.call(:createElement, "div")
     new_el.call(:setAttribute, "data-widget", "pi-dyn-inserted")
     slot.call(:appendChild, new_el)
-    JS.eval("new Promise(r => setTimeout(r, 0))").await
+    JS.eval_javascript("new Promise(r => setTimeout(r, 0))").await
 
     Spec.assert_equal "host-token", captured
 

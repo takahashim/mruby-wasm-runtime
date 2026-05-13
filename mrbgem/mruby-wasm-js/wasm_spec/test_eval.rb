@@ -1,24 +1,24 @@
 
 
-Spec.describe "JS.eval / global / property access" do
+Spec.describe "JS.eval_javascript / global / property access" do
   Spec.assert "eval returns JS::Object with int" do
-    Spec.assert_equal 42, JS.eval("42").to_i
+    Spec.assert_equal 42, JS.eval_javascript("42").to_i
   end
 
   Spec.assert "eval returns JS::Object with string" do
-    Spec.assert_equal "hi", JS.eval("'hi'").to_s
+    Spec.assert_equal "hi", JS.eval_javascript("'hi'").to_s
   end
 
   Spec.assert "eval returns JS::Object with float" do
-    Spec.assert_equal 3.14, JS.eval("3.14").to_f
+    Spec.assert_equal 3.14, JS.eval_javascript("3.14").to_f
   end
 
   Spec.assert "eval returns JS::Object with null" do
-    Spec.assert_true JS.eval("null").nil?
+    Spec.assert_true JS.eval_javascript("null").nil?
   end
 
   Spec.assert "eval returns JS::Object with undefined" do
-    Spec.assert_true JS.eval("undefined").nil?
+    Spec.assert_true JS.eval_javascript("undefined").nil?
   end
 
   Spec.assert "JS.global is the JS globalThis" do
@@ -42,13 +42,13 @@ Spec.describe "JS.eval / global / property access" do
   end
 
   Spec.assert "[]= sets a property" do
-    obj = JS.eval("({})")
+    obj = JS.eval_javascript("({})")
     obj[:foo] = 123
     Spec.assert_equal 123, obj[:foo].to_i
   end
 
   Spec.assert "[]= with string value" do
-    obj = JS.eval("({})")
+    obj = JS.eval_javascript("({})")
     obj[:name] = "alice"
     Spec.assert_equal "alice", obj[:name].to_s
   end

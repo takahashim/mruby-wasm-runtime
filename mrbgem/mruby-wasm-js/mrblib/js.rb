@@ -54,7 +54,12 @@ module JS
       Object.new(_global)
     end
 
-    def eval(src)
+    # Evaluate JS source code in the host environment. Escape hatch
+    # for cases that the structured `JS.global` / `JS::Object#call`
+    # API can't express (object literals, ad-hoc functions, host-side
+    # helpers). Deliberately long-named to discourage casual use —
+    # this is the wide door into host JS and is NOT a sandbox.
+    def eval_javascript(src)
       Object.new(_eval(src))
     end
 
@@ -151,8 +156,11 @@ module JS
 
     # Build a JS object literal from a Ruby Hash. Recursively wraps values.
     #   JS.object(once: true)  →  { once: true }
+    # Uses `new Object()` instead of `eval_javascript("({})")` so this
+    # works in compiler-less (min) builds and avoids the escape hatch
+    # in library-internal paths.
     def object(hash = {})
-      obj = eval("({})")
+      obj = global[:Object].new
       hash.each { |k, v| obj[k.to_s] = v }
       obj
     end
@@ -160,7 +168,7 @@ module JS
     # Build a JS array from a Ruby Array. Recursively wraps elements.
     #   JS.array([1, "two", true])  →  [1, "two", true]
     def array(items = [])
-      arr = eval("[]")
+      arr = global[:Array].new
       items.each { |item| arr.push(item) }
       arr
     end
@@ -225,6 +233,31 @@ module JS
     end
   end
 
+  # Handle returned by `JS::Object#on`. `#off` undoes both halves of the
+  # registration in one call: it removes the JS-side `addEventListener`
+  # binding AND releases the Ruby Proc tied to it. Raw use of
+  # `JS.release_callback(cb)` only frees the Proc half, which is the
+  # historical footgun this class exists to close.
+  class Subscription
+    def initialize(target, event, callback)
+      @target = target
+      @event = event
+      @callback = callback
+      @off = false
+    end
+
+    def off
+      return if @off
+      @off = true
+      @target.call(:removeEventListener, @event, @callback)
+      JS.release_callback(@callback)
+    end
+
+    def off?
+      @off
+    end
+  end
+
   class Object
     # `initialize(handle)` and `handle` are defined in C.
     # Inherits from BasicObject — only define what we actually need.
@@ -272,16 +305,18 @@ module JS
     end
 
     # Subscribe a Ruby block to a JS event (ergonomic alias).
-    #   button.on(:click) { |ev| ... }
+    #   listener = button.on(:click) { |ev| ... }
+    #   listener.off   # removeEventListener + JS.release_callback
     # Pass options via the second arg, e.g. JS.object(once: true).
     def on(event, options = nil, &block)
       cb = JS.callback(&block)
+      evt = event.to_s
       if options
-        call(:addEventListener, event.to_s, cb, options)
+        call(:addEventListener, evt, cb, options)
       else
-        call(:addEventListener, event.to_s, cb)
+        call(:addEventListener, evt, cb)
       end
-      cb
+      JS::Subscription.new(self, evt, cb)
     end
 
     # method_missing: forward unknown method calls to JS.
@@ -380,7 +415,7 @@ module JS
 
     # Adapt the wrapped JS function as a Ruby Proc so it can be passed
     # with `&` to Enumerable methods:
-    #   js_upcase = JS.eval("s => s.toUpperCase()")
+    #   js_upcase = JS.eval_javascript("s => s.toUpperCase()")
     #   ["a", "b"].map(&js_upcase)  # => [Object("A"), Object("B")]
     # Implemented via JS Function.prototype.call (`fn.call(null, *args)`).
     def to_proc

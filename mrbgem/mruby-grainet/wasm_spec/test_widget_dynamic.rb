@@ -15,7 +15,7 @@ Spec.describe "Dynamic mount/unmount via MutationObserver" do
     new_el = doc.call(:createElement, "div")
     new_el.call(:setAttribute, "data-widget", "dyn-mount")
     container.call(:appendChild, new_el)
-    JS.eval("new Promise(r => setTimeout(r, 0))").await
+    JS.eval_javascript("new Promise(r => setTimeout(r, 0))").await
 
     Spec.assert_equal 1, mounted
 
@@ -38,7 +38,7 @@ Spec.describe "Dynamic mount/unmount via MutationObserver" do
 
     el = doc.call(:querySelector, "[data-widget='dyn-unmount']")
     el.call(:remove)
-    JS.eval("new Promise(r => setTimeout(r, 0))").await
+    JS.eval_javascript("new Promise(r => setTimeout(r, 0))").await
 
     Spec.assert_equal 1, cleaned
 
