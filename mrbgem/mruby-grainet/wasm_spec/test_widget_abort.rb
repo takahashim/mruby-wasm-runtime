@@ -1,4 +1,9 @@
 Spec.describe "Widget lifecycle abort" do
+  # `Grainet.reset!` forcefully unmounts widgets registered by the
+  # previous case, so the next case starts from a clean registry even
+  # if the MutationObserver-based unmount hadn't flushed yet.
+  Spec.after { Grainet.reset! }
+
   Spec.assert "alive? reflects mounted / unmounted state" do
     doc = JS.global[:document]
     body = doc[:body]
