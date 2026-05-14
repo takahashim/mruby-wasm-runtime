@@ -2,9 +2,9 @@ Spec.describe "bind_list" do
   Spec.assert "renders initial items as direct children" do
     doc = JS.global[:document]
     body = doc[:body]
-    body[:innerHTML] = '<div data-widget="bl-init"><ul data-ref="list"></ul></div>'
+    body[:innerHTML] = '<div data-component="bl-init"><ul data-ref="list"></ul></div>'
 
-    klass = Class.new(Grainet::Widget) do
+    klass = Class.new(Grainet::Component) do
       attr_reader :items
       define_method(:setup) do
         @items = signal([{id: 1, t: "a"}, {id: 2, t: "b"}, {id: 3, t: "c"}])
@@ -28,9 +28,9 @@ Spec.describe "bind_list" do
   Spec.assert "appended item adds one DOM node, others preserved" do
     doc = JS.global[:document]
     body = doc[:body]
-    body[:innerHTML] = '<div data-widget="bl-append"><ul data-ref="list"></ul></div>'
+    body[:innerHTML] = '<div data-component="bl-append"><ul data-ref="list"></ul></div>'
 
-    klass = Class.new(Grainet::Widget) do
+    klass = Class.new(Grainet::Component) do
       attr_reader :items
       define_method(:setup) do
         @items = signal([{id: 1, t: "a"}, {id: 2, t: "b"}])
@@ -42,7 +42,7 @@ Spec.describe "bind_list" do
     Grainet.register "bl-append", klass
     Grainet.start
 
-    el = doc.call(:querySelector, "[data-widget='bl-append']")
+    el = doc.call(:querySelector, "[data-component='bl-append']")
     inst = Grainet.find_for_element(el)
     list = doc.call(:querySelector, "[data-ref='list']")
 
@@ -62,9 +62,9 @@ Spec.describe "bind_list" do
   Spec.assert "removed item disposes its node, others preserved" do
     doc = JS.global[:document]
     body = doc[:body]
-    body[:innerHTML] = '<div data-widget="bl-remove"><ul data-ref="list"></ul></div>'
+    body[:innerHTML] = '<div data-component="bl-remove"><ul data-ref="list"></ul></div>'
 
-    klass = Class.new(Grainet::Widget) do
+    klass = Class.new(Grainet::Component) do
       attr_reader :items
       define_method(:setup) do
         @items = signal([{id: 1, t: "a"}, {id: 2, t: "b"}, {id: 3, t: "c"}])
@@ -76,7 +76,7 @@ Spec.describe "bind_list" do
     Grainet.register "bl-remove", klass
     Grainet.start
 
-    el = doc.call(:querySelector, "[data-widget='bl-remove']")
+    el = doc.call(:querySelector, "[data-component='bl-remove']")
     inst = Grainet.find_for_element(el)
     list = doc.call(:querySelector, "[data-ref='list']")
 
@@ -96,9 +96,9 @@ Spec.describe "bind_list" do
   Spec.assert "in-place update replaces only the changed item's node" do
     doc = JS.global[:document]
     body = doc[:body]
-    body[:innerHTML] = '<div data-widget="bl-update"><ul data-ref="list"></ul></div>'
+    body[:innerHTML] = '<div data-component="bl-update"><ul data-ref="list"></ul></div>'
 
-    klass = Class.new(Grainet::Widget) do
+    klass = Class.new(Grainet::Component) do
       attr_reader :items
       define_method(:setup) do
         @items = signal([{id: 1, t: "a"}, {id: 2, t: "b"}])
@@ -110,7 +110,7 @@ Spec.describe "bind_list" do
     Grainet.register "bl-update", klass
     Grainet.start
 
-    el = doc.call(:querySelector, "[data-widget='bl-update']")
+    el = doc.call(:querySelector, "[data-component='bl-update']")
     inst = Grainet.find_for_element(el)
     list = doc.call(:querySelector, "[data-ref='list']")
 
@@ -136,9 +136,9 @@ Spec.describe "bind_list" do
   Spec.assert "reordering moves existing nodes without re-creating them" do
     doc = JS.global[:document]
     body = doc[:body]
-    body[:innerHTML] = '<div data-widget="bl-reorder"><ul data-ref="list"></ul></div>'
+    body[:innerHTML] = '<div data-component="bl-reorder"><ul data-ref="list"></ul></div>'
 
-    klass = Class.new(Grainet::Widget) do
+    klass = Class.new(Grainet::Component) do
       attr_reader :items
       define_method(:setup) do
         @items = signal([{id: 1, t: "a"}, {id: 2, t: "b"}, {id: 3, t: "c"}])
@@ -150,7 +150,7 @@ Spec.describe "bind_list" do
     Grainet.register "bl-reorder", klass
     Grainet.start
 
-    el = doc.call(:querySelector, "[data-widget='bl-reorder']")
+    el = doc.call(:querySelector, "[data-component='bl-reorder']")
     inst = Grainet.find_for_element(el)
     list = doc.call(:querySelector, "[data-ref='list']")
 
@@ -170,25 +170,25 @@ Spec.describe "bind_list" do
     body[:innerHTML] = ""
   end
 
-  Spec.assert "removed item with nested widget is auto-unmounted by MO" do
+  Spec.assert "removed item with nested component is auto-unmounted by MO" do
     doc = JS.global[:document]
     body = doc[:body]
-    body[:innerHTML] = '<div data-widget="bl-host"><ul data-ref="list"></ul></div>'
+    body[:innerHTML] = '<div data-component="bl-host"><ul data-ref="list"></ul></div>'
 
     cleaned = []
-    leaf_klass = Class.new(Grainet::Widget) do
+    leaf_klass = Class.new(Grainet::Component) do
       define_method(:setup) do
         cleanup { cleaned << refs.label.text }
       end
     end
-    host_klass = Class.new(Grainet::Widget) do
+    host_klass = Class.new(Grainet::Component) do
       attr_reader :items
       define_method(:setup) do
         @items = signal([{id: 1, t: "alpha"}, {id: 2, t: "beta"}])
         bind_list refs.list, @items, key: ->(it) { it[:id] } do |it|
           HTML(:li,
             HTML(:span, it[:t], data_ref: "label"),
-            data_widget: "bl-leaf")
+            data_component: "bl-leaf")
         end
       end
     end
@@ -197,10 +197,10 @@ Spec.describe "bind_list" do
     Grainet.start
     JS.eval_javascript("new Promise(r => setTimeout(r, 0))").await
 
-    el = doc.call(:querySelector, "[data-widget='bl-host']")
+    el = doc.call(:querySelector, "[data-component='bl-host']")
     inst = Grainet.find_for_element(el)
 
-    # Drop the first item; its leaf widget should run cleanup.
+    # Drop the first item; its leaf component should run cleanup.
     inst.items.update { |arr| arr.reject { |it| it[:id] == 1 } }
     JS.eval_javascript("new Promise(r => setTimeout(r, 0))").await
 
@@ -214,11 +214,11 @@ Spec.describe "bind_list" do
     body = doc[:body]
     body[:innerHTML] = <<~HTML
       <template data-template="bl_scope"><li><span data-ref="label"></span></li></template>
-      <div data-widget="bl-scope-host"><ul data-ref="list"></ul></div>
+      <div data-component="bl-scope-host"><ul data-ref="list"></ul></div>
     HTML
 
     cleaned = []
-    klass = Class.new(Grainet::Widget) do
+    klass = Class.new(Grainet::Component) do
       attr_reader :items
 
       define_method(:setup) do
@@ -232,7 +232,7 @@ Spec.describe "bind_list" do
     Grainet.register "bl-scope-host", klass
     Grainet.start
 
-    el = doc.call(:querySelector, "[data-widget='bl-scope-host']")
+    el = doc.call(:querySelector, "[data-component='bl-scope-host']")
     inst = Grainet.find_for_element(el)
     inst.items.update { |arr| arr.reject { |it| it["id"] == 1 } }
 
@@ -243,12 +243,12 @@ Spec.describe "bind_list" do
   Spec.assert "duplicate keys raise Grainet::Error in dev mode" do
     doc = JS.global[:document]
     body = doc[:body]
-    body[:innerHTML] = '<div data-widget="bl-dup"><ul data-ref="list"></ul></div>'
+    body[:innerHTML] = '<div data-component="bl-dup"><ul data-ref="list"></ul></div>'
 
     captured = []
     Grainet.logger = ->(_severity, _label, err) { captured << err }
     begin
-      klass = Class.new(Grainet::Widget) do
+      klass = Class.new(Grainet::Component) do
         define_method(:setup) do
           items = signal([{"id" => 1, "t" => "a"}, {"id" => 1, "t" => "b"}])
           bind_list refs.list, items, key: "id" do |it|
@@ -272,9 +272,9 @@ Spec.describe "bind_list" do
   Spec.assert "key: \"id\" String shortcut works against String-keyed Hashes" do
     doc = JS.global[:document]
     body = doc[:body]
-    body[:innerHTML] = '<div data-widget="bl-strkey"><ul data-ref="list"></ul></div>'
+    body[:innerHTML] = '<div data-component="bl-strkey"><ul data-ref="list"></ul></div>'
 
-    klass = Class.new(Grainet::Widget) do
+    klass = Class.new(Grainet::Component) do
       attr_reader :items
       define_method(:setup) do
         @items = signal([{"id" => 1, "t" => "a"}, {"id" => 2, "t" => "b"}])
@@ -296,12 +296,12 @@ Spec.describe "bind_list" do
   Spec.assert "key: :id Symbol raises ArgumentError with helpful hint" do
     doc = JS.global[:document]
     body = doc[:body]
-    body[:innerHTML] = '<div data-widget="bl-symkey"><ul data-ref="list"></ul></div>'
+    body[:innerHTML] = '<div data-component="bl-symkey"><ul data-ref="list"></ul></div>'
 
     captured = []
     Grainet.logger = ->(_severity, _label, err) { captured << err }
 
-    klass = Class.new(Grainet::Widget) do
+    klass = Class.new(Grainet::Component) do
       define_method(:setup) do
         items = signal([{"id" => 1}])
         bind_list refs.list, items, key: :id do |it|
@@ -325,12 +325,12 @@ Spec.describe "bind_list" do
   Spec.assert "key: 42 (non-Proc/non-String) raises ArgumentError" do
     doc = JS.global[:document]
     body = doc[:body]
-    body[:innerHTML] = '<div data-widget="bl-intkey"><ul data-ref="list"></ul></div>'
+    body[:innerHTML] = '<div data-component="bl-intkey"><ul data-ref="list"></ul></div>'
 
     captured = []
     Grainet.logger = ->(_severity, _label, err) { captured << err }
 
-    klass = Class.new(Grainet::Widget) do
+    klass = Class.new(Grainet::Component) do
       define_method(:setup) do
         items = signal([{"id" => 1}])
         bind_list refs.list, items, key: 42 do |it|

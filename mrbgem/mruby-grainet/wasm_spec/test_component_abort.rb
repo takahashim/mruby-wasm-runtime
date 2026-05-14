@@ -1,5 +1,5 @@
-Spec.describe "Widget lifecycle abort" do
-  # `Grainet.reset!` forcefully unmounts widgets registered by the
+Spec.describe "Component lifecycle abort" do
+  # `Grainet.reset!` forcefully unmounts components registered by the
   # previous case, so the next case starts from a clean registry even
   # if the MutationObserver-based unmount hadn't flushed yet.
   Spec.after { Grainet.reset! }
@@ -7,13 +7,13 @@ Spec.describe "Widget lifecycle abort" do
   Spec.assert "alive? reflects mounted / unmounted state" do
     doc = JS.global[:document]
     body = doc[:body]
-    body[:innerHTML] = '<div data-widget="ab-alive"></div>'
+    body[:innerHTML] = '<div data-component="ab-alive"></div>'
 
-    klass = Class.new(Grainet::Widget)
+    klass = Class.new(Grainet::Component)
     Grainet.register "ab-alive", klass
     Grainet.start
 
-    inst = Grainet.find_for_element(doc.call(:querySelector, "[data-widget='ab-alive']"))
+    inst = Grainet.find_for_element(doc.call(:querySelector, "[data-component='ab-alive']"))
     Spec.assert_true inst.alive?
 
     body[:innerHTML] = ""
@@ -24,13 +24,13 @@ Spec.describe "Widget lifecycle abort" do
   Spec.assert "abort_signal is a JS AbortSignal, not aborted while mounted" do
     doc = JS.global[:document]
     body = doc[:body]
-    body[:innerHTML] = '<div data-widget="ab-signal"></div>'
+    body[:innerHTML] = '<div data-component="ab-signal"></div>'
 
-    klass = Class.new(Grainet::Widget)
+    klass = Class.new(Grainet::Component)
     Grainet.register "ab-signal", klass
     Grainet.start
 
-    inst = Grainet.find_for_element(doc.call(:querySelector, "[data-widget='ab-signal']"))
+    inst = Grainet.find_for_element(doc.call(:querySelector, "[data-component='ab-signal']"))
     sig = inst.abort_signal
     Spec.assert_false sig[:aborted].js_bool
 
@@ -39,16 +39,16 @@ Spec.describe "Widget lifecycle abort" do
     Spec.assert_true sig[:aborted].js_bool
   end
 
-  Spec.assert "Widget#sleep raises Grainet::Aborted if already unmounted" do
+  Spec.assert "Component#sleep raises Grainet::Aborted if already unmounted" do
     doc = JS.global[:document]
     body = doc[:body]
-    body[:innerHTML] = '<div data-widget="ab-pre"></div>'
+    body[:innerHTML] = '<div data-component="ab-pre"></div>'
 
-    klass = Class.new(Grainet::Widget)
+    klass = Class.new(Grainet::Component)
     Grainet.register "ab-pre", klass
     Grainet.start
 
-    inst = Grainet.find_for_element(doc.call(:querySelector, "[data-widget='ab-pre']"))
+    inst = Grainet.find_for_element(doc.call(:querySelector, "[data-component='ab-pre']"))
     body[:innerHTML] = ""
     JS.eval_javascript("new Promise(r => setTimeout(r, 16))").await
 
@@ -58,14 +58,14 @@ Spec.describe "Widget lifecycle abort" do
   Spec.assert "Aborted from sleep inside :click handler is silenced" do
     doc = JS.global[:document]
     body = doc[:body]
-    body[:innerHTML] = '<div data-widget="ab-click"><button data-ref="btn"></button></div>'
+    body[:innerHTML] = '<div data-component="ab-click"><button data-ref="btn"></button></div>'
 
     captured = []
     Grainet.logger = ->(_severity, msg, err) { captured << [msg, err] }
 
     reached_after_sleep = false
     boundary_fired = false
-    klass = Class.new(Grainet::Widget) do
+    klass = Class.new(Grainet::Component) do
       define_method(:setup) do
         on_error { |_l, _e| boundary_fired = true; true }
         refs.btn.on(:click) do
@@ -77,7 +77,7 @@ Spec.describe "Widget lifecycle abort" do
     Grainet.register "ab-click", klass
     Grainet.start
 
-    btn = doc.call(:querySelector, "[data-widget='ab-click'] button")
+    btn = doc.call(:querySelector, "[data-component='ab-click'] button")
     btn.call(:click)
     JS.eval_javascript("new Promise(r => setTimeout(r, 20))").await
     body[:innerHTML] = ""
@@ -93,13 +93,13 @@ Spec.describe "Widget lifecycle abort" do
   Spec.assert "Aborted from sleep inside every block is silenced" do
     doc = JS.global[:document]
     body = doc[:body]
-    body[:innerHTML] = '<div data-widget="ab-every"></div>'
+    body[:innerHTML] = '<div data-component="ab-every"></div>'
 
     captured = []
     Grainet.logger = ->(_severity, msg, err) { captured << [msg, err] }
 
     reached_after_sleep = 0
-    klass = Class.new(Grainet::Widget) do
+    klass = Class.new(Grainet::Component) do
       define_method(:setup) do
         every(20) do
           sleep(0.2)
@@ -123,10 +123,10 @@ Spec.describe "Widget lifecycle abort" do
   Spec.assert "Aborted bypasses on_error entirely (silenced at Logger#error)" do
     doc = JS.global[:document]
     body = doc[:body]
-    body[:innerHTML] = '<div data-widget="ab-on-err"><button data-ref="btn"></button></div>'
+    body[:innerHTML] = '<div data-component="ab-on-err"><button data-ref="btn"></button></div>'
 
     on_error_invocations = []
-    klass = Class.new(Grainet::Widget) do
+    klass = Class.new(Grainet::Component) do
       define_method(:setup) do
         on_error do |label, err|
           on_error_invocations << [label, err.class]
@@ -140,7 +140,7 @@ Spec.describe "Widget lifecycle abort" do
     Grainet.register "ab-on-err", klass
     Grainet.start
 
-    btn = doc.call(:querySelector, "[data-widget='ab-on-err'] button")
+    btn = doc.call(:querySelector, "[data-component='ab-on-err'] button")
     btn.call(:click)
     JS.eval_javascript("new Promise(r => setTimeout(r, 20))").await
     body[:innerHTML] = ""
@@ -152,13 +152,13 @@ Spec.describe "Widget lifecycle abort" do
   Spec.assert "non-Aborted exceptions still flow through on_error / logger" do
     doc = JS.global[:document]
     body = doc[:body]
-    body[:innerHTML] = '<div data-widget="ab-regress"><button data-ref="btn"></button></div>'
+    body[:innerHTML] = '<div data-component="ab-regress"><button data-ref="btn"></button></div>'
 
     captured = []
     Grainet.logger = ->(_severity, msg, err) { captured << [msg, err] }
 
     boundary_saw = nil
-    klass = Class.new(Grainet::Widget) do
+    klass = Class.new(Grainet::Component) do
       define_method(:setup) do
         on_error { |label, err| boundary_saw = [label, err.message]; true }
         refs.btn.on(:click) { raise "kaboom" }
@@ -167,7 +167,7 @@ Spec.describe "Widget lifecycle abort" do
     Grainet.register "ab-regress", klass
     Grainet.start
 
-    doc.call(:querySelector, "[data-widget='ab-regress'] button").call(:click)
+    doc.call(:querySelector, "[data-component='ab-regress'] button").call(:click)
     JS.eval_javascript("new Promise(r => setTimeout(r, 16))").await
 
     Spec.assert_true boundary_saw && boundary_saw[1] == "kaboom"

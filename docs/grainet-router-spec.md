@@ -2,7 +2,7 @@
 
 複数ページ SPA 構成のための **`mruby-grainet-router`** gem の API 仕様。実装は `mrbgem/mruby-grainet-router/mrblib/grainet_router.rb`。`mruby-grainet` core に依存するが、core からは依存しない (opt-in)。
 
-中心概念は `Grainet::Router::Context` クラスのインスタンス。アプリ全体で `Grainet::Router.default_context` が単一の Context を返し、以降の操作 (`draw` / `start` / `navigate` / `path` 等) はこの Context インスタンス経由で行う。Widget 内では `Grainet::Router::WidgetMixin` (auto-include) が同じ Context を `router` instance method として expose する。
+中心概念は `Grainet::Router::Context` クラスのインスタンス。アプリ全体で `Grainet::Router.default_context` が単一の Context を返し、以降の操作 (`draw` / `start` / `navigate` / `path` 等) はこの Context インスタンス経由で行う。Component 内では `Grainet::Router::WidgetMixin` (auto-include) が同じ Context を `router` instance method として expose する。
 
 対象読者: 複数 route を持つアプリを Grainet で書きたい人、現状の `effect → location.hash` 単方向 sync (`examples/grainet-receipt.html`) では足りなくなった人、SolidJS Router からの移植を検討する人。
 
@@ -10,7 +10,7 @@
 
 `window.location` (path / query / hash) を **signal として扱う** ことで、URL 状態を Grainet の reactivity の一部に組み込む。具体的には:
 
-- URL から状態 (現在のページ、route param) を読み取り、widget の表示・bind に反映
+- URL から状態 (現在のページ、route param) を読み取り、component の表示・bind に反映
 - ページ遷移を `router.navigate(path)` で起こし、ブラウザの `history` API を更新
 - ブラウザの「戻る/進む」 (popstate) と SPA 内 navigation を一貫して扱う
 - 既存の `signal` / `computed` / `effect` / `bind` だけで route 切替 UI が書ける
@@ -39,7 +39,7 @@
 
 ## Grainet Router を使わない選択 (MPA)
 
-各 route が別 HTML ファイル (例: `/home.html`, `/users.html`) で、ページ遷移は通常の `<a href>` によるフルリロードで良い場合は **`mruby-grainet-router` を読み込まないのが正解**。各 HTML で `Grainet.start` だけ呼んで、その page 専用の widget を mount すれば足りる。
+各 route が別 HTML ファイル (例: `/home.html`, `/users.html`) で、ページ遷移は通常の `<a href>` によるフルリロードで良い場合は **`mruby-grainet-router` を読み込まないのが正解**。各 HTML で `Grainet.start` だけ呼んで、その page 専用の component を mount すれば足りる。
 
 SolidJS Router 等も同じ境界を採っており、Router の責務は **「URL 変更時に JS がページ全体を保持したまま DOM だけ書き換える」 = SPA 内 navigation** に閉じている。MPA はブラウザの通常遷移に任せる領域なので Router 不要。
 
@@ -63,7 +63,7 @@ Router を導入するのは:
 |---|---|
 | Boot コード (script トップレベル等、`draw`/`start` のみ) | `Grainet::Router.draw` / `Grainet::Router.start` の short-cut で default_context に forward |
 | Boot コードでそれ以外を呼ぶ場合 | `Grainet::Router.default_context` を経由 (テストや低レベル操作) |
-| Widget 内 (`setup` etc.) | `Grainet::Router::WidgetMixin` が `router` instance method を提供。`lookup(:router)` 経由で取得するため、親 widget が `expose :router, sub_ctx` で sub-context を注入できる |
+| Component 内 (`setup` etc.) | `Grainet::Router::WidgetMixin` が `router` instance method を提供。`lookup(:router)` 経由で取得するため、親 component が `expose :router, sub_ctx` で sub-context を注入できる |
 | 追加 Context (sub-router など) | `Grainet::Router.new_context` で別 instance を生成 |
 
 ```ruby
@@ -73,8 +73,8 @@ Grainet::Router.draw outlet: "[data-router-outlet]" do
 end
 Grainet::Router.start
 
-# Widget — context は WidgetMixin の router 経由
-class HomePage < Grainet::Widget
+# Component — context は WidgetMixin の router 経由
+class HomePage < Grainet::Component
   def setup
     bind refs.title, text: computed { "path=#{router.path}" }
   end
@@ -94,8 +94,8 @@ Module-level に提供される shortcut は **default context 限定**、かつ
 
 それ以外の **per-call API** (`path` / `navigate` / `params` / `current` / `match` / `*_path` / `*_match` / `intercept_link` / `bind_link` / `href` / etc.) は **Context インスタンス経由のみ**:
 
-- Widget 内: `router.foo` (WidgetMixin)
-- Widget 外: `Grainet::Router.default_context.foo` (テスト等)
+- Component 内: `router.foo` (WidgetMixin)
+- Component 外: `Grainet::Router.default_context.foo` (テスト等)
 - Sub-context: `sub_ctx.foo` (明示的な context 参照)
 
 このスコープ分けで:
@@ -109,7 +109,7 @@ Module-level に提供される shortcut は **default context 限定**、かつ
 `Grainet::Router` Module は **factory + namespace + 限定的 lifecycle shortcut** のみを提供し、状態は持たない。実際の状態は `Context` instance に閉じ込められている。これにより:
 
 - `router.foo` と書いたとき `router` が **真にインスタンス** = Ruby 慣習通り (小文字 = instance/method-return)
-- `lookup(:router)` で widget tree に sub-context を注入できる素地 (`expose :router, sub_ctx`)
+- `lookup(:router)` で component tree に sub-context を注入できる素地 (`expose :router, sub_ctx`)
 - 複数 Context を共存させた multi-tenant SPA / sub-router の将来拡張余地
 - テストごとの分離 (`new_context` で独立 Router を生成可能)
 
@@ -117,7 +117,7 @@ Module-level に提供される shortcut は **default context 限定**、かつ
 
 ### 将来の拡張余地
 
-- **Sub-router**: 子 widget tree に独自 Context を注入 (`expose :router, Grainet::Router.new_context`) すると、その subtree の `router.path` 等は別 Context を見る。outlet を sub-context に紐付ければネスト route が実現可能 (v2 候補)
+- **Sub-router**: 子 component tree に独自 Context を注入 (`expose :router, Grainet::Router.new_context`) すると、その subtree の `router.path` 等は別 Context を見る。outlet を sub-context に紐付ければネスト route が実現可能 (v2 候補)
 - **複数の独立 Router**: 1 HTML 内に独立した複数 SPA がある稀なケースで `Grainet::Router.new_context` を使う
 
 v1 の API は現状のシングル context 利用に最適化されているが、内部構造は instance-based なので **後方互換を保ったまま** 上記拡張を後付けできる。
@@ -131,7 +131,7 @@ Router は 2 層構成:
 | 層 | 用途 | 主要 API |
 |---|---|---|
 | 低レベル | URL 状態を signal/computed として扱うだけ。表示は呼び出し側で書く | `location` / `path` / `query` / `match` / `navigate` / `intercept_link` |
-| 高レベル DSL | 複数ページ SPA。route ごとに widget を lazy mount | `draw` / `page` / `*_path` / `*_match` / `params` / `current` |
+| 高レベル DSL | 複数ページ SPA。route ごとに component を lazy mount | `draw` / `page` / `*_path` / `*_match` / `params` / `current` |
 
 低レベル API は単独で完結しているので、「URL から signal を読みたいだけ」「常時マウント + `bind hidden:` でページ切替したい」用途では DSL 不要。`mrbgem/mruby-grainet-router` は両方を提供する。
 
@@ -142,7 +142,7 @@ Router は 2 層構成:
 - 各 route は `<template id="page-foo">` として HTML に書いておく
 - アプリには 1 つの **outlet 要素** (`<div data-router-outlet>`) を置く
 - route 遷移時に Router が active な template を clone して outlet に append、前の内容を取り除く
-- outlet 内の `data-widget="..."` は既存 Grainet の MutationObserver により自動で mount / unmount
+- outlet 内の `data-component="..."` は既存 Grainet の MutationObserver により自動で mount / unmount
 
 ```html
 <nav>
@@ -153,13 +153,13 @@ Router は 2 層構成:
 <div data-router-outlet></div>
 
 <template id="page-home">
-  <div data-widget="home-page">
+  <div data-component="home-page">
     <h1>Home</h1>
   </div>
 </template>
 
 <template id="page-user">
-  <div data-widget="user-detail">
+  <div data-component="user-detail">
     <h2 data-ref="title">User</h2>
   </div>
 </template>
@@ -183,21 +183,21 @@ Grainet::Router.start  # mode: :hash がデフォルト
 
 ### 低レベル API: 軽量 / always-mounted モデル
 
-DSL を使わず、`bind hidden:` で「全 widget 常駐 + 可視性切替」も書ける。state 保持したい / シンプル app / 低レベルに留めたい場合:
+DSL を使わず、`bind hidden:` で「全 component 常駐 + 可視性切替」も書ける。state 保持したい / シンプル app / 低レベルに留めたい場合:
 
 ```html
-<div data-widget="home-page">  <h1>Home</h1>  </div>
-<div data-widget="user-detail" hidden>  <h2>User</h2>  </div>
+<div data-component="home-page">  <h1>Home</h1>  </div>
+<div data-component="user-detail" hidden>  <h2>User</h2>  </div>
 ```
 
 ```ruby
-class HomePage < Grainet::Widget
+class HomePage < Grainet::Component
   def setup
     bind root, hidden: computed { router.path != "/" }
   end
 end
 
-class UserDetail < Grainet::Widget
+class UserDetail < Grainet::Component
   def setup
     m = router.match("/users/:id")
     bind root, hidden: computed { m.value.nil? }
@@ -240,7 +240,7 @@ end
 Grainet::Router.start
 ```
 
-`Grainet::Router.draw` / `start` は default context への lifecycle shortcut。Widget 内では `Grainet::Router::WidgetMixin` が同じ Context を `lookup(:router)` 経由で `router` として公開する (= 後述の Widget 内 API と一貫)。
+`Grainet::Router.draw` / `start` は default context への lifecycle shortcut。Component 内では `Grainet::Router::WidgetMixin` が同じ Context を `lookup(:router)` 経由で `router` として公開する (= 後述の Component 内 API と一貫)。
 
 `draw` は route 宣言のみ。実際の listener 起動・初回マッチ評価は `start` で行う。順序は `draw` → `start` を推奨 (start 時に route 表ができていれば最初の outlet 描画が正しく行える)。
 
@@ -281,7 +281,7 @@ Grainet::Router.start(mode: :history, base: "/myapp/")
 
 ### 冪等性
 
-`start` は冪等。複数 widget で各々 `start` を呼んでも 2 回目以降は no-op。テストでも widget 単体起動でも安全。`draw` も冪等で、再呼び出しは前の宣言を上書き (主にテスト用途)。
+`start` は冪等。複数 component で各々 `start` を呼んでも 2 回目以降は no-op。テストでも component 単体起動でも安全。`draw` も冪等で、再呼び出しは前の宣言を上書き (主にテスト用途)。
 
 ---
 
@@ -397,7 +397,7 @@ m.value
 低レベル `router.match("/users/:id")` と意味的には同じ。違いは:
 
 - DSL 経由: 名前で参照可能、param 名 typo を防げる
-- 低レベル: pattern 文字列を毎回書く、widget ごとに同じパターンを呼ぶと computed が重複生成される (性能劣化)
+- 低レベル: pattern 文字列を毎回書く、component ごとに同じパターンを呼ぶと computed が重複生成される (性能劣化)
 
 DSL 採用時は **named match を優先**。
 
@@ -406,7 +406,7 @@ DSL 採用時は **named match を優先**。
 active route の param Hash を直接返す (DSL 専用):
 
 ```ruby
-class UserDetail < Grainet::Widget
+class UserDetail < Grainet::Component
   def setup
     bind refs.title, text: computed { router.params[:id] }
   end
@@ -415,7 +415,7 @@ end
 
 reactive コンテキスト (`computed` / `effect` / `bind`) 内で呼ぶと、内部で `location` signal を読むため URL 変化に応じて自動再計算される。
 
-lazy mount 中は active route の widget しか mount されないので、`router.params[:id]` は常に有効値を返す。
+lazy mount 中は active route の component しか mount されないので、`router.params[:id]` は常に有効値を返す。
 
 低レベルの `match` を使う場合は `m.value[:id]` と書く必要がある (`params` は draw を使った時のみ意味を持つ)。
 
@@ -476,7 +476,7 @@ m = router.match("/users/:id")
 m.value  # => { id: "42" } | nil
 ```
 
-DSL を使わない / 動的 pattern を作りたい場合に使う。同じ pattern を複数の widget で使う場合は computed が重複するので、widget の ivar / instance 共有を検討。
+DSL を使わない / 動的 pattern を作りたい場合に使う。同じ pattern を複数の component で使う場合は computed が重複するので、component の ivar / instance 共有を検討。
 
 ### `router.navigate(path, replace: false)` → nil
 
@@ -508,7 +508,7 @@ end
 2. `href` が現在の origin と同一なら `event.preventDefault` + `router.navigate(path)`
 3. 外部 URL / `target="_blank"` / 修飾キー (Cmd/Ctrl/Shift) 押下時は何もしない (ブラウザのデフォルトに任せる)
 
-`intercept_link` を呼ぶ widget の責任範囲は「自分の subtree の `<a>` クリック」。グローバルで全 `<a>` を hijack する仕様にはしない。グローバル opt-in は将来 `router.start(intercept_links: true)` で提供可能。
+`intercept_link` を呼ぶ component の責任範囲は「自分の subtree の `<a>` クリック」。グローバルで全 `<a>` を hijack する仕様にはしない。グローバル opt-in は将来 `router.start(intercept_links: true)` で提供可能。
 
 ---
 
@@ -556,10 +556,10 @@ router.resolve("./edit")      # => "/users/edit"
 
 ### `router.bind_link(el, href:, match: nil, ...)` → nil
 
-anchor 要素 1 本に対して **href の書き込み + active class の reactive bind** を 1 呼出で行う高レベル helper。Widget 経由で呼ぶのを推奨 (auto-cleanup される):
+anchor 要素 1 本に対して **href の書き込み + active class の reactive bind** を 1 呼出で行う高レベル helper。Component 経由で呼ぶのを推奨 (auto-cleanup される):
 
 ```ruby
-class Nav < Grainet::Widget
+class Nav < Grainet::Component
   def setup
     bind_link refs.home,    href: router.home_path
     bind_link refs.counter, href: router.counter_path
@@ -588,8 +588,8 @@ end
 1. `href:` を `router.href(...)` で実 href 文字列に変換し、`<a>` の href 属性に書く
 2. `match:` (省略時は `href:` の path) を `active?` で評価
 3. `active_class:` を toggle (active 時 add、inactive 時 remove)
-4. 全体を Widget の `effect` 内で実行 → location 変化に追随
-5. Widget 経由 (`widget.bind_link(...)` = `Grainet::Router::WidgetMixin`) で呼ばれた場合、effect は widget 寿命に紐付き unmount で auto-dispose
+4. 全体を Component の `effect` 内で実行 → location 変化に追随
+5. Component 経由 (`component.bind_link(...)` = `Grainet::Router::WidgetMixin`) で呼ばれた場合、effect は component 寿命に紐付き unmount で auto-dispose
 
 #### `active:` の省略時挙動 (`match:` フォールバック)
 
@@ -602,19 +602,19 @@ bind_link refs.users, href: "/users", match: "/users"
 
 通常はこれで充分 (Nav UX で「親 path を含む全子 path を active 強調」が自然)。複数 route 名を集約したい場合は `match: [:users, :user]` のように明示する。
 
-### Widget instance method としての `bind_link`
+### Component instance method としての `bind_link`
 
-`mruby-grainet-form` の `form` ヘルパと同じパターンで、`Grainet::Router::WidgetMixin` が `Grainet::Widget` に include される。これにより:
+`mruby-grainet-form` の `form` ヘルパと同じパターンで、`Grainet::Router::WidgetMixin` が `Grainet::Component` に include される。これにより:
 
 ```ruby
 # 短縮形 (推奨)
 bind_link refs.home, href: r.home_path
 
 # 等価な明示形
-router.bind_link(refs.home, href: r.home_path, owner_widget: self)
+router.bind_link(refs.home, href: r.home_path, owner_component: self)
 ```
 
-owner_widget が自動で `self` (Widget) になり、effect が widget の lifecycle に track される。
+owner_component が自動で `self` (Component) になり、effect が component の lifecycle に track される。
 
 ---
 
@@ -623,7 +623,7 @@ owner_widget が自動で `self` (Widget) になり、effect が widget の life
 ### 1. シンプルな複数ページ SPA (lazy mount + DSL)
 
 ```html
-<nav data-widget="nav">
+<nav data-component="nav">
   <a href="/" data-ref="home_link">Home</a>
   <a href="/about" data-ref="about_link">About</a>
 </nav>
@@ -631,10 +631,10 @@ owner_widget が自動で `self` (Widget) になり、effect が widget の life
 <div data-router-outlet></div>
 
 <template id="page-home">
-  <div data-widget="home-page"><h1>Welcome</h1></div>
+  <div data-component="home-page"><h1>Welcome</h1></div>
 </template>
 <template id="page-about">
-  <div data-widget="about-page"><h1>About</h1></div>
+  <div data-component="about-page"><h1>About</h1></div>
 </template>
 ```
 
@@ -645,7 +645,7 @@ Grainet::Router.draw outlet: "[data-router-outlet]" do
 end
 Grainet::Router.start
 
-class Nav < Grainet::Widget
+class Nav < Grainet::Component
   def setup
     bind refs.home_link,  class: { active: computed { router.current == :home } }
     bind refs.about_link, class: { active: computed { router.current == :about } }
@@ -658,7 +658,7 @@ end
 
 ```html
 <template id="page-user">
-  <div data-widget="user-detail">
+  <div data-component="user-detail">
     <h2 data-ref="title"></h2>
   </div>
 </template>
@@ -669,7 +669,7 @@ Grainet::Router.draw outlet: "[data-router-outlet]" do
   page :user, "/users/:id"
 end
 
-class UserDetail < Grainet::Widget
+class UserDetail < Grainet::Component
   def setup
     bind refs.title, text: computed { "User #{router.params[:id]}" }
   end
@@ -693,7 +693,7 @@ end
 ### 4. 認証 guard (effect で実装)
 
 ```ruby
-class App < Grainet::Widget
+class App < Grainet::Component
   def setup
     @user = lookup(:current_user)
 
@@ -726,7 +726,7 @@ end
 ### 6. クエリ string の利用
 
 ```ruby
-class SearchPage < Grainet::Widget
+class SearchPage < Grainet::Component
   def setup
     @query = signal(router.query["q"] || "")
 
@@ -744,12 +744,12 @@ end
 
 ### 7. 低レベル API のみ (always-mounted パターン)
 
-DSL を使わず、各 widget が自分の表示条件を declare:
+DSL を使わず、各 component が自分の表示条件を declare:
 
 ```ruby
 Grainet::Router.default_context.start
 
-class HomePage < Grainet::Widget
+class HomePage < Grainet::Component
   def setup
     bind root, hidden: computed { router.path != "/" }
   end
@@ -768,20 +768,20 @@ Grainet::Router.draw outlet: "[data-router-outlet]" do
   page :user, "/users/:id"
 end
 
-class Nav < Grainet::Widget   # 常時マウント
+class Nav < Grainet::Component   # 常時マウント
   def setup
     # 常駐、各 link の active 強調を router.current で
   end
 end
 
-class Footer < Grainet::Widget  # 常時マウント
+class Footer < Grainet::Component  # 常時マウント
   def setup
     # ...
   end
 end
 ```
 
-`<div data-widget="nav">` と `<div data-widget="footer">` は outlet の **外**に配置するだけで両立する。
+`<div data-component="nav">` と `<div data-component="footer">` は outlet の **外**に配置するだけで両立する。
 
 ---
 
@@ -791,20 +791,20 @@ end
 
 DSL の lazy mount は内部で `Grainet::Template` の HTML `<template>` clone 機構を流用する。Router 側に独自実装は持たず、`Grainet::Template` の API を call するだけ。
 
-### MutationObserver による widget auto-mount
+### MutationObserver による component auto-mount
 
-clone した template を outlet に append すると、内部の `data-widget="..."` は既存 Grainet の MutationObserver により自動で widget mount される。前 route の DOM を取り除けば widget は auto-cleanup する。Router 自身は widget lifecycle を管理しない。
+clone した template を outlet に append すると、内部の `data-component="..."` は既存 Grainet の MutationObserver により自動で component mount される。前 route の DOM を取り除けば component は auto-cleanup する。Router 自身は component lifecycle を管理しない。
 
 ### `error_boundary` との関係
 
-route 内 widget の例外は通常通り親 widget の `error_boundary` に bubble する。outlet 配下で widget が raise した場合も同様。Router は error 処理に介入しない。
+route 内 component の例外は通常通り親 component の `error_boundary` に bubble する。outlet 配下で component が raise した場合も同様。Router は error 処理に介入しない。
 
 ### `persistent_signal` との関係
 
-lazy mount で widget が unmount されると signal も消える。state を route 切替を超えて残したい場合は `persistent_signal` (localStorage) で永続化する:
+lazy mount で component が unmount されると signal も消える。state を route 切替を超えて残したい場合は `persistent_signal` (localStorage) で永続化する:
 
 ```ruby
-class TodosPage < Grainet::Widget
+class TodosPage < Grainet::Component
   def setup
     @items = persistent_signal("todos-items", [])
     # 他 route に navigate しても、再表示時に items が復元される
@@ -824,7 +824,7 @@ end
 ### なぜ lazy mount をデフォルトに?
 
 - **conventional**: SPA ユーザの期待 (「ページ移動 = 状態リセット」) に合う
-- **scale**: 大規模アプリで全 widget を常時マウントするのは初回 boot コスト・実行時 effect コストが高い
+- **scale**: 大規模アプリで全 component を常時マウントするのは初回 boot コスト・実行時 effect コストが高い
 - **既存 `Grainet::Template` インフラを流用**: 自前 DOM 操作なしで実装できる
 - **state 保持が必要なら `persistent_signal`**: 既存 Grainet primitive で対応可
 - **Solid / React / Vue 全部 lazy**: 移植コストが下がる
@@ -856,7 +856,7 @@ end
 
 ### なぜ `match` を computed として返す?
 
-- signal の依存追跡で widget が自動再評価される
+- signal の依存追跡で component が自動再評価される
 - 手動 listener / unsubscribe 不要
 - bind / effect で消費するときの書き味が他の computed と完全に同じ
 
@@ -893,7 +893,7 @@ Grainet::Router.draw outlet: "[data-router-outlet]" do
   fallback                       template: "page-404"
 end
 
-# Widget 内 (Grainet::Router::WidgetMixin が同じ Context を `router` として expose)
+# Component 内 (Grainet::Router::WidgetMixin が同じ Context を `router` として expose)
 # 自動生成 API (DSL 経由)
 router.home_path                # => "/"
 router.user_path(id: 42)        # => "/users/42"
@@ -1080,7 +1080,7 @@ end
 - `match`/`compile` の様々な pattern × path 組み合わせを unit test
 - `intercept_link` の修飾キー / `target=_blank` / 外部 URL ケースを網羅
 - DSL: `page` 宣言 → path helper / match の動作確認
-- outlet: template clone → MutationObserver で widget mount 確認 (統合テスト)
+- outlet: template clone → MutationObserver で component mount 確認 (統合テスト)
 
 ### Future extensions
 

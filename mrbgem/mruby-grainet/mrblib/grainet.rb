@@ -12,16 +12,16 @@
 #   - Grainet::Signal / Grainet::Computed / Grainet::Effect (user-facing types,
 #     flat under Grainet — no Reactive:: in the path)
 #
-# Companion file grainet_widget.rb adds Grainet::Widget (the user's
+# Companion file grainet_component.rb adds Grainet::Component (the user's
 # inheritance base), RefElement / Refs / Bindable / Registry, and the
 # module-level facade (Grainet.start / register / find_for_element).
 
 module Grainet
   class Error < StandardError; end
 
-  # Raised by `Widget#sleep` (and other lifecycle-aware awaits) when
-  # the owning widget has unmounted during the await — keeps the
-  # resuming fiber from operating on a dead widget. `StandardError`
+  # Raised by `Component#sleep` (and other lifecycle-aware awaits) when
+  # the owning component has unmounted during the await — keeps the
+  # resuming fiber from operating on a dead component. `StandardError`
   # parent (a la `Timeout::Error`) so the framework's existing
   # `rescue => e` boundaries catch it; `Logger#error` silently drops
   # Aborted at the top, bypassing `on_error` and stderr.
@@ -31,7 +31,7 @@ module Grainet
   class Aborted < StandardError; end
 
   # Validated name for HTML data-* attribute values that Grainet uses
-  # as keys (data-widget / data-template / data-ref). The pattern
+  # as keys (data-component / data-template / data-ref). The pattern
   # `[A-Za-z][A-Za-z0-9_-]*` matches identifier-like tokens that
   # round-trip safely through CSS attribute selectors (no quoting
   # required) and method_missing access. Acts as a value object —
@@ -543,7 +543,7 @@ module Grainet
   end
 
   # Side effect that re-runs whenever a tracked dependency changes.
-  # `source:` (the owning Widget, when created via Widget#effect) is
+  # `source:` (the owning Component, when created via Component#effect) is
   # consulted by `Grainet.logger.error` for on_error bubbling.
   class Effect
     include Reactive::Observer

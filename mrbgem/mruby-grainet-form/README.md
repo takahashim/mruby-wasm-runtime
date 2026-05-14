@@ -11,7 +11,7 @@ Optional gem. Add it to `build_config/wasi-js.rb` after
 ## Quickstart
 
 ```ruby
-class SignupForm < Grainet::Widget
+class SignupForm < Grainet::Component
   def setup
     @form = form do |f|
       f.field :email, ref: refs.email, initial: "" do |v|
@@ -54,7 +54,7 @@ The corresponding HTML provides the inputs and error placeholders; the
 form builder doesn't generate markup:
 
 ```html
-<form data-widget="signup-form">
+<form data-component="signup-form">
   <div data-ref="email_field">
     <input data-ref="email" type="email">
     <p data-ref="email_error" hidden></p>
@@ -73,9 +73,9 @@ form builder doesn't generate markup:
 
 ### `form { |f| ... }` → `Grainet::Form`
 
-Widget instance method. Yields a `Form` to the block; declare fields
-via `f.field`. The block runs in widget lexical scope, so `refs.NAME`,
-widget ivars, and widget methods remain accessible.
+Component instance method. Yields a `Form` to the block; declare fields
+via `f.field`. The block runs in component lexical scope, so `refs.NAME`,
+component ivars, and component methods remain accessible.
 
 ### `Grainet::Form#field(name, ref:, initial:, type: :text, &validator)`
 
@@ -104,7 +104,7 @@ f.field :email, ref: refs.email, initial: "", &EMAIL_VALIDATOR
 
 #### Built-in validators
 
-`Grainet::Form::Validators` is auto-included into widgets that load
+`Grainet::Form::Validators` is auto-included into components that load
 this gem, so validator helpers can be called by bare name inside field
 validator blocks. Compose them with Ruby `||` so the first non-`nil`
 message wins.
@@ -114,7 +114,7 @@ values return `nil`, so optional fields can still use length or
 inclusion checks without becoming required.
 
 ```ruby
-class MyForm < Grainet::Widget
+class MyForm < Grainet::Component
   def setup
     @form = form do |f|
       # Optional field; if filled, must be at least 3 chars.
@@ -138,7 +138,7 @@ class MyForm < Grainet::Widget
 end
 ```
 
-Outside widget context, call them as module methods:
+Outside component context, call them as module methods:
 `Grainet::Form::Validators.required(v)`.
 
 | validator | behavior | default message |
@@ -150,7 +150,7 @@ Outside widget context, call them as module methods:
 | `inclusion(v, list, message: nil)` | fails when present value is not in `list` | `"must be one of: ..."` |
 | `acceptance(v, message: "must be accepted")` | fails on falsy values | `"must be accepted"` |
 
-If a widget already defines one of these method names, use
+If a component already defines one of these method names, use
 `Grainet::Form::Validators.required(v)` style explicitly.
 
 ### `Grainet::Form#submit { |values| ... }`

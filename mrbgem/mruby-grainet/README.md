@@ -1,6 +1,6 @@
 # mruby-grainet
 
-**Grainet** — signal-first widget system for mruby on WebAssembly.
+**Grainet** — signal-first component system for mruby on WebAssembly.
 
 A small Ruby UI layer that connects existing HTML to Ruby state, events,
 and DOM updates — without templating, virtual DOM, or component DSLs.
@@ -8,14 +8,14 @@ and DOM updates — without templating, virtual DOM, or component DSLs.
 ## Quick start
 
 ```html
-<div data-widget="counter">
+<div data-component="counter">
   <button data-ref="increment">+</button>
   <span data-ref="count">0</span>
 </div>
 ```
 
 ```ruby
-class Counter < Grainet::Widget
+class Counter < Grainet::Component
   def setup
     @count = signal(0)
 

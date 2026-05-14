@@ -1,6 +1,6 @@
-# grainet_widget.rb — Grainet::Widget base class.
+# grainet_component.rb — Grainet::Component base class.
 #
-# Users write `class Counter < Grainet::Widget`. Owns lifecycle
+# Users write `class Counter < Grainet::Component`. Owns lifecycle
 # (prepare_setup / setup / cleanup), reactive helpers (signal / computed /
 # effect / persistent_signal), error boundary, and expose / lookup.
 #
@@ -8,10 +8,10 @@
 # bind_list. Registry (in grainet_registry.rb) drives mount / unmount.
 
 module Grainet
-  # Aggregates a Widget's (or Scope's) lifecycle resources — effects,
+  # Aggregates a Component's (or Scope's) lifecycle resources — effects,
   # computeds, listeners, cleanups, and labeled "disposables" (resource
   # / selector / ...) — and tears them down in the right order on
-  # `dispose`. Both Widget and its inner Scope compose one of these so
+  # `dispose`. Both Component and its inner Scope compose one of these so
   # the teardown sequence lives in exactly one place.
   #
   # Teardown order on `dispose`:
@@ -22,7 +22,7 @@ module Grainet
   #   5. listeners (removeEventListener + release_callback)
   #
   # Each step is wrapped in a rescue that routes through
-  # `Grainet.logger.error` with `source:` set to the owning Widget, so
+  # `Grainet.logger.error` with `source:` set to the owning Component, so
   # a single bad cleanup doesn't poison the rest of the teardown.
   class DisposableSet
     def initialize(source)
@@ -69,7 +69,7 @@ module Grainet
     end
 
     # Public so callers can route their own teardown bits (e.g. a
-    # Widget's child-widget loop) through the same error-routing rescue
+    # Component's child-component loop) through the same error-routing rescue
     # as the resources we hold internally.
     def safe_release(label)
       yield
@@ -80,7 +80,7 @@ module Grainet
 
   # Role mixin: a class that "owns" a DisposableSet of lifecycle
   # resources (effects, computeds, listeners, cleanups, labeled
-  # disposables). Widget and its inner Scope both include this, so the
+  # disposables). Component and its inner Scope both include this, so the
   # user-facing helpers (`effect { ... }`, `cleanup { ... }`,
   # `resource(...)`, `RefElement#on`, ...) can target either through a
   # single uniform API.
@@ -109,10 +109,10 @@ module Grainet
     end
   end
 
-  # Handle for `Widget#timeout` / `Widget#every`. The block passed in is
+  # Handle for `Component#timeout` / `Component#every`. The block passed in is
   # the underlying `clearTimeout` / `clearInterval` + `release_callback`
   # pair; `Timer` adds the idempotent gate so `stop` is safe to call
-  # multiple times and pairs cleanly with the widget's unmount cleanup.
+  # multiple times and pairs cleanly with the component's unmount cleanup.
   class Timer
     def initialize(&stopper)
       @stopper = stopper
@@ -130,17 +130,17 @@ module Grainet
     end
   end
 
-  # The user-inheritable base. Users write `class Counter < Grainet::Widget`.
-  class Widget
+  # The user-inheritable base. Users write `class Counter < Grainet::Component`.
+  class Component
     # A bag of lifecycle resources associated with a sub-scope (e.g.
     # one row of a `bind_list` block). Disposed when the row is removed
-    # or the host Widget unmounts. Shares ResourceOwner's `register_*`
-    # API with Widget so the same helpers target either.
+    # or the host Component unmounts. Shares ResourceOwner's `register_*`
+    # API with Component so the same helpers target either.
     class Scope
       include ResourceOwner
 
-      def initialize(source_widget)
-        @resources = DisposableSet.new(source_widget)
+      def initialize(source_component)
+        @resources = DisposableSet.new(source_component)
       end
 
       def dispose
@@ -157,7 +157,7 @@ module Grainet
 
     class << self
       # Class-level error boundary declaration. The block runs in the
-      # widget instance's context (instance_exec), so `@ivars` resolve
+      # component instance's context (instance_exec), so `@ivars` resolve
       # to the instance, and is auto-installed at the START of the
       # prepare_setup phase — early enough to catch errors in
       # `prepare_setup` itself and in any descendant's setup.
@@ -202,7 +202,7 @@ module Grainet
     end
 
     # Override for the main lifecycle. Runs in post-order (children
-    # first), so `refs.x.widget.method` works for nested widgets when
+    # first), so `refs.x.component.method` works for nested components when
     # reading them from a parent's setup.
     def setup
     end
@@ -228,7 +228,7 @@ module Grainet
     # ---- Reactive helpers ------------------------------------------
 
     # Wrap a raw `JS::Object` DOM element as a RefElement bound to this
-    # widget. Use when you have a JS-side element (event.target,
+    # component. Use when you have a JS-side element (event.target,
     # querySelector result, etc.) and want the framework's ergonomic
     # API (`attr`, `data`, `on` with auto-cleanup, `text=` etc.) on it.
     def wrap(js_element)
@@ -245,7 +245,7 @@ module Grainet
     #
     # Parse / read errors fall back to default and emit a Grainet
     # warning. Write errors (quota etc.) bubble through the effect, so
-    # an error_boundary above the widget can react.
+    # an error_boundary above the component can react.
     def persistent_signal(key, default: nil, &block_default)
       k = key.to_s
       storage = JS.global[:localStorage]
@@ -284,7 +284,7 @@ module Grainet
       e
     end
 
-    # Run `block` once per animation frame. Auto-cancels on widget
+    # Run `block` once per animation frame. Auto-cancels on component
     # unmount; raises route through `error_boundary`. Block receives
     # the rAF (`requestAnimationFrame`) timestamp (ms).
     def each_frame(&block)
@@ -309,7 +309,7 @@ module Grainet
       nil
     end
 
-    # One-shot `setTimeout` with auto-cancel on widget unmount and
+    # One-shot `setTimeout` with auto-cancel on component unmount and
     # raises routed through `error_boundary`. `ms` is the delay in
     # milliseconds. Returns a `Grainet::Timer` — call `.stop` on it to
     # cancel before it fires (e.g. for debounce / cancellation flows).
@@ -331,7 +331,7 @@ module Grainet
       timer
     end
 
-    # Repeating `setInterval` with auto-cancel on widget unmount and
+    # Repeating `setInterval` with auto-cancel on component unmount and
     # raises routed through `error_boundary`. `ms` is the interval in
     # milliseconds. Raises don't stop the interval (matches `setInterval`
     # and `each_frame` semantics) — subsequent ticks keep firing.
@@ -367,7 +367,7 @@ module Grainet
       !@unmounted
     end
 
-    # Lazy JS `AbortController.signal` that fires on widget unmount.
+    # Lazy JS `AbortController.signal` that fires on component unmount.
     # Pass to `Fetchy` / `Resource` / any `signal:`-aware API for
     # early-cancellation.
     def abort_signal
@@ -377,7 +377,7 @@ module Grainet
 
     # Override of `Kernel#sleep` with unmount guards on both sides of
     # the yield. Raises `Grainet::Aborted` (silenced by framework) if
-    # the widget unmounts before or during the wait, so user code can
+    # the component unmounts before or during the wait, so user code can
     # write `sleep(0.5); do_more` without explicit guards.
     def sleep(seconds)
       raise Aborted if @unmounted
@@ -418,17 +418,17 @@ module Grainet
       @scope_stack.pop
     end
 
-    # Add a child widget to this Widget's subtree. Registry calls this
+    # Add a child component to this Component's subtree. Registry calls this
     # during mount; wires the child's `parent` reverse-pointer.
-    def add_child(child_widget)
-      @children << child_widget
-      child_widget.assign_parent(self)
+    def add_child(child_component)
+      @children << child_component
+      child_component.assign_parent(self)
     end
 
     # Framework-internal: pair with `add_child` on the parent.
-    # User code should not re-parent widgets.
-    def assign_parent(parent_widget)
-      @parent = parent_widget
+    # User code should not re-parent components.
+    def assign_parent(parent_component)
+      @parent = parent_component
     end
 
     def exposed_for(key)
@@ -478,7 +478,7 @@ module Grainet
     private
 
     # Return the current resource-owning target — the active Scope when
-    # inside a `bind_list` block, else self (the Widget). Used by
+    # inside a `bind_list` block, else self (the Component). Used by
     # `effect`/`computed`/`cleanup`/`ref` to attach to whichever scope
     # is current.
     def current_owner

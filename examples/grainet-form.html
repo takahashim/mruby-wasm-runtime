@@ -62,13 +62,13 @@
       activity log.
     </p>
 
-    <div data-widget="activity-log">
+    <div data-component="activity-log">
       <div class="panel">
         <h2>Activity</h2>
         <p class="status" data-ref="log">no submissions yet.</p>
       </div>
 
-      <form data-widget="signup-form" class="panel" novalidate>
+      <form data-component="signup-form" class="panel" novalidate>
         <h2>Sign up</h2>
 
         <div class="field" data-ref="email_field">
@@ -106,7 +106,7 @@
     <p id="boot">booting…</p>
 
     <script type="text/ruby" id="ruby-source">
-class SignupForm < Grainet::Widget
+class SignupForm < Grainet::Component
   def setup
     @form = form do |f|
       f.field :email, ref: refs.email, initial: "" do |field|
@@ -178,7 +178,7 @@ class SignupForm < Grainet::Widget
           next
         end
 
-        # Bubbles past the form's data-widget boundary so ActivityLog
+        # Bubbles past the form's data-component boundary so ActivityLog
         # picks it up without coupling to this class.
         root.dispatch(:user_submitted,
           detail: { email: values[:email] },
@@ -189,7 +189,7 @@ class SignupForm < Grainet::Widget
   end
 end
 
-class ActivityLog < Grainet::Widget
+class ActivityLog < Grainet::Component
   def setup
     @count = signal(0)
     @last_email = signal("")

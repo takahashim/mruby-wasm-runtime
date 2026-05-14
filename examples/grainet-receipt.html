@@ -55,7 +55,7 @@
       An editable receipt with line items, totals, and shareable state in the URL.
     </p>
 
-    <div data-widget="receipt">
+    <div data-component="receipt">
       <table class="receipt">
         <thead>
           <tr>
@@ -101,7 +101,7 @@
     <p id="boot">booting…</p>
 
     <script type="text/ruby" id="receipt-source">
-class Receipt < Grainet::Widget
+class Receipt < Grainet::Component
   HASH_PREFIX = "#state="
 
   def prepare_setup

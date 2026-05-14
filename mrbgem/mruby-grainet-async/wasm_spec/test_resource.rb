@@ -41,7 +41,7 @@ def uninstall_resource_fetch_stub
 end
 
 # Reset DOM + Grainet registry so each test starts from a clean slate.
-# Without this, leftover widgets from earlier tests stay in the registry
+# Without this, leftover components from earlier tests stay in the registry
 # and a transient body mutation can trigger MutationObserver pruning
 # that unmounts the current test's resource mid-fetch.
 def reset_grainet_state
@@ -49,7 +49,7 @@ def reset_grainet_state
   Grainet.reset!
 end
 
-Spec.describe "Widget#resource" do
+Spec.describe "Component#resource" do
   Spec.before { reset_grainet_state }
 
   Spec.assert "loads with pending -> ready state and exposes reactive getters" do
@@ -57,7 +57,7 @@ Spec.describe "Widget#resource" do
       "/users/1" => JS.object(status: 200, body: '{"id":1,"name":"Alice"}', delay: 20),
     ))
 
-    klass = Class.new(Grainet::Widget) do
+    klass = Class.new(Grainet::Component) do
       define_method(:setup) do
         @user_id = signal(1)
         @user = resource(initial: nil) do |r|
@@ -72,11 +72,11 @@ Spec.describe "Widget#resource" do
 
     doc = JS.global[:document]
     body = doc[:body]
-    body[:innerHTML] = '<div data-widget="resource-basic"></div>'
+    body[:innerHTML] = '<div data-component="resource-basic"></div>'
     Grainet.register "resource-basic", klass
     Grainet.start
 
-    inst = Grainet.find_for_element(doc.call(:querySelector, "[data-widget='resource-basic']"))
+    inst = Grainet.find_for_element(doc.call(:querySelector, "[data-component='resource-basic']"))
     value, state, loading, error = inst.snapshot
     Spec.assert_equal nil, value
     Spec.assert_equal :pending, state
@@ -101,7 +101,7 @@ Spec.describe "Widget#resource" do
       "/users/2" => JS.object(status: 200, body: '{"id":2,"name":"Fast"}', delay: 5),
     ))
 
-    klass = Class.new(Grainet::Widget) do
+    klass = Class.new(Grainet::Component) do
       define_method(:setup) do
         @user_id = signal(1)
         @user = resource(initial: nil) do |r|
@@ -115,11 +115,11 @@ Spec.describe "Widget#resource" do
 
     doc = JS.global[:document]
     body = doc[:body]
-    body[:innerHTML] = '<div data-widget="resource-stale"></div>'
+    body[:innerHTML] = '<div data-component="resource-stale"></div>'
     Grainet.register "resource-stale", klass
     Grainet.start
 
-    inst = Grainet.find_for_element(doc.call(:querySelector, "[data-widget='resource-stale']"))
+    inst = Grainet.find_for_element(doc.call(:querySelector, "[data-component='resource-stale']"))
     inst.set_user_id(2)
     JS.eval_javascript("new Promise(r => setTimeout(r, 20))").await
     value, state = inst.snapshot
@@ -142,7 +142,7 @@ Spec.describe "Widget#resource" do
       "/users/2" => JS.object(status: 200, body: '{"id":2,"name":"Bob"}', delay: 25),
     ))
 
-    klass = Class.new(Grainet::Widget) do
+    klass = Class.new(Grainet::Component) do
       define_method(:setup) do
         @user_id = signal(1)
         @user = resource(initial: nil) do |r|
@@ -156,11 +156,11 @@ Spec.describe "Widget#resource" do
 
     doc = JS.global[:document]
     body = doc[:body]
-    body[:innerHTML] = '<div data-widget="resource-refresh"></div>'
+    body[:innerHTML] = '<div data-component="resource-refresh"></div>'
     Grainet.register "resource-refresh", klass
     Grainet.start
 
-    inst = Grainet.find_for_element(doc.call(:querySelector, "[data-widget='resource-refresh']"))
+    inst = Grainet.find_for_element(doc.call(:querySelector, "[data-component='resource-refresh']"))
     JS.eval_javascript("new Promise(r => setTimeout(r, 0))").await
     value, state, loading = inst.snapshot
     Spec.assert_equal "Alice", value["name"]
@@ -185,7 +185,7 @@ Spec.describe "Widget#resource" do
   end
 
   Spec.assert "supports non-Fetchy async loaders" do
-    klass = Class.new(Grainet::Widget) do
+    klass = Class.new(Grainet::Component) do
       define_method(:setup) do
         @n = signal(3)
         @double = resource(initial: 0) do |_r|
@@ -199,11 +199,11 @@ Spec.describe "Widget#resource" do
 
     doc = JS.global[:document]
     body = doc[:body]
-    body[:innerHTML] = '<div data-widget="resource-generic"></div>'
+    body[:innerHTML] = '<div data-component="resource-generic"></div>'
     Grainet.register "resource-generic", klass
     Grainet.start
 
-    inst = Grainet.find_for_element(doc.call(:querySelector, "[data-widget='resource-generic']"))
+    inst = Grainet.find_for_element(doc.call(:querySelector, "[data-component='resource-generic']"))
     JS.global[:Promise].resolve(0).await
     Spec.assert_equal 6, inst.value
     inst.set_n(5)

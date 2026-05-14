@@ -126,7 +126,7 @@
       A three-column Kanban board with drag-and-drop cards and saved state.
     </p>
 
-    <div data-widget="kanban-board">
+    <div data-component="kanban-board">
       <!-- System error overlay: 想定外の例外を error_boundary 経由で表示。
            赤系の枠で「これはバグ / 異常」と分かる見せ方。 -->
       <div data-ref="error_overlay" class="overlay error-overlay" hidden>
@@ -141,7 +141,7 @@
 
       <!-- User notice overlay: validation 等の予測される user message。
            黄系の枠で system error と区別。@notice signal を lookup 経由で
-           子 widget が直接書き換える。 -->
+           子 component が直接書き換える。 -->
       <div data-ref="notice_overlay" class="overlay notice-overlay" hidden>
         <div class="dialog" role="dialog" aria-labelledby="notice-title">
           <h3 id="notice-title">Notice</h3>
@@ -153,7 +153,7 @@
       </div>
 
       <div class="board">
-        <div data-widget="kanban-column" data-status="todo" class="column">
+        <div data-component="kanban-column" data-status="todo" class="column">
           <h2>Todo <span data-ref="count" class="count">0</span></h2>
           <ul data-ref="list" class="cards"></ul>
           <form data-ref="add_form" class="add-form" onsubmit="return false">
@@ -161,7 +161,7 @@
             <button data-ref="add_button" type="button">Add</button>
           </form>
         </div>
-        <div data-widget="kanban-column" data-status="doing" class="column">
+        <div data-component="kanban-column" data-status="doing" class="column">
           <h2>Doing <span data-ref="count" class="count">0</span></h2>
           <ul data-ref="list" class="cards"></ul>
           <form data-ref="add_form" class="add-form" onsubmit="return false">
@@ -169,7 +169,7 @@
             <button data-ref="add_button" type="button">Add</button>
           </form>
         </div>
-        <div data-widget="kanban-column" data-status="done" class="column">
+        <div data-component="kanban-column" data-status="done" class="column">
           <h2>Done <span data-ref="count" class="count">0</span></h2>
           <ul data-ref="list" class="cards"></ul>
           <form data-ref="add_form" class="add-form" onsubmit="return false">
@@ -181,7 +181,7 @@
     </div>
 
     <template data-template="card-row">
-      <li data-widget="kanban-card" draggable="true">
+      <li data-component="kanban-card" draggable="true">
         <span data-ref="title"></span>
         <button data-ref="delete" class="dismiss" type="button" aria-label="delete">×</button>
       </li>
@@ -190,11 +190,11 @@
     <p id="boot">booting…</p>
 
     <script type="text/ruby" id="ruby-source">
-# Per-card widget. Mounted by MO when bind_list inserts the cloned
+# Per-card component. Mounted by MO when bind_list inserts the cloned
 # template into a column. Auto-cleanup of dragstart / click listeners
 # on unmount (e.g. when status changes and the card moves to another
 # column → removed from one bind_list, inserted in another).
-class KanbanCard < Grainet::Widget
+class KanbanCard < Grainet::Component
   def setup
     root.on(:dragstart) do |event|
       id = root.data(:id)
@@ -209,7 +209,7 @@ class KanbanCard < Grainet::Widget
   end
 end
 
-class KanbanColumn < Grainet::Widget
+class KanbanColumn < Grainet::Component
   def setup
     @cards = lookup(:cards)
     @notice = lookup(:notice)
@@ -270,11 +270,11 @@ class KanbanColumn < Grainet::Widget
   end
 end
 
-class KanbanBoard < Grainet::Widget
+class KanbanBoard < Grainet::Component
   STORAGE_KEY = "grainet-kanban-cards"
 
   # Class-level boundary auto-registers in the prepare_setup phase, so
-  # even errors in this widget's own prepare_setup body or in any
+  # even errors in this component's own prepare_setup body or in any
   # descendant's setup are routed here.
   error_boundary do |label, error|
     @error_message.value = "#{label}\n#{error.class}: #{error.message}"

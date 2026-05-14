@@ -1,4 +1,4 @@
-# Specs for Grainet::Form. Each test mounts a Widget that uses the
+# Specs for Grainet::Form. Each test mounts a Component that uses the
 # `form` helper, simulates user interaction (input + blur events), and
 # inspects the field state (value / dirty? / touched? / error /
 # show_error? / valid?). DOM is happy-dom via the spec runner.
@@ -16,9 +16,9 @@ Spec.describe "Grainet::Form: field state" do
   Spec.assert "base_error starts as nil" do
     doc = JS.global[:document]
     body = doc[:body]
-    body[:innerHTML] = '<div data-widget="form-base-init"><input data-ref="x"></div>'
+    body[:innerHTML] = '<div data-component="form-base-init"><input data-ref="x"></div>'
 
-    klass = Class.new(Grainet::Widget) do
+    klass = Class.new(Grainet::Component) do
       attr_reader :_form
       define_method(:setup) do
         @_form = form do |f|
@@ -29,7 +29,7 @@ Spec.describe "Grainet::Form: field state" do
     Grainet.register "form-base-init", klass
     Grainet.start
 
-    el = doc.call(:querySelector, "[data-widget='form-base-init']")
+    el = doc.call(:querySelector, "[data-component='form-base-init']")
     fm = Grainet.find_for_element(el)._form
     Spec.assert_equal nil, fm.base_error
 
@@ -40,12 +40,12 @@ Spec.describe "Grainet::Form: field state" do
     doc = JS.global[:document]
     body = doc[:body]
     body[:innerHTML] = <<~HTML
-      <div data-widget="form-init">
+      <div data-component="form-init">
         <input data-ref="email" type="email">
       </div>
     HTML
 
-    klass = Class.new(Grainet::Widget) do
+    klass = Class.new(Grainet::Component) do
       attr_reader :_form
       define_method(:setup) do
         @_form = form do |f|
@@ -59,7 +59,7 @@ Spec.describe "Grainet::Form: field state" do
     input = doc.call(:querySelector, "input[data-ref='email']")
     Spec.assert_equal "init@x.io", input[:value].to_s
 
-    el = doc.call(:querySelector, "[data-widget='form-init']")
+    el = doc.call(:querySelector, "[data-component='form-init']")
     inst = Grainet.find_for_element(el)
     Spec.assert_equal "init@x.io", inst._form[:email].value
 
@@ -69,9 +69,9 @@ Spec.describe "Grainet::Form: field state" do
   Spec.assert "dirty? latches true after input differs from initial" do
     doc = JS.global[:document]
     body = doc[:body]
-    body[:innerHTML] = '<div data-widget="form-dirty"><input data-ref="x"></div>'
+    body[:innerHTML] = '<div data-component="form-dirty"><input data-ref="x"></div>'
 
-    klass = Class.new(Grainet::Widget) do
+    klass = Class.new(Grainet::Component) do
       attr_reader :_form
       define_method(:setup) do
         @_form = form do |f|
@@ -83,7 +83,7 @@ Spec.describe "Grainet::Form: field state" do
     Grainet.start
 
     input = doc.call(:querySelector, "[data-ref='x']")
-    el = doc.call(:querySelector, "[data-widget='form-dirty']")
+    el = doc.call(:querySelector, "[data-component='form-dirty']")
     f = Grainet.find_for_element(el)._form[:x]
 
     Spec.assert_equal false, f.dirty?
@@ -103,9 +103,9 @@ Spec.describe "Grainet::Form: field state" do
   Spec.assert "touched? is false until blur, then true" do
     doc = JS.global[:document]
     body = doc[:body]
-    body[:innerHTML] = '<div data-widget="form-touch"><input data-ref="x"></div>'
+    body[:innerHTML] = '<div data-component="form-touch"><input data-ref="x"></div>'
 
-    klass = Class.new(Grainet::Widget) do
+    klass = Class.new(Grainet::Component) do
       attr_reader :_form
       define_method(:setup) do
         @_form = form do |f|
@@ -117,7 +117,7 @@ Spec.describe "Grainet::Form: field state" do
     Grainet.start
 
     input = doc.call(:querySelector, "[data-ref='x']")
-    el = doc.call(:querySelector, "[data-widget='form-touch']")
+    el = doc.call(:querySelector, "[data-component='form-touch']")
     f = Grainet.find_for_element(el)._form[:x]
 
     # input alone does NOT mark touched
@@ -139,9 +139,9 @@ Spec.describe "Grainet::Form: validation" do
   Spec.assert "validator runs and produces error on invalid value" do
     doc = JS.global[:document]
     body = doc[:body]
-    body[:innerHTML] = '<div data-widget="form-vld"><input data-ref="email"></div>'
+    body[:innerHTML] = '<div data-component="form-vld"><input data-ref="email"></div>'
 
-    klass = Class.new(Grainet::Widget) do
+    klass = Class.new(Grainet::Component) do
       attr_reader :_form
       define_method(:setup) do
         @_form = form do |f|
@@ -155,7 +155,7 @@ Spec.describe "Grainet::Form: validation" do
     Grainet.start
 
     input = doc.call(:querySelector, "[data-ref='email']")
-    el = doc.call(:querySelector, "[data-widget='form-vld']")
+    el = doc.call(:querySelector, "[data-component='form-vld']")
     f = Grainet.find_for_element(el)._form[:email]
 
     Spec.assert_equal "must include @", f.error
@@ -172,9 +172,9 @@ Spec.describe "Grainet::Form: validation" do
   Spec.assert "show_error? is false until touched, then true while invalid" do
     doc = JS.global[:document]
     body = doc[:body]
-    body[:innerHTML] = '<div data-widget="form-ev"><input data-ref="x"></div>'
+    body[:innerHTML] = '<div data-component="form-ev"><input data-ref="x"></div>'
 
-    klass = Class.new(Grainet::Widget) do
+    klass = Class.new(Grainet::Component) do
       attr_reader :_form
       define_method(:setup) do
         @_form = form do |f|
@@ -188,7 +188,7 @@ Spec.describe "Grainet::Form: validation" do
     Grainet.start
 
     input = doc.call(:querySelector, "[data-ref='x']")
-    el = doc.call(:querySelector, "[data-widget='form-ev']")
+    el = doc.call(:querySelector, "[data-component='form-ev']")
     f = Grainet.find_for_element(el)._form[:x]
 
     # Initially invalid but not touched → error hidden
@@ -210,13 +210,13 @@ Spec.describe "Grainet::Form: validation" do
     doc = JS.global[:document]
     body = doc[:body]
     body[:innerHTML] = <<~HTML
-      <div data-widget="form-all">
+      <div data-component="form-all">
         <input data-ref="email">
         <input data-ref="pw">
       </div>
     HTML
 
-    klass = Class.new(Grainet::Widget) do
+    klass = Class.new(Grainet::Component) do
       attr_reader :_form
       define_method(:setup) do
         @_form = form do |f|
@@ -232,7 +232,7 @@ Spec.describe "Grainet::Form: validation" do
     Grainet.register "form-all", klass
     Grainet.start
 
-    el = doc.call(:querySelector, "[data-widget='form-all']")
+    el = doc.call(:querySelector, "[data-component='form-all']")
     fm = Grainet.find_for_element(el)._form
     Spec.assert_equal false, fm.valid?
 
@@ -257,12 +257,12 @@ Spec.describe "Grainet::Form: submit" do
     doc = JS.global[:document]
     body = doc[:body]
     body[:innerHTML] = <<~HTML
-      <div data-widget="form-sub-base-clear">
+      <div data-component="form-sub-base-clear">
         <input data-ref="x">
       </div>
     HTML
 
-    klass = Class.new(Grainet::Widget) do
+    klass = Class.new(Grainet::Component) do
       attr_reader :_form
       define_method(:setup) do
         @_form = form do |f|
@@ -275,7 +275,7 @@ Spec.describe "Grainet::Form: submit" do
     Grainet.register "form-sub-base-clear", klass
     Grainet.start
 
-    el = doc.call(:querySelector, "[data-widget='form-sub-base-clear']")
+    el = doc.call(:querySelector, "[data-component='form-sub-base-clear']")
     fm = Grainet.find_for_element(el)._form
     fm.set_base_error("stale message")
 
@@ -292,12 +292,12 @@ Spec.describe "Grainet::Form: submit" do
     doc = JS.global[:document]
     body = doc[:body]
     body[:innerHTML] = <<~HTML
-      <div data-widget="form-sub-bad">
+      <div data-component="form-sub-bad">
         <input data-ref="x">
       </div>
     HTML
 
-    klass = Class.new(Grainet::Widget) do
+    klass = Class.new(Grainet::Component) do
       attr_reader :_form
       define_method(:setup) do
         @_form = form do |f|
@@ -310,7 +310,7 @@ Spec.describe "Grainet::Form: submit" do
     Grainet.register "form-sub-bad", klass
     Grainet.start
 
-    el = doc.call(:querySelector, "[data-widget='form-sub-bad']")
+    el = doc.call(:querySelector, "[data-component='form-sub-bad']")
     fm = Grainet.find_for_element(el)._form
 
     fired = false
@@ -326,13 +326,13 @@ Spec.describe "Grainet::Form: submit" do
     doc = JS.global[:document]
     body = doc[:body]
     body[:innerHTML] = <<~HTML
-      <div data-widget="form-sub-ok">
+      <div data-component="form-sub-ok">
         <input data-ref="email">
         <input data-ref="pw">
       </div>
     HTML
 
-    klass = Class.new(Grainet::Widget) do
+    klass = Class.new(Grainet::Component) do
       attr_reader :_form
       define_method(:setup) do
         @_form = form do |f|
@@ -344,7 +344,7 @@ Spec.describe "Grainet::Form: submit" do
     Grainet.register "form-sub-ok", klass
     Grainet.start
 
-    el = doc.call(:querySelector, "[data-widget='form-sub-ok']")
+    el = doc.call(:querySelector, "[data-component='form-sub-ok']")
     fm = Grainet.find_for_element(el)._form
     fm.set_base_error("stale message")
 
@@ -360,9 +360,9 @@ Spec.describe "Grainet::Form: submit" do
   Spec.assert "submit_attempted? becomes true after submit, cleared by reset" do
     doc = JS.global[:document]
     body = doc[:body]
-    body[:innerHTML] = '<div data-widget="form-sub-att"><input data-ref="x"></div>'
+    body[:innerHTML] = '<div data-component="form-sub-att"><input data-ref="x"></div>'
 
-    klass = Class.new(Grainet::Widget) do
+    klass = Class.new(Grainet::Component) do
       attr_reader :_form
       define_method(:setup) do
         @_form = form do |f|
@@ -373,7 +373,7 @@ Spec.describe "Grainet::Form: submit" do
     Grainet.register "form-sub-att", klass
     Grainet.start
 
-    el = doc.call(:querySelector, "[data-widget='form-sub-att']")
+    el = doc.call(:querySelector, "[data-component='form-sub-att']")
     fm = Grainet.find_for_element(el)._form
 
     Spec.assert_equal false, fm.submit_attempted?
@@ -392,9 +392,9 @@ Spec.describe "Grainet::Form: reset" do
   Spec.assert "set_base_error and clear_base_error update form-level error" do
     doc = JS.global[:document]
     body = doc[:body]
-    body[:innerHTML] = '<div data-widget="form-base-set"><input data-ref="x"></div>'
+    body[:innerHTML] = '<div data-component="form-base-set"><input data-ref="x"></div>'
 
-    klass = Class.new(Grainet::Widget) do
+    klass = Class.new(Grainet::Component) do
       attr_reader :_form
       define_method(:setup) do
         @_form = form do |f|
@@ -405,7 +405,7 @@ Spec.describe "Grainet::Form: reset" do
     Grainet.register "form-base-set", klass
     Grainet.start
 
-    el = doc.call(:querySelector, "[data-widget='form-base-set']")
+    el = doc.call(:querySelector, "[data-component='form-base-set']")
     fm = Grainet.find_for_element(el)._form
 
     fm.set_base_error("login failed")
@@ -420,9 +420,9 @@ Spec.describe "Grainet::Form: reset" do
   Spec.assert "reset restores initial value and clears dirty?/touched?" do
     doc = JS.global[:document]
     body = doc[:body]
-    body[:innerHTML] = '<div data-widget="form-reset"><input data-ref="x"></div>'
+    body[:innerHTML] = '<div data-component="form-reset"><input data-ref="x"></div>'
 
-    klass = Class.new(Grainet::Widget) do
+    klass = Class.new(Grainet::Component) do
       attr_reader :_form
       define_method(:setup) do
         @_form = form do |f|
@@ -434,7 +434,7 @@ Spec.describe "Grainet::Form: reset" do
     Grainet.start
 
     input = doc.call(:querySelector, "[data-ref='x']")
-    el = doc.call(:querySelector, "[data-widget='form-reset']")
+    el = doc.call(:querySelector, "[data-component='form-reset']")
     fm = Grainet.find_for_element(el)._form
     f = fm[:x]
 
@@ -467,9 +467,9 @@ Spec.describe "Grainet::Form: server errors" do
   Spec.assert "set_server_errors injects errors that win over validator" do
     doc = JS.global[:document]
     body = doc[:body]
-    body[:innerHTML] = '<div data-widget="form-sv"><input data-ref="email"></div>'
+    body[:innerHTML] = '<div data-component="form-sv"><input data-ref="email"></div>'
 
-    klass = Class.new(Grainet::Widget) do
+    klass = Class.new(Grainet::Component) do
       attr_reader :_form
       define_method(:setup) do
         @_form = form do |f|
@@ -482,7 +482,7 @@ Spec.describe "Grainet::Form: server errors" do
     Grainet.register "form-sv", klass
     Grainet.start
 
-    el = doc.call(:querySelector, "[data-widget='form-sv']")
+    el = doc.call(:querySelector, "[data-component='form-sv']")
     fm = Grainet.find_for_element(el)._form
 
     Spec.assert_equal nil, fm[:email].error
@@ -501,12 +501,12 @@ Spec.describe "Grainet::Form: checkbox type" do
     doc = JS.global[:document]
     body = doc[:body]
     body[:innerHTML] = <<~HTML
-      <div data-widget="form-cb">
+      <div data-component="form-cb">
         <input data-ref="tos" type="checkbox">
       </div>
     HTML
 
-    klass = Class.new(Grainet::Widget) do
+    klass = Class.new(Grainet::Component) do
       attr_reader :_form
       define_method(:setup) do
         @_form = form do |f|
@@ -520,7 +520,7 @@ Spec.describe "Grainet::Form: checkbox type" do
     Grainet.start
 
     cb = doc.call(:querySelector, "[data-ref='tos']")
-    el = doc.call(:querySelector, "[data-widget='form-cb']")
+    el = doc.call(:querySelector, "[data-component='form-cb']")
     f = Grainet.find_for_element(el)._form[:tos]
 
     Spec.assert_equal false, f.value
@@ -535,20 +535,20 @@ Spec.describe "Grainet::Form: checkbox type" do
   end
 end
 
-# ---------- Multiple forms in one widget ----------
+# ---------- Multiple forms in one component ----------
 
-Spec.describe "Grainet::Form: multiple forms per widget" do
-  Spec.assert "two forms in one widget are independent" do
+Spec.describe "Grainet::Form: multiple forms per component" do
+  Spec.assert "two forms in one component are independent" do
     doc = JS.global[:document]
     body = doc[:body]
     body[:innerHTML] = <<~HTML
-      <div data-widget="form-multi">
+      <div data-component="form-multi">
         <input data-ref="login_user">
         <input data-ref="signup_email">
       </div>
     HTML
 
-    klass = Class.new(Grainet::Widget) do
+    klass = Class.new(Grainet::Component) do
       attr_reader :login, :signup
       define_method(:setup) do
         @login = form do |f|
@@ -564,7 +564,7 @@ Spec.describe "Grainet::Form: multiple forms per widget" do
     Grainet.register "form-multi", klass
     Grainet.start
 
-    el = doc.call(:querySelector, "[data-widget='form-multi']")
+    el = doc.call(:querySelector, "[data-component='form-multi']")
     inst = Grainet.find_for_element(el)
     Spec.assert_true inst.login.valid?
     Spec.assert_equal false, inst.signup.valid?
@@ -582,14 +582,14 @@ Spec.describe "Grainet::Form: fields enumeration" do
     doc = JS.global[:document]
     body = doc[:body]
     body[:innerHTML] = <<~HTML
-      <div data-widget="form-enum">
+      <div data-component="form-enum">
         <input data-ref="a">
         <input data-ref="b">
         <input data-ref="c">
       </div>
     HTML
 
-    klass = Class.new(Grainet::Widget) do
+    klass = Class.new(Grainet::Component) do
       attr_reader :_form
       define_method(:setup) do
         @_form = form do |f|
@@ -602,7 +602,7 @@ Spec.describe "Grainet::Form: fields enumeration" do
     Grainet.register "form-enum", klass
     Grainet.start
 
-    el = doc.call(:querySelector, "[data-widget='form-enum']")
+    el = doc.call(:querySelector, "[data-component='form-enum']")
     fm = Grainet.find_for_element(el)._form
 
     Spec.assert_equal [:a, :b, :c], fm.fields.keys

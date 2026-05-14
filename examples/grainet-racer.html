@@ -47,7 +47,7 @@
       A pseudo-3D driving demo with keyboard steering, speed, and distance.
     </p>
 
-    <div data-widget="racer">
+    <div data-component="racer">
       <div class="hud">
         <span>Speed: <b data-ref="speed">0 km/h</b></span>
         <span>Dist: <b data-ref="distance">0 m</b></span>
@@ -67,7 +67,7 @@
     <p id="boot">booting…</p>
 
     <script type="text/ruby" id="ruby-source">
-class Racer < Grainet::Widget
+class Racer < Grainet::Component
   WIDTH         = 640
   HEIGHT        = 360
   ROAD_WIDTH    = 2000

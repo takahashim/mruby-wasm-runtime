@@ -126,9 +126,9 @@ Spec.describe "Grainet::Form::Validators integrated with field" do
   Spec.assert "validator block uses bare validator names (auto-included via FormBuilder)" do
     doc = JS.global[:document]
     body = doc[:body]
-    body[:innerHTML] = '<div data-widget="form-vld-int"><input data-ref="x"></div>'
+    body[:innerHTML] = '<div data-component="form-vld-int"><input data-ref="x"></div>'
 
-    klass = Class.new(Grainet::Widget) do
+    klass = Class.new(Grainet::Component) do
       attr_reader :_form
       define_method(:setup) do
         @_form = form do |f|
@@ -141,7 +141,7 @@ Spec.describe "Grainet::Form::Validators integrated with field" do
     Grainet.register "form-vld-int", klass
     Grainet.start
 
-    el = doc.call(:querySelector, "[data-widget='form-vld-int']")
+    el = doc.call(:querySelector, "[data-component='form-vld-int']")
     f = Grainet.find_for_element(el)._form[:x]
 
     Spec.assert_equal "required", f.error

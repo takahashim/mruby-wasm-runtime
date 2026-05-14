@@ -3,21 +3,21 @@ Spec.describe "expose / lookup" do
     doc = JS.global[:document]
     body = doc[:body]
     body[:innerHTML] = <<~HTML
-      <div data-widget="pi-app">
-        <div data-widget="pi-leaf">
+      <div data-component="pi-app">
+        <div data-component="pi-leaf">
           <span data-ref="label">x</span>
         </div>
       </div>
     HTML
 
-    parent_klass = Class.new(Grainet::Widget) do
+    parent_klass = Class.new(Grainet::Component) do
       attr_reader :theme
       define_method(:prepare_setup) do
         @theme = signal("light")
         expose :theme, @theme
       end
     end
-    leaf_klass = Class.new(Grainet::Widget) do
+    leaf_klass = Class.new(Grainet::Component) do
       define_method(:setup) do
         theme = lookup(:theme)
         bind refs.label, :text do
@@ -34,7 +34,7 @@ Spec.describe "expose / lookup" do
     Spec.assert_equal "light", label[:textContent].to_s
 
     # Mutating the exposed signal updates the descendant via lookup
-    parent_el = doc.call(:querySelector, "[data-widget='pi-app']")
+    parent_el = doc.call(:querySelector, "[data-component='pi-app']")
     parent_inst = Grainet.find_for_element(parent_el)
     parent_inst.theme.value = "dark"
     Spec.assert_equal "dark", label[:textContent].to_s
@@ -46,22 +46,22 @@ Spec.describe "expose / lookup" do
     doc = JS.global[:document]
     body = doc[:body]
     body[:innerHTML] = <<~HTML
-      <div data-widget="pi-outer">
-        <div data-widget="pi-inner">
-          <div data-widget="pi-grand">
+      <div data-component="pi-outer">
+        <div data-component="pi-inner">
+          <div data-component="pi-grand">
             <span data-ref="out"></span>
           </div>
         </div>
       </div>
     HTML
 
-    outer_klass = Class.new(Grainet::Widget) do
+    outer_klass = Class.new(Grainet::Component) do
       define_method(:prepare_setup) { expose :name, "outer" }
     end
-    inner_klass = Class.new(Grainet::Widget) do
+    inner_klass = Class.new(Grainet::Component) do
       define_method(:prepare_setup) { expose :name, "inner" }
     end
-    grand_klass = Class.new(Grainet::Widget) do
+    grand_klass = Class.new(Grainet::Component) do
       attr_reader :seen
       define_method(:setup) { @seen = lookup(:name) }
     end
@@ -71,7 +71,7 @@ Spec.describe "expose / lookup" do
     Grainet.register "pi-grand", grand_klass
     Grainet.start
 
-    grand_el = doc.call(:querySelector, "[data-widget='pi-grand']")
+    grand_el = doc.call(:querySelector, "[data-component='pi-grand']")
     grand_inst = Grainet.find_for_element(grand_el)
     Spec.assert_equal "inner", grand_inst.seen
 
@@ -81,10 +81,10 @@ Spec.describe "expose / lookup" do
   Spec.assert "lookup without an exposed value raises with a helpful message" do
     doc = JS.global[:document]
     body = doc[:body]
-    body[:innerHTML] = '<div data-widget="pi-orphan"><span data-ref="x"></span></div>'
+    body[:innerHTML] = '<div data-component="pi-orphan"><span data-ref="x"></span></div>'
 
     captured = nil
-    klass = Class.new(Grainet::Widget) do
+    klass = Class.new(Grainet::Component) do
       define_method(:setup) do
         begin
           lookup(:missing)
@@ -97,7 +97,7 @@ Spec.describe "expose / lookup" do
     Grainet.register "pi-orphan", klass
     Grainet.start
 
-    el = doc.call(:querySelector, "[data-widget='pi-orphan']")
+    el = doc.call(:querySelector, "[data-component='pi-orphan']")
     inst = Grainet.find_for_element(el)
     Spec.assert_true inst.err.include?("missing")
     Spec.assert_true inst.err.include?("lookup")
@@ -108,9 +108,9 @@ Spec.describe "expose / lookup" do
   Spec.assert "lookup(:key, default) returns the default if not exposed" do
     doc = JS.global[:document]
     body = doc[:body]
-    body[:innerHTML] = '<div data-widget="pi-default"></div>'
+    body[:innerHTML] = '<div data-component="pi-default"></div>'
 
-    klass = Class.new(Grainet::Widget) do
+    klass = Class.new(Grainet::Component) do
       attr_reader :v
       define_method(:setup) { @v = lookup(:flag, "fallback") }
     end
@@ -118,7 +118,7 @@ Spec.describe "expose / lookup" do
     Grainet.start
 
     inst = Grainet.find_for_element(
-      doc.call(:querySelector, "[data-widget='pi-default']"))
+      doc.call(:querySelector, "[data-component='pi-default']"))
     Spec.assert_equal "fallback", inst.v
 
     body[:innerHTML] = ""
@@ -127,10 +127,10 @@ Spec.describe "expose / lookup" do
   Spec.assert "lookup with block uses block as lazy default" do
     doc = JS.global[:document]
     body = doc[:body]
-    body[:innerHTML] = '<div data-widget="pi-block"></div>'
+    body[:innerHTML] = '<div data-component="pi-block"></div>'
 
     factory_calls = 0
-    klass = Class.new(Grainet::Widget) do
+    klass = Class.new(Grainet::Component) do
       attr_reader :v
       define_method(:setup) do
         @v = lookup(:thing) do
@@ -143,7 +143,7 @@ Spec.describe "expose / lookup" do
     Grainet.start
 
     inst = Grainet.find_for_element(
-      doc.call(:querySelector, "[data-widget='pi-block']"))
+      doc.call(:querySelector, "[data-component='pi-block']"))
     Spec.assert_equal "made-fresh", inst.v
     Spec.assert_equal 1, factory_calls
 
@@ -154,23 +154,23 @@ Spec.describe "expose / lookup" do
     doc = JS.global[:document]
     body = doc[:body]
     body[:innerHTML] = <<~HTML
-      <div data-widget="pi-order-parent">
-        <div data-widget="pi-order-child">
-          <div data-widget="pi-order-grand"></div>
+      <div data-component="pi-order-parent">
+        <div data-component="pi-order-child">
+          <div data-component="pi-order-grand"></div>
         </div>
       </div>
     HTML
 
     log = []
-    parent_klass = Class.new(Grainet::Widget) do
+    parent_klass = Class.new(Grainet::Component) do
       define_method(:prepare_setup) { log << :parent_prepare_setup }
       define_method(:setup)        { log << :parent_setup }
     end
-    child_klass = Class.new(Grainet::Widget) do
+    child_klass = Class.new(Grainet::Component) do
       define_method(:prepare_setup) { log << :child_prepare_setup }
       define_method(:setup)        { log << :child_setup }
     end
-    grand_klass = Class.new(Grainet::Widget) do
+    grand_klass = Class.new(Grainet::Component) do
       define_method(:prepare_setup) { log << :grand_prepare_setup }
       define_method(:setup)        { log << :grand_setup }
     end
@@ -192,13 +192,13 @@ Spec.describe "expose / lookup" do
   Spec.assert "dynamic mount via MO runs prepare_setup for the new subtree" do
     doc = JS.global[:document]
     body = doc[:body]
-    body[:innerHTML] = '<div data-widget="pi-dyn-host"><div id="slot"></div></div>'
+    body[:innerHTML] = '<div data-component="pi-dyn-host"><div id="slot"></div></div>'
 
-    host_klass = Class.new(Grainet::Widget) do
+    host_klass = Class.new(Grainet::Component) do
       define_method(:prepare_setup) { expose :token, "host-token" }
     end
     captured = nil
-    inserted_klass = Class.new(Grainet::Widget) do
+    inserted_klass = Class.new(Grainet::Component) do
       define_method(:setup) do
         captured = lookup(:token)
       end
@@ -210,7 +210,7 @@ Spec.describe "expose / lookup" do
 
     slot = doc.call(:querySelector, "#slot")
     new_el = doc.call(:createElement, "div")
-    new_el.call(:setAttribute, "data-widget", "pi-dyn-inserted")
+    new_el.call(:setAttribute, "data-component", "pi-dyn-inserted")
     slot.call(:appendChild, new_el)
     JS.eval_javascript("new Promise(r => setTimeout(r, 0))").await
 

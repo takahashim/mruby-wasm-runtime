@@ -1,9 +1,9 @@
-Spec.describe "Widget#persistent_signal" do
+Spec.describe "Component#persistent_signal" do
   Spec.assert "loads default (block form) when localStorage is empty" do
     JS.global[:localStorage].call(:removeItem, "ps-empty-block")
 
     captured = nil
-    klass = Class.new(Grainet::Widget) do
+    klass = Class.new(Grainet::Component) do
       define_method(:setup) do
         @s = persistent_signal("ps-empty-block") { [1, 2, 3] }
       end
@@ -12,11 +12,11 @@ Spec.describe "Widget#persistent_signal" do
 
     doc = JS.global[:document]
     body = doc[:body]
-    body[:innerHTML] = '<div data-widget="ps-empty-block"></div>'
+    body[:innerHTML] = '<div data-component="ps-empty-block"></div>'
     Grainet.register "ps-empty-block", klass
     Grainet.start
 
-    el = doc.call(:querySelector, "[data-widget='ps-empty-block']")
+    el = doc.call(:querySelector, "[data-component='ps-empty-block']")
     captured = Grainet.find_for_element(el).read
     Spec.assert_equal [1, 2, 3], captured
 
@@ -27,7 +27,7 @@ Spec.describe "Widget#persistent_signal" do
   Spec.assert "loads default (kwarg form) when localStorage is empty" do
     JS.global[:localStorage].call(:removeItem, "ps-empty-kwarg")
 
-    klass = Class.new(Grainet::Widget) do
+    klass = Class.new(Grainet::Component) do
       define_method(:setup) do
         @s = persistent_signal("ps-empty-kwarg", default: "hello")
       end
@@ -36,11 +36,11 @@ Spec.describe "Widget#persistent_signal" do
 
     doc = JS.global[:document]
     body = doc[:body]
-    body[:innerHTML] = '<div data-widget="ps-empty-kwarg"></div>'
+    body[:innerHTML] = '<div data-component="ps-empty-kwarg"></div>'
     Grainet.register "ps-empty-kwarg", klass
     Grainet.start
 
-    el = doc.call(:querySelector, "[data-widget='ps-empty-kwarg']")
+    el = doc.call(:querySelector, "[data-component='ps-empty-kwarg']")
     Spec.assert_equal "hello", Grainet.find_for_element(el).read
 
     body[:innerHTML] = ""
@@ -51,7 +51,7 @@ Spec.describe "Widget#persistent_signal" do
     JS.global[:localStorage].call(:setItem, "ps-stored",
       Grainet::JSON.generate([{ "id" => 9, "title" => "x" }]))
 
-    klass = Class.new(Grainet::Widget) do
+    klass = Class.new(Grainet::Component) do
       define_method(:setup) do
         @s = persistent_signal("ps-stored") { [] }
       end
@@ -60,11 +60,11 @@ Spec.describe "Widget#persistent_signal" do
 
     doc = JS.global[:document]
     body = doc[:body]
-    body[:innerHTML] = '<div data-widget="ps-stored"></div>'
+    body[:innerHTML] = '<div data-component="ps-stored"></div>'
     Grainet.register "ps-stored", klass
     Grainet.start
 
-    el = doc.call(:querySelector, "[data-widget='ps-stored']")
+    el = doc.call(:querySelector, "[data-component='ps-stored']")
     Spec.assert_equal [{ "id" => 9, "title" => "x" }], Grainet.find_for_element(el).read
 
     JS.global[:localStorage].call(:removeItem, "ps-stored")
@@ -78,7 +78,7 @@ Spec.describe "Widget#persistent_signal" do
     captured = []
     Grainet.logger = ->(severity, msg, _err) { captured << [severity, msg] if severity == :warn }
 
-    klass = Class.new(Grainet::Widget) do
+    klass = Class.new(Grainet::Component) do
       define_method(:setup) do
         @s = persistent_signal("ps-broken") { "fallback" }
       end
@@ -87,11 +87,11 @@ Spec.describe "Widget#persistent_signal" do
 
     doc = JS.global[:document]
     body = doc[:body]
-    body[:innerHTML] = '<div data-widget="ps-broken"></div>'
+    body[:innerHTML] = '<div data-component="ps-broken"></div>'
     Grainet.register "ps-broken", klass
     Grainet.start
 
-    el = doc.call(:querySelector, "[data-widget='ps-broken']")
+    el = doc.call(:querySelector, "[data-component='ps-broken']")
     Spec.assert_equal "fallback", Grainet.find_for_element(el).read
     Spec.assert_equal 1, captured.length
     Spec.assert_true captured.first[1].to_s.include?("ps-broken")
@@ -105,7 +105,7 @@ Spec.describe "Widget#persistent_signal" do
   Spec.assert "writes to localStorage when signal changes" do
     JS.global[:localStorage].call(:removeItem, "ps-write")
 
-    klass = Class.new(Grainet::Widget) do
+    klass = Class.new(Grainet::Component) do
       define_method(:setup) do
         @s = persistent_signal("ps-write", default: 0)
       end
@@ -114,11 +114,11 @@ Spec.describe "Widget#persistent_signal" do
 
     doc = JS.global[:document]
     body = doc[:body]
-    body[:innerHTML] = '<div data-widget="ps-write"></div>'
+    body[:innerHTML] = '<div data-component="ps-write"></div>'
     Grainet.register "ps-write", klass
     Grainet.start
 
-    el = doc.call(:querySelector, "[data-widget='ps-write']")
+    el = doc.call(:querySelector, "[data-component='ps-write']")
     inst = Grainet.find_for_element(el)
 
     # Initial effect run already wrote default.

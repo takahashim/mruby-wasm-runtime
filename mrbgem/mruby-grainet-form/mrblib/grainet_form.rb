@@ -1,11 +1,11 @@
 # Grainet Form Builder — signal-based form state + validation.
 #
-# Headless, data-only form state. Widgets provide the HTML; this gem
+# Headless, data-only form state. Components provide the HTML; this gem
 # provides per-field reactive state (`value`, `dirty?`, `touched?`,
 # `error`, `valid?`) on top of Grainet's existing bindings.
 #
 # The form block receives the Form instance explicitly (no `instance_eval`)
-# so widget instance variables and methods remain accessible inside
+# so component instance variables and methods remain accessible inside
 # validator blocks.
 #
 # This lives in the optional `mruby-grainet-form` gem rather than core.
@@ -23,37 +23,37 @@ module Grainet
       attr_reader :name
       attr_reader :value_signal, :dirty_signal, :touched_signal, :error_signal
 
-      def initialize(name:, ref:, initial:, widget:, type: :text, validator: nil, form: nil)
+      def initialize(name:, ref:, initial:, component:, type: :text, validator: nil, form: nil)
         @name = name
         @initial = initial
-        @widget = widget
+        @component = component
         @validator = validator
         @form = form
         property = TYPE_TO_PROPERTY[type] || :value
 
-        @value_signal = widget.signal(initial)
-        widget.bind_input(ref, @value_signal, property: property)
+        @value_signal = component.signal(initial)
+        component.bind_input(ref, @value_signal, property: property)
 
         # dirty: latches true once value diverges from initial.
-        @dirty_signal = widget.signal(false)
-        widget.effect(label: "form:#{name}:dirty") do
+        @dirty_signal = component.signal(false)
+        component.effect(label: "form:#{name}:dirty") do
           v = @value_signal.value
           @dirty_signal.value = true if !@dirty_signal.value && v != @initial
         end
 
         # touched: flips on blur; also set for all fields by Form#submit.
-        @touched_signal = widget.signal(false)
+        @touched_signal = component.signal(false)
         ref.on(:blur) { @touched_signal.value = true }
 
         # error precedence: server_error → field validator → form-level validator.
-        @server_error_signal = widget.signal(nil)
-        @validator_error_computed = widget.computed do
+        @server_error_signal = component.signal(nil)
+        @validator_error_computed = component.computed do
           # Validator receives (field, form); extra arg is ignored by Proc
           # when the block only declares one parameter.
           msg = @validator ? @validator.call(self, @form) : nil
           (msg.is_a?(String) && !msg.empty?) ? msg : nil
         end
-        @error_signal = widget.computed do
+        @error_signal = component.computed do
           @server_error_signal.value ||
             @validator_error_computed.value ||
             (@form && @form.form_error_for(@name).value)
@@ -128,12 +128,12 @@ module Grainet
       end
     end
 
-    def initialize(widget)
-      @widget                = widget
+    def initialize(component)
+      @component                = component
       @fields                = {}
-      @base_error_signal     = widget.signal(nil)
-      @submit_attempted_signal  = widget.signal(false)
-      @form_validator_signal        = widget.signal(nil)
+      @base_error_signal     = component.signal(nil)
+      @submit_attempted_signal  = component.signal(false)
+      @form_validator_signal        = component.signal(nil)
       @form_validator_computed = nil
       @form_error_computeds      = {}
     end
@@ -149,7 +149,7 @@ module Grainet
       sym = name.to_sym
       @fields[sym] = Field.new(
         name: sym, ref: ref, initial: initial,
-        validator: validator, widget: @widget, type: type, form: self)
+        validator: validator, component: @component, type: type, form: self)
     end
 
     def fields
@@ -178,7 +178,7 @@ module Grainet
     # Reads form[:name].value inside the block, which auto-tracks each
     # field's signal when evaluated inside this computed.
     def form_validator_computed
-      @form_validator_computed ||= @widget.computed do
+      @form_validator_computed ||= @component.computed do
         block = @form_validator_signal.value
         next {} unless block
         result = block.call(self)
@@ -189,7 +189,7 @@ module Grainet
     # Cached per-field computed of the form-level error for one field.
     def form_error_for(name)
       sym = name.to_sym
-      @form_error_computeds[sym] ||= @widget.computed do
+      @form_error_computeds[sym] ||= @component.computed do
         msg = form_validator_computed.value[sym]
         (msg.is_a?(String) && !msg.empty?) ? msg : nil
       end
@@ -306,7 +306,7 @@ module Grainet
     end
   end
 
-  # Adds `form` and bare validator helpers to widgets when this gem is loaded.
+  # Adds `form` and bare validator helpers to components when this gem is loaded.
   module FormBuilder
     include Grainet::Form::Validators
 
@@ -318,4 +318,4 @@ module Grainet
   end
 end
 
-Grainet::Widget.include(Grainet::FormBuilder)
+Grainet::Component.include(Grainet::FormBuilder)

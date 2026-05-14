@@ -3,12 +3,12 @@ Spec.describe "bind class:" do
     doc = JS.global[:document]
     body = doc[:body]
     body[:innerHTML] = <<~HTML
-      <div data-widget="bind-class">
+      <div data-component="bind-class">
         <p data-ref="field" class="base"></p>
       </div>
     HTML
 
-    klass = Class.new(Grainet::Widget) do
+    klass = Class.new(Grainet::Component) do
       attr_reader :invalid, :dirty
       define_method(:setup) do
         @invalid = signal(false)
@@ -19,7 +19,7 @@ Spec.describe "bind class:" do
     Grainet.register "bind-class", klass
     Grainet.start
 
-    el = doc.call(:querySelector, "[data-widget='bind-class']")
+    el = doc.call(:querySelector, "[data-component='bind-class']")
     inst = Grainet.find_for_element(el)
     field = doc.call(:querySelector, "[data-ref='field']")
 
@@ -48,10 +48,10 @@ Spec.describe "bind class:" do
   Spec.assert "raises when class: value is not a Hash" do
     doc = JS.global[:document]
     body = doc[:body]
-    body[:innerHTML] = '<div data-widget="bind-class-bad"><span data-ref="x"></span></div>'
+    body[:innerHTML] = '<div data-component="bind-class-bad"><span data-ref="x"></span></div>'
 
     captured = nil
-    klass = Class.new(Grainet::Widget) do
+    klass = Class.new(Grainet::Component) do
       define_method(:setup) do
         sig = signal("foo")
         begin
@@ -65,7 +65,7 @@ Spec.describe "bind class:" do
     Grainet.register "bind-class-bad", klass
     Grainet.start
 
-    el = doc.call(:querySelector, "[data-widget='bind-class-bad']")
+    el = doc.call(:querySelector, "[data-component='bind-class-bad']")
     inst = Grainet.find_for_element(el)
     Spec.assert_true inst.captured_message.include?("class:")
 
@@ -78,12 +78,12 @@ Spec.describe "bind style:" do
     doc = JS.global[:document]
     body = doc[:body]
     body[:innerHTML] = <<~HTML
-      <div data-widget="bind-style">
+      <div data-component="bind-style">
         <div data-ref="box"></div>
       </div>
     HTML
 
-    klass = Class.new(Grainet::Widget) do
+    klass = Class.new(Grainet::Component) do
       attr_reader :color, :size
       define_method(:setup) do
         @color = signal("red")
@@ -94,7 +94,7 @@ Spec.describe "bind style:" do
     Grainet.register "bind-style", klass
     Grainet.start
 
-    el = doc.call(:querySelector, "[data-widget='bind-style']")
+    el = doc.call(:querySelector, "[data-component='bind-style']")
     inst = Grainet.find_for_element(el)
     box = doc.call(:querySelector, "[data-ref='box']")
     read = ->(prop) { box[:style].call(:getPropertyValue, prop).to_s }

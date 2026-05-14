@@ -3,12 +3,12 @@ Spec.describe "bind" do
     doc = JS.global[:document]
     body = doc[:body]
     body[:innerHTML] = <<~HTML
-      <div data-widget="bind-text">
+      <div data-component="bind-text">
         <span data-ref="out"></span>
       </div>
     HTML
 
-    klass = Class.new(Grainet::Widget) do
+    klass = Class.new(Grainet::Component) do
       attr_reader :name
       define_method(:setup) do
         @name = signal("Alice")
@@ -18,7 +18,7 @@ Spec.describe "bind" do
     Grainet.register "bind-text", klass
     Grainet.start
 
-    el = doc.call(:querySelector, "[data-widget='bind-text']")
+    el = doc.call(:querySelector, "[data-component='bind-text']")
     inst = Grainet.find_for_element(el)
     out = doc.call(:querySelector, "span[data-ref='out']")
     Spec.assert_equal "Alice", out[:textContent].to_s
@@ -32,12 +32,12 @@ Spec.describe "bind" do
     doc = JS.global[:document]
     body = doc[:body]
     body[:innerHTML] = <<~HTML
-      <div data-widget="bind-block">
+      <div data-component="bind-block">
         <p data-ref="msg"></p>
       </div>
     HTML
 
-    klass = Class.new(Grainet::Widget) do
+    klass = Class.new(Grainet::Component) do
       attr_reader :n
       define_method(:setup) do
         @n = signal(0)
@@ -53,7 +53,7 @@ Spec.describe "bind" do
     Grainet.register "bind-block", klass
     Grainet.start
 
-    el = doc.call(:querySelector, "[data-widget='bind-block']")
+    el = doc.call(:querySelector, "[data-component='bind-block']")
     inst = Grainet.find_for_element(el)
     p_el = doc.call(:querySelector, "p[data-ref='msg']")
     Spec.assert_equal "zero", p_el[:textContent].to_s
@@ -69,14 +69,14 @@ Spec.describe "bind" do
     doc = JS.global[:document]
     body = doc[:body]
     body[:innerHTML] = <<~HTML
-      <div data-widget="bind-bools">
+      <div data-component="bind-bools">
         <p data-ref="err">err</p>
         <button data-ref="submit">go</button>
         <input data-ref="cb" type="checkbox">
       </div>
     HTML
 
-    klass = Class.new(Grainet::Widget) do
+    klass = Class.new(Grainet::Component) do
       attr_reader :err_hidden, :busy, :ok
       define_method(:setup) do
         @err_hidden = signal(false)
@@ -90,7 +90,7 @@ Spec.describe "bind" do
     Grainet.register "bind-bools", klass
     Grainet.start
 
-    el = doc.call(:querySelector, "[data-widget='bind-bools']")
+    el = doc.call(:querySelector, "[data-component='bind-bools']")
     inst = Grainet.find_for_element(el)
     err = doc.call(:querySelector, "[data-ref='err']")
     submit = doc.call(:querySelector, "[data-ref='submit']")

@@ -1,4 +1,4 @@
-Spec.describe "Widget#each_frame" do
+Spec.describe "Component#each_frame" do
   # Force-unmount synchronously between cases so MO scheduling latency
   # in CI can't leak rAF ticks past the assertion window.
   Spec.after { Grainet.reset! }
@@ -6,10 +6,10 @@ Spec.describe "Widget#each_frame" do
   Spec.assert "block is invoked once per animation frame" do
     doc = JS.global[:document]
     body = doc[:body]
-    body[:innerHTML] = '<div data-widget="ef-basic"></div>'
+    body[:innerHTML] = '<div data-component="ef-basic"></div>'
 
     counts = []
-    klass = Class.new(Grainet::Widget) do
+    klass = Class.new(Grainet::Component) do
       define_method(:setup) do
         each_frame { |_ts| counts << :tick }
       end
@@ -26,13 +26,13 @@ Spec.describe "Widget#each_frame" do
     JS.eval_javascript("new Promise(r => setTimeout(r, 16))").await
   end
 
-  Spec.assert "loop stops after widget unmount" do
+  Spec.assert "loop stops after component unmount" do
     doc = JS.global[:document]
     body = doc[:body]
-    body[:innerHTML] = '<div data-widget="ef-stop"></div>'
+    body[:innerHTML] = '<div data-component="ef-stop"></div>'
 
     counts = []
-    klass = Class.new(Grainet::Widget) do
+    klass = Class.new(Grainet::Component) do
       define_method(:setup) do
         each_frame { |_ts| counts << :tick }
       end
@@ -58,12 +58,12 @@ Spec.describe "Widget#each_frame" do
   Spec.assert "block raise routes to error_boundary" do
     doc = JS.global[:document]
     body = doc[:body]
-    body[:innerHTML] = '<div data-widget="ef-err"></div>'
+    body[:innerHTML] = '<div data-component="ef-err"></div>'
 
     captured = []
     Grainet.logger = ->(_severity, msg, err) { captured << [:global, msg, err] }
 
-    klass = Class.new(Grainet::Widget) do
+    klass = Class.new(Grainet::Component) do
       define_method(:setup) do
         on_error do |label, err|
           captured << [:local, label, err.message]

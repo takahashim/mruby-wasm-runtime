@@ -49,22 +49,22 @@
       A shared theme switcher that updates multiple cards at once.
     </p>
 
-    <div data-widget="theme-app">
+    <div data-component="theme-app">
       <div class="toolbar">
         <button data-ref="toggle">Toggle theme</button>
         <span class="status" data-ref="status"></span>
       </div>
 
-      <div data-widget="theme-card" class="card">
+      <div data-component="theme-card" class="card">
         <h3>First card</h3>
         <p>This card updates together with the shared theme setting.
-           <span data-widget="theme-badge" class="badge" data-ref="badge_root">
+           <span data-component="theme-badge" class="badge" data-ref="badge_root">
              status
            </span>
         </p>
       </div>
 
-      <div data-widget="theme-card" class="card">
+      <div data-component="theme-card" class="card">
         <h3>Second card</h3>
         <p>Both cards reflect the current mode immediately.</p>
       </div>
@@ -73,7 +73,7 @@
     <p id="boot">booting…</p>
 
     <script type="text/ruby" id="ruby-source">
-class ThemeApp < Grainet::Widget
+class ThemeApp < Grainet::Component
   # prepare_setup runs in pre-order — before any descendant's setup. By the
   # time a child calls lookup(:theme), this signal is already in scope.
   def prepare_setup
@@ -92,17 +92,17 @@ class ThemeApp < Grainet::Widget
   end
 end
 
-class ThemeCard < Grainet::Widget
+class ThemeCard < Grainet::Component
   def setup
     @theme = lookup(:theme)
 
-    # bind on root: the widget's own DOM root gets the .is-dark class
+    # bind on root: the component's own DOM root gets the .is-dark class
     # whenever the inherited theme is "dark".
     bind root, class: { "is-dark" => computed { @theme.value == "dark" } }
   end
 end
 
-class ThemeBadge < Grainet::Widget
+class ThemeBadge < Grainet::Component
   def setup
     @theme = lookup(:theme)
 

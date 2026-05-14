@@ -1,15 +1,15 @@
 # grainet_sortable.rb — Grainet::Sortable mixins.
 #
-# Mixins to wire HTML5 drag-and-drop reordering into a Widget with
+# Mixins to wire HTML5 drag-and-drop reordering into a Component with
 # minimal boilerplate. Two mixins, one per role:
 #
 #   Grainet::Sortable::Item — the draggable row itself. Include and
-#   call `make_sortable` in setup. The widget's root gets all five
+#   call `make_sortable` in setup. The component's root gets all five
 #   native DnD handlers and dispatches `:sortable_reorder` (bubbling)
 #   with detail `{ "src" => ..., "dst" => ..., "pos" => "before"|"after" }`
 #   on drop.
 #
-#   Grainet::Sortable::List — the widget that owns the list. Include
+#   Grainet::Sortable::List — the component that owns the list. Include
 #   and call `sortable_target(refs.list, signal, key: "id")` in setup.
 #   Listens for `:sortable_reorder` from rows and applies the reorder
 #   to the signal; also handles drops in empty list space (below the
@@ -17,7 +17,7 @@
 #
 # Pure data operations (`reorder_items`, `move_to_end`, `drop_before?`)
 # live on the parent `Grainet::Sortable` module so they're testable
-# without needing a Widget instance.
+# without needing a Component instance.
 #
 # CSS classes the Item mixin toggles on the row root:
 #   is-dragging  — set on the source row while it's being dragged
@@ -86,7 +86,7 @@ module Grainet
       # Host-side wiring. Listens for the reorder event on the list
       # element itself (`el_ref`) — that scopes naturally to row
       # events from this `<ul>` only, so multiple sortable lists
-      # inside one widget (or nested sortable trees) don't cross-fire.
+      # inside one component (or nested sortable trees) don't cross-fire.
       # Also adds a fallback drop handler on `el_ref` so cursors
       # released in empty list space (below the last row, in the gap
       # between rows) still append the source instead of being lost.

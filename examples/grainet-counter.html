@@ -38,7 +38,7 @@
     <h1>Grainet Counter</h1>
     <p>A simple counter with increment, decrement, and reset controls.</p>
 
-    <div class="panel" data-widget="counter">
+    <div class="panel" data-component="counter">
       <h2>Counter</h2>
       <div class="row">
         <button data-ref="decrement">-</button>
@@ -52,7 +52,7 @@
     <p id="status">booting…</p>
 
     <script type="text/ruby" id="ruby-source">
-class Counter < Grainet::Widget
+class Counter < Grainet::Component
   def setup
     @count = signal(0)
 
@@ -77,7 +77,7 @@ end
 
 Grainet.register "counter", Counter
 Grainet.start
-puts "counter widget mounted"
+puts "counter component mounted"
     </script>
 
     <script type="module">

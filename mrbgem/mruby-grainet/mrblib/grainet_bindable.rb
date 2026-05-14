@@ -1,7 +1,7 @@
 # grainet_bindable.rb — Bindable mixin + nested ListReconciler engine.
 #
 # Bindable is the DOM-binding DSL (`bind` / `bind_input` / `bind_list`) that
-# Widget mixes in. `Bindable::ListReconciler` is the key-based diff
+# Component mixes in. `Bindable::ListReconciler` is the key-based diff
 # engine that powers `bind_list`; nested under Bindable because it has
 # no purpose outside that context.
 #
@@ -11,15 +11,15 @@
 
 module Grainet
   # DOM-binding DSL (`bind` / `bind_input` / `bind_list`) as a reusable
-  # mixin. Pulled out of Widget so future host classes can opt in
-  # without inheriting the full Widget lifecycle. The host class is
+  # mixin. Pulled out of Component so future host classes can opt in
+  # without inheriting the full Component lifecycle. The host class is
   # required to provide:
   #   - `effect(label:, &block)` — register an effect that
   #     auto-disposes with the host's lifecycle.
   module Bindable
     # Three-pass key-based list reconciliation engine for `bind_list`.
     # Holds the `by_key` cache across runs so DOM nodes for unchanged
-    # keys survive signal updates (preserving focus, nested widget
+    # keys survive signal updates (preserving focus, nested component
     # identity, etc.). See docs/grainet-spec.md "bind_list" for the
     # user-facing contract.
     class ListReconciler

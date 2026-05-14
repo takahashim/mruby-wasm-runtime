@@ -1,13 +1,13 @@
-Spec.describe "Widget#timeout" do
+Spec.describe "Component#timeout" do
   Spec.after { Grainet.reset! }
 
   Spec.assert "block fires once after the delay" do
     doc = JS.global[:document]
     body = doc[:body]
-    body[:innerHTML] = '<div data-widget="to-basic"></div>'
+    body[:innerHTML] = '<div data-component="to-basic"></div>'
 
     fired = []
-    klass = Class.new(Grainet::Widget) do
+    klass = Class.new(Grainet::Component) do
       define_method(:setup) { timeout(20) { fired << :hit } }
     end
     Grainet.register "to-basic", klass
@@ -20,13 +20,13 @@ Spec.describe "Widget#timeout" do
     JS.eval_javascript("new Promise(r => setTimeout(r, 16))").await
   end
 
-  Spec.assert "auto-cancels when widget unmounts before delay elapses" do
+  Spec.assert "auto-cancels when component unmounts before delay elapses" do
     doc = JS.global[:document]
     body = doc[:body]
-    body[:innerHTML] = '<div data-widget="to-cancel"></div>'
+    body[:innerHTML] = '<div data-component="to-cancel"></div>'
 
     fired = []
-    klass = Class.new(Grainet::Widget) do
+    klass = Class.new(Grainet::Component) do
       define_method(:setup) { timeout(80) { fired << :hit } }
     end
     Grainet.register "to-cancel", klass
@@ -46,12 +46,12 @@ Spec.describe "Widget#timeout" do
   Spec.assert "block raise routes to error_boundary" do
     doc = JS.global[:document]
     body = doc[:body]
-    body[:innerHTML] = '<div data-widget="to-err"></div>'
+    body[:innerHTML] = '<div data-component="to-err"></div>'
 
     captured = []
     Grainet.logger = ->(_severity, msg, err) { captured << [:global, msg, err] }
 
-    klass = Class.new(Grainet::Widget) do
+    klass = Class.new(Grainet::Component) do
       define_method(:setup) do
         on_error do |label, err|
           captured << [:local, label, err.message]
@@ -80,11 +80,11 @@ Spec.describe "Widget#timeout" do
   Spec.assert "Timer#stop cancels the pending timeout" do
     doc = JS.global[:document]
     body = doc[:body]
-    body[:innerHTML] = '<div data-widget="to-manual"></div>'
+    body[:innerHTML] = '<div data-component="to-manual"></div>'
 
     fired = []
     captured_timer = nil
-    klass = Class.new(Grainet::Widget) do
+    klass = Class.new(Grainet::Component) do
       define_method(:setup) do
         captured_timer = timeout(60) { fired << :hit }
       end
@@ -105,16 +105,16 @@ Spec.describe "Widget#timeout" do
   end
 end
 
-Spec.describe "Widget#every" do
+Spec.describe "Component#every" do
   Spec.after { Grainet.reset! }
 
   Spec.assert "block fires repeatedly at the interval" do
     doc = JS.global[:document]
     body = doc[:body]
-    body[:innerHTML] = '<div data-widget="ev-basic"></div>'
+    body[:innerHTML] = '<div data-component="ev-basic"></div>'
 
     counts = []
-    klass = Class.new(Grainet::Widget) do
+    klass = Class.new(Grainet::Component) do
       define_method(:setup) { every(15) { counts << :tick } }
     end
     Grainet.register "ev-basic", klass
@@ -127,13 +127,13 @@ Spec.describe "Widget#every" do
     JS.eval_javascript("new Promise(r => setTimeout(r, 30))").await
   end
 
-  Spec.assert "interval stops after widget unmount" do
+  Spec.assert "interval stops after component unmount" do
     doc = JS.global[:document]
     body = doc[:body]
-    body[:innerHTML] = '<div data-widget="ev-stop"></div>'
+    body[:innerHTML] = '<div data-component="ev-stop"></div>'
 
     counts = []
-    klass = Class.new(Grainet::Widget) do
+    klass = Class.new(Grainet::Component) do
       define_method(:setup) { every(15) { counts << :tick } }
     end
     Grainet.register "ev-stop", klass
@@ -143,7 +143,7 @@ Spec.describe "Widget#every" do
     Spec.assert_true counts.length >= 1
 
     # Direct reset! avoids MO scheduling latency under CI load — same
-    # contract is verified ("interval stops once the widget unmounts").
+    # contract is verified ("interval stops once the component unmounts").
     Grainet.reset!
     body[:innerHTML] = ""
     JS.eval_javascript("new Promise(r => setTimeout(r, 30))").await
@@ -156,12 +156,12 @@ Spec.describe "Widget#every" do
   Spec.assert "block raise routes to error_boundary and interval keeps firing" do
     doc = JS.global[:document]
     body = doc[:body]
-    body[:innerHTML] = '<div data-widget="ev-err"></div>'
+    body[:innerHTML] = '<div data-component="ev-err"></div>'
 
     captured = []
     Grainet.logger = ->(_severity, msg, err) { captured << [:global, msg, err] }
 
-    klass = Class.new(Grainet::Widget) do
+    klass = Class.new(Grainet::Component) do
       define_method(:setup) do
         on_error do |label, err|
           captured << [:local, label, err.message]
@@ -190,11 +190,11 @@ Spec.describe "Widget#every" do
   Spec.assert "Timer#stop halts further ticks; double stop is a no-op" do
     doc = JS.global[:document]
     body = doc[:body]
-    body[:innerHTML] = '<div data-widget="ev-manual"></div>'
+    body[:innerHTML] = '<div data-component="ev-manual"></div>'
 
     counts = []
     captured_timer = nil
-    klass = Class.new(Grainet::Widget) do
+    klass = Class.new(Grainet::Component) do
       define_method(:setup) do
         captured_timer = every(15) { counts << :tick }
       end

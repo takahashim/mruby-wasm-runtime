@@ -9,13 +9,13 @@ Spec.describe "Grainet::Form field validator with |field, form|" do
     doc = JS.global[:document]
     body = doc[:body]
     body[:innerHTML] = <<~HTML
-      <div data-widget="form-cross-vof">
+      <div data-component="form-cross-vof">
         <input data-ref="password">
         <input data-ref="confirm">
       </div>
     HTML
 
-    klass = Class.new(Grainet::Widget) do
+    klass = Class.new(Grainet::Component) do
       attr_reader :_form
       define_method(:setup) do
         @_form = form do |f|
@@ -29,7 +29,7 @@ Spec.describe "Grainet::Form field validator with |field, form|" do
     Grainet.register "form-cross-vof", klass
     Grainet.start
 
-    el = doc.call(:querySelector, "[data-widget='form-cross-vof']")
+    el = doc.call(:querySelector, "[data-component='form-cross-vof']")
     fm = Grainet.find_for_element(el)._form
     confirm = fm[:confirm]
 
@@ -59,13 +59,13 @@ Spec.describe "Grainet::Form field validator with |field, form|" do
     doc = JS.global[:document]
     body = doc[:body]
     body[:innerHTML] = <<~HTML
-      <div data-widget="form-cross-react">
+      <div data-component="form-cross-react">
         <input data-ref="a">
         <input data-ref="b">
       </div>
     HTML
 
-    klass = Class.new(Grainet::Widget) do
+    klass = Class.new(Grainet::Component) do
       attr_reader :_form
       define_method(:setup) do
         @_form = form do |f|
@@ -79,7 +79,7 @@ Spec.describe "Grainet::Form field validator with |field, form|" do
     Grainet.register "form-cross-react", klass
     Grainet.start
 
-    el = doc.call(:querySelector, "[data-widget='form-cross-react']")
+    el = doc.call(:querySelector, "[data-component='form-cross-react']")
     fm = Grainet.find_for_element(el)._form
     b = fm[:b]
     a_input = doc.call(:querySelector, "[data-ref='a']")
@@ -107,13 +107,13 @@ Spec.describe "Grainet::Form#validate (form-level)" do
     doc = JS.global[:document]
     body = doc[:body]
     body[:innerHTML] = <<~HTML
-      <div data-widget="form-fl-1">
+      <div data-component="form-fl-1">
         <input data-ref="password">
         <input data-ref="confirm">
       </div>
     HTML
 
-    klass = Class.new(Grainet::Widget) do
+    klass = Class.new(Grainet::Component) do
       attr_reader :_form
       define_method(:setup) do
         @_form = form do |f|
@@ -130,7 +130,7 @@ Spec.describe "Grainet::Form#validate (form-level)" do
     Grainet.register "form-fl-1", klass
     Grainet.start
 
-    el = doc.call(:querySelector, "[data-widget='form-fl-1']")
+    el = doc.call(:querySelector, "[data-component='form-fl-1']")
     fm = Grainet.find_for_element(el)._form
 
     # initial: both "" → equal → no error
@@ -152,13 +152,13 @@ Spec.describe "Grainet::Form#validate (form-level)" do
     doc = JS.global[:document]
     body = doc[:body]
     body[:innerHTML] = <<~HTML
-      <div data-widget="form-fl-2">
+      <div data-component="form-fl-2">
         <input data-ref="password">
         <input data-ref="confirm">
       </div>
     HTML
 
-    klass = Class.new(Grainet::Widget) do
+    klass = Class.new(Grainet::Component) do
       attr_reader :_form
       define_method(:setup) do
         @_form = form do |f|
@@ -177,7 +177,7 @@ Spec.describe "Grainet::Form#validate (form-level)" do
     Grainet.register "form-fl-2", klass
     Grainet.start
 
-    el = doc.call(:querySelector, "[data-widget='form-fl-2']")
+    el = doc.call(:querySelector, "[data-component='form-fl-2']")
     fm = Grainet.find_for_element(el)._form
 
     # password = "abc", confirm = "" → field-level says "field-required"
@@ -206,9 +206,9 @@ Spec.describe "Grainet::Form#validate (form-level)" do
   Spec.assert "server error wins over field-level and form-level" do
     doc = JS.global[:document]
     body = doc[:body]
-    body[:innerHTML] = '<div data-widget="form-fl-3"><input data-ref="x"></div>'
+    body[:innerHTML] = '<div data-component="form-fl-3"><input data-ref="x"></div>'
 
-    klass = Class.new(Grainet::Widget) do
+    klass = Class.new(Grainet::Component) do
       attr_reader :_form
       define_method(:setup) do
         @_form = form do |f|
@@ -224,7 +224,7 @@ Spec.describe "Grainet::Form#validate (form-level)" do
     Grainet.register "form-fl-3", klass
     Grainet.start
 
-    el = doc.call(:querySelector, "[data-widget='form-fl-3']")
+    el = doc.call(:querySelector, "[data-component='form-fl-3']")
     fm = Grainet.find_for_element(el)._form
 
     # "ok" is 2 chars, < 3 → field-err fires; form-err suppressed.
@@ -245,13 +245,13 @@ Spec.describe "Grainet::Form#validate (form-level)" do
     doc = JS.global[:document]
     body = doc[:body]
     body[:innerHTML] = <<~HTML
-      <div data-widget="form-fl-4">
+      <div data-component="form-fl-4">
         <input data-ref="a">
         <input data-ref="b">
       </div>
     HTML
 
-    klass = Class.new(Grainet::Widget) do
+    klass = Class.new(Grainet::Component) do
       attr_reader :_form
       define_method(:setup) do
         @_form = form do |f|
@@ -268,7 +268,7 @@ Spec.describe "Grainet::Form#validate (form-level)" do
     Grainet.register "form-fl-4", klass
     Grainet.start
 
-    el = doc.call(:querySelector, "[data-widget='form-fl-4']")
+    el = doc.call(:querySelector, "[data-component='form-fl-4']")
     fm = Grainet.find_for_element(el)._form
     a_input = doc.call(:querySelector, "[data-ref='a']")
     b_input = doc.call(:querySelector, "[data-ref='b']")

@@ -1,17 +1,17 @@
 # grainet_ref.rb — RefElement / Refs / TemplateRefs / Template.
 #
 # DOM element wrappers + ref lookup proxies. Grouped here because they
-# share the "JS::Object element + Widget back-ref + ref lookup" theme
-# and form the bridge layer between raw DOM and the Bindable / Widget
+# share the "JS::Object element + Component back-ref + ref lookup" theme
+# and form the bridge layer between raw DOM and the Bindable / Component
 # DSLs that consume them.
 #
 # Loaded after grainet.rb (Grainet module + AttrName).
 
 module Grainet
   # Wraps a JS DOM element together with a back-reference to the
-  # owning widget. Lets `el.on(:click)` register a listener that gets
-  # auto-removed on widget unmount, and `el.widget` resolve to a child
-  # Grainet::Widget instance when the element is itself a `data-widget`
+  # owning component. Lets `el.on(:click)` register a listener that gets
+  # auto-removed on component unmount, and `el.component` resolve to a child
+  # Grainet::Component instance when the element is itself a `data-component`
   # root.
   #
   # Unrecognised methods fall through to the wrapped JS::Object so the
@@ -32,16 +32,16 @@ module Grainet
 
     BIND_PROPS = PROPS.map { |name, _, _| name }.freeze
 
-    attr_reader :js, :widget, :name
+    attr_reader :js, :component, :name
 
-    def initialize(js_object, widget, name: nil)
+    def initialize(js_object, component, name: nil)
       @js = js_object
-      @widget = widget
+      @component = component
       @name = name
     end
 
     # Register a DOM event listener. The callback is tracked on the
-    # owning widget so it gets removed (and the JS::Object callback
+    # owning component so it gets removed (and the JS::Object callback
     # handle released) on unmount. The block is wrapped so that a
     # raise routes through `Grainet.logger.error` (and bubbles up to the
     # nearest `on_error` / `error_boundary`) rather than being printed
@@ -49,12 +49,12 @@ module Grainet
     def on(event, options = nil, &block)
       raise ArgumentError, "block required" unless block
       evt = event.to_s
-      widget = @widget
+      component = @component
       cb = JS.callback do |*args|
         begin
           block.call(*args)
         rescue => e
-          Grainet.logger.error("listener (#{evt})", e, source: widget)
+          Grainet.logger.error("listener (#{evt})", e, source: component)
         end
       end
       if options
@@ -62,7 +62,7 @@ module Grainet
       else
         @js.call(:addEventListener, evt, cb)
       end
-      @widget.track_listener(@js, evt, cb) if @widget
+      @component.track_listener(@js, evt, cb) if @component
       cb
     end
 
@@ -125,16 +125,16 @@ module Grainet
       end
     end
 
-    # The Widget instance attached to this element. Raises if the
-    # element is not itself a `data-widget` root.
-    def widget_instance
+    # The Component instance attached to this element. Raises if the
+    # element is not itself a `data-component` root.
+    def component_instance
       Grainet.find_for_element(@js) ||
         raise(Grainet::Error,
-              "Missing widget on ref: #{@name || "(unknown)"} in #{@widget ? @widget.class.name : "(no widget)"}")
+              "Missing component on ref: #{@name || "(unknown)"} in #{@component ? @component.class.name : "(no component)"}")
     end
 
-    # `widget` reads naturally in the spec: `refs.left.widget.reset`.
-    alias_method :widget, :widget_instance
+    # `component` reads naturally in the spec: `refs.left.component.reset`.
+    alias_method :component, :component_instance
 
     def to_js
       @js
@@ -150,20 +150,20 @@ module Grainet
   end
 
   # Refs — proxy returning RefElement instances by name. Built once per
-  # widget mount by walking the root's subtree, stopping at nested
-  # `data-widget` boundaries.
+  # component mount by walking the root's subtree, stopping at nested
+  # `data-component` boundaries.
   class Refs
-    def initialize(widget)
-      @widget = widget
+    def initialize(component)
+      @component = component
       @cache = {}
-      collect(widget.root.to_js)
+      collect(component.root.to_js)
     end
 
     def [](name)
       key = name.to_s
       el = @cache[key]
       return el if el
-      raise Grainet::Error, "Missing ref: #{key} in #{@widget.class.name}"
+      raise Grainet::Error, "Missing ref: #{key} in #{@component.class.name}"
     end
 
     def method_missing(sym, *args)
@@ -181,8 +181,8 @@ module Grainet
 
     # Iterative DFS over `element`'s descendants. Records [data-ref]
     # elements as RefElements. Does not descend into nested
-    # `data-widget` subtrees, but DOES collect refs declared on the
-    # nested widget's *root* element (which belongs to the parent's
+    # `data-component` subtrees, but DOES collect refs declared on the
+    # nested component's *root* element (which belongs to the parent's
     # scope per the spec).
     def collect(root_js)
       stack = []
@@ -199,11 +199,11 @@ module Grainet
         if !ref_attr.js_null?
           name = ref_attr.to_s
           unless @cache[name]
-            @cache[name] = RefElement.new(node, @widget, name: name)
+            @cache[name] = RefElement.new(node, @component, name: name)
           end
         end
-        widget_attr = node.call(:getAttribute, "data-widget")
-        next if !widget_attr.js_null?
+        component_attr = node.call(:getAttribute, "data-component")
+        next if !component_attr.js_null?
         kids = node[:children]
         kn = kids[:length].to_i
         ki = 0
@@ -217,11 +217,11 @@ module Grainet
 
   # Lazy `data-ref` lookup over a cloned `<template>` subtree. Uses
   # querySelector (not Refs#collect's DFS) because the clone isn't
-  # mounted yet, so the data-widget boundary stop doesn't apply.
+  # mounted yet, so the data-component boundary stop doesn't apply.
   class TemplateRefs
-    def initialize(root_js, widget)
+    def initialize(root_js, component)
       @root_js = root_js
-      @widget = widget
+      @component = component
       @cache = {}
     end
 
@@ -232,7 +232,7 @@ module Grainet
       validated = AttrName.new(key, kind: "data-ref")
       js = @root_js.call(:querySelector, "[data-ref=\"#{validated}\"]")
       raise Grainet::Error, "Missing template ref: #{key}" if js.js_null?
-      @cache[key] = RefElement.new(js, @widget, name: key)
+      @cache[key] = RefElement.new(js, @component, name: key)
     end
 
     def method_missing(sym, *args)
@@ -253,29 +253,29 @@ module Grainet
   # `bind_list` without raw-element handling.
   class Template
     # Clone `<template data-template="NAME">` from the document and
-    # wrap its first element child as a Template. `widget` is consulted
+    # wrap its first element child as a Template. `component` is consulted
     # by `TemplateRefs` for listener auto-cleanup tracking when the
     # cloned content's RefElements register events.
-    def self.from_document(name, widget = nil)
+    def self.from_document(name, component = nil)
       name = AttrName.new(name, kind: "data-template")
       tpl = JS.global[:document].call(:querySelector, "template[data-template=\"#{name}\"]")
       raise Error, "Missing template: #{name}" if tpl.js_null?
       frag = tpl[:content].call(:cloneNode, true)
       clone = frag[:firstElementChild]
       raise Error, "Empty template: #{name}" if clone.js_null?
-      t = new(clone, widget)
+      t = new(clone, component)
       yield t.refs if block_given?
       t
     end
 
-    def initialize(node, widget = nil)
+    def initialize(node, component = nil)
       @node = node
-      @widget = widget
+      @component = component
       @refs = nil
     end
 
     def refs
-      @refs ||= TemplateRefs.new(@node, @widget)
+      @refs ||= TemplateRefs.new(@node, @component)
     end
 
     def to_js

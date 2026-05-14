@@ -1,4 +1,4 @@
-Spec.describe "Widget mount + refs + events" do
+Spec.describe "Component mount + refs + events" do
   # CI: force-unmount between cases so a slow MutationObserver from a
   # previous case can't leak ticks/cleanups into the next assertion.
   Spec.after { Grainet.reset! }
@@ -7,14 +7,14 @@ Spec.describe "Widget mount + refs + events" do
     doc = JS.global[:document]
     body = doc[:body]
     body[:innerHTML] = <<~HTML
-      <div data-widget="counter">
+      <div data-component="counter">
         <button data-ref="increment">+</button>
         <button data-ref="decrement">-</button>
         <span data-ref="count">0</span>
       </div>
     HTML
 
-    counter_class = Class.new(Grainet::Widget) do
+    counter_class = Class.new(Grainet::Component) do
       def setup
         @count = signal(0)
         refs.increment.on(:click) { @count.update { |n| n + 1 } }
@@ -41,13 +41,13 @@ Spec.describe "Widget mount + refs + events" do
     body[:innerHTML] = ""
   end
 
-  Spec.assert "missing ref raises with widget name and ref name" do
+  Spec.assert "missing ref raises with component name and ref name" do
     doc = JS.global[:document]
     body = doc[:body]
-    body[:innerHTML] = '<div data-widget="missing-ref-test"></div>'
+    body[:innerHTML] = '<div data-component="missing-ref-test"></div>'
 
     captured = nil
-    klass = Class.new(Grainet::Widget) do
+    klass = Class.new(Grainet::Component) do
       def setup
         begin
           refs.never_declared
@@ -60,7 +60,7 @@ Spec.describe "Widget mount + refs + events" do
     Grainet.register "missing-ref-test", klass
     Grainet.start
 
-    el = doc.call(:querySelector, "[data-widget='missing-ref-test']")
+    el = doc.call(:querySelector, "[data-component='missing-ref-test']")
     inst = Grainet.find_for_element(el)
     Spec.assert_true inst.captured_message.include?("Missing ref: never_declared")
     Spec.assert_true inst.captured_message.include?("missing-ref-test") ||
@@ -72,10 +72,10 @@ Spec.describe "Widget mount + refs + events" do
   Spec.assert "cleanup runs on element removal" do
     doc = JS.global[:document]
     body = doc[:body]
-    body[:innerHTML] = '<div data-widget="cleanup-test"></div>'
+    body[:innerHTML] = '<div data-component="cleanup-test"></div>'
 
     cleaned = []
-    klass = Class.new(Grainet::Widget) do
+    klass = Class.new(Grainet::Component) do
       define_method(:setup) do
         cleanup { cleaned << :ran }
       end
@@ -83,7 +83,7 @@ Spec.describe "Widget mount + refs + events" do
     Grainet.register "cleanup-test", klass
     Grainet.start
 
-    el = doc.call(:querySelector, "[data-widget='cleanup-test']")
+    el = doc.call(:querySelector, "[data-component='cleanup-test']")
     el.call(:remove)
     # Allow MutationObserver microtask to flush. CI runners under load
     # need several drains before the MO callback actually fires.
@@ -94,23 +94,23 @@ Spec.describe "Widget mount + refs + events" do
     body[:innerHTML] = ""
   end
 
-  Spec.assert "Grainet.register rejects invalid widget names" do
+  Spec.assert "Grainet.register rejects invalid component names" do
     err = nil
     begin
-      Grainet.register('evil"]; .x', Class.new(Grainet::Widget))
+      Grainet.register('evil"]; .x', Class.new(Grainet::Component))
     rescue Grainet::Error => e
       err = e
     end
     Spec.assert_true !err.nil?
-    Spec.assert_true err.message.include?("data-widget")
+    Spec.assert_true err.message.include?("data-component")
     Spec.assert_true err.message.include?("[A-Za-z][A-Za-z0-9_-]*")
   end
 
-  Spec.assert "Widget#ref wraps a raw DOM element as a RefElement" do
+  Spec.assert "Component#ref wraps a raw DOM element as a RefElement" do
     doc = JS.global[:document]
     body = doc[:body]
     body[:innerHTML] = <<~HTML
-      <div data-widget="ref-wrap">
+      <div data-component="ref-wrap">
         <ul>
           <li data-id="7">A</li>
           <li data-id="42">B</li>
@@ -119,7 +119,7 @@ Spec.describe "Widget mount + refs + events" do
     HTML
 
     captured = {}
-    klass = Class.new(Grainet::Widget) do
+    klass = Class.new(Grainet::Component) do
       define_method(:setup) do
         nodes = root.to_js.call(:querySelectorAll, "li")
         captured[:first_id]  = wrap(nodes[0]).attr("data-id").to_i
@@ -141,10 +141,10 @@ Spec.describe "Widget mount + refs + events" do
   Spec.assert "RefElement#attr reads / writes / removes HTML attributes" do
     doc = JS.global[:document]
     body = doc[:body]
-    body[:innerHTML] = '<div data-widget="attr-test" data-status="todo"></div>'
+    body[:innerHTML] = '<div data-component="attr-test" data-status="todo"></div>'
 
     captured = {}
-    klass = Class.new(Grainet::Widget) do
+    klass = Class.new(Grainet::Component) do
       define_method(:setup) do
         captured[:read]    = root.attr("data-status")
         captured[:missing] = root.attr("data-missing")
@@ -171,16 +171,16 @@ Spec.describe "Widget mount + refs + events" do
     JS.eval_javascript("new Promise(r => setTimeout(r, 0))").await
   end
 
-  Spec.assert "Widget#selector helper works inside bind/class flows" do
+  Spec.assert "Component#selector helper works inside bind/class flows" do
     doc = JS.global[:document]
     body = doc[:body]
     body[:innerHTML] = <<~HTML
       <template data-template="selector-row"><li><span data-ref="label"></span></li></template>
-      <div data-widget="selector-test"><ul data-ref="list"></ul></div>
+      <div data-component="selector-test"><ul data-ref="list"></ul></div>
     HTML
 
     selected = nil
-    klass = Class.new(Grainet::Widget) do
+    klass = Class.new(Grainet::Component) do
       attr_reader :selected
 
       define_method(:setup) do
@@ -197,7 +197,7 @@ Spec.describe "Widget mount + refs + events" do
     Grainet.register "selector-test", klass
     Grainet.start
 
-    host = doc.call(:querySelector, "[data-widget='selector-test']")
+    host = doc.call(:querySelector, "[data-component='selector-test']")
     inst = Grainet.find_for_element(host)
     list = doc.call(:querySelector, "[data-ref='list']")
     Spec.assert_true list[:children][1][:classList].call(:contains, "active").js_bool

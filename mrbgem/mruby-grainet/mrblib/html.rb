@@ -98,7 +98,7 @@ module HTML
     #   - other                    — coerced via to_s and escaped
     #
     # Attribute keys:
-    #   - Symbol `:data_widget`   → "data-widget" (`_` auto-converted to `-`,
+    #   - Symbol `:data_component`   → "data-component" (`_` auto-converted to `-`,
     #                                idiomatic for kebab-case HTML attrs)
     #   - String `"xml:space"`    → used as-is (escape hatch for `:`, `_`,
     #                                or any name you want left untouched)

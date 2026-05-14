@@ -327,8 +327,8 @@ Spec.describe "Grainet::Router link helpers" do
     JS.global[:history].call(:replaceState, nil, "", "#/")
     router.start
     link = doc.call(:getElementById, "users")
-    # bind_link returns nil; lifetime is widget-tracked when called via
-    # the widget mixin, or the Grainet::Effect lives until VM teardown
+    # bind_link returns nil; lifetime is component-tracked when called via
+    # the component mixin, or the Grainet::Effect lives until VM teardown
     # for raw JS-element invocations like this test.
     Spec.assert_equal nil, router.bind_link(
       link, href: "/users", active_class: "active", inactive_class: "inactive")
@@ -362,36 +362,36 @@ Spec.describe "Grainet::Router link helpers" do
     body[:innerHTML] = ""
   end
 
-  Spec.assert "WidgetMixin#router returns default_context without provider" do
+  Spec.assert "ComponentMixin#router returns default_context without provider" do
     doc = JS.global[:document]
-    widget = Class.new(Grainet::Widget).new(doc.call(:createElement, "div"))
-    Spec.assert_true widget.router.equal?(Grainet::Router.default_context)
+    component = Class.new(Grainet::Component).new(doc.call(:createElement, "div"))
+    Spec.assert_true component.router.equal?(Grainet::Router.default_context)
   end
 
-  Spec.assert "WidgetMixin#router uses exposed router context" do
+  Spec.assert "ComponentMixin#router uses exposed router context" do
     doc = JS.global[:document]
     custom_router = Object.new
-    parent = Class.new(Grainet::Widget) do
+    parent = Class.new(Grainet::Component) do
       define_method(:prepare_setup) { expose :router, custom_router }
     end.new(doc.call(:createElement, "div"))
-    child = Class.new(Grainet::Widget).new(doc.call(:createElement, "div"))
+    child = Class.new(Grainet::Component).new(doc.call(:createElement, "div"))
 
     parent.prepare_setup_phase
     parent.add_child(child)
     Spec.assert_true child.router.equal?(custom_router)
   end
 
-  Spec.assert "WidgetMixin#bind_link delegates through router context" do
+  Spec.assert "ComponentMixin#bind_link delegates through router context" do
     router.__reset_for_tests__
     doc = JS.global[:document]
     body = doc[:body]
-    body[:innerHTML] = '<a id="widget-link"></a>'
+    body[:innerHTML] = '<a id="component-link"></a>'
     JS.global[:history].call(:replaceState, nil, "", "#/")
     router.start
 
-    widget = Class.new(Grainet::Widget).new(doc.call(:createElement, "div"))
-    link = doc.call(:getElementById, "widget-link")
-    widget.bind_link(widget.wrap(link), href: "/users", active_class: "active")
+    component = Class.new(Grainet::Component).new(doc.call(:createElement, "div"))
+    link = doc.call(:getElementById, "component-link")
+    component.bind_link(component.wrap(link), href: "/users", active_class: "active")
 
     Spec.assert_equal "#/users", link.call(:getAttribute, "href").to_s
     Spec.assert_false link[:classList].call(:contains, "active").js_bool

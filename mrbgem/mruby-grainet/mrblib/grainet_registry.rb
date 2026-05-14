@@ -1,12 +1,12 @@
 # grainet_registry.rb — Registry class + Grainet module-level façade.
 #
-# Registry owns the live state of widgets in the DOM (registered classes,
+# Registry owns the live state of components in the DOM (registered classes,
 # mounted instances, the MutationObserver). The module-level `class << self`
 # block at the bottom is what users normally touch:
 # `Grainet.register` / `Grainet.start` / `Grainet.template`.
 
 module Grainet
-  # Owns the live state of widgets in the DOM:
+  # Owns the live state of components in the DOM:
   #   - registered classes by name
   #   - mounted instances by id
   #   - the MutationObserver that drives dynamic mount/unmount
@@ -15,27 +15,27 @@ module Grainet
   # (`Grainet.registry`); the module-level `register` / `start`
   # methods are thin delegators.
   class Registry
-    WIDGET_ID_ATTR = "data-widget-id"
+    COMPONENT_ID_ATTR = "data-component-id"
 
     def initialize
-      @widget_classes = {}
-      @widgets = {}
-      @next_widget_id = 0
+      @component_classes = {}
+      @components = {}
+      @next_component_id = 0
       @observer = nil
       @observer_callback = nil
     end
 
     def register(name, klass)
-      @widget_classes[name.to_s] = klass
+      @component_classes[name.to_s] = klass
     end
 
-    def widget_for_element(js_element)
-      attr = js_element.call(:getAttribute, WIDGET_ID_ATTR)
+    def component_for_element(js_element)
+      attr = js_element.call(:getAttribute, COMPONENT_ID_ATTR)
       return nil if attr.js_null?
-      @widgets[attr.to_s.to_i]
+      @components[attr.to_s.to_i]
     end
 
-    # Mount all data-widget elements under `root_js` in two passes:
+    # Mount all data-component elements under `root_js` in two passes:
     #
     #   1. Pre-order: instantiate, register, link parent, run
     #      `prepare_setup`. After this all exposed values in this
@@ -43,24 +43,24 @@ module Grainet
     #      finds them.
     #
     #   2. Post-order: run `setup`. Children before parents, so
-    #      `refs.x.widget.method` from a parent's setup sees its
+    #      `refs.x.component.method` from a parent's setup sees its
     #      children fully initialised.
     def start(root_js = nil)
       root_js ||= JS.global[:document][:body]
-      # install_observer must precede mount_subtree: if a widget's setup
-      # inserts nested data-widget nodes (e.g. bind_list with template:),
+      # install_observer must precede mount_subtree: if a component's setup
+      # inserts nested data-component nodes (e.g. bind_list with template:),
       # MO needs to be watching to mount them on the next microtask.
       install_observer
-      prune_disconnected_widgets
+      prune_disconnected_components
       mount_subtree(root_js)
       nil
     end
 
     def reset!
-      @widgets.each_value(&:unmount)
-      @widgets = {}
-      @widget_classes = {}
-      @next_widget_id = 0
+      @components.each_value(&:unmount)
+      @components = {}
+      @component_classes = {}
+      @next_component_id = 0
       return unless @observer
       @observer.call(:disconnect)
       JS.release_callback(@observer_callback)
@@ -71,11 +71,11 @@ module Grainet
     def mount_subtree(root_js)
       return if root_js.js_null? || root_js.typeof != "object"
       collected = []
-      collect_widgets(root_js, collected)
+      collect_components(root_js, collected)
 
       instances = []
       collected.each do |el_js|
-        instance = instantiate_widget(el_js)
+        instance = instantiate_component(el_js)
         next unless instance
         instances << instance
         instance.prepare_setup_phase
@@ -87,16 +87,16 @@ module Grainet
     def unmount_subtree(root_js)
       return if root_js.js_null? || root_js.typeof != "object"
       collected = []
-      collect_widgets(root_js, collected)
+      collect_components(root_js, collected)
       collected.each do |el_js|
-        wid = el_js.call(:getAttribute, WIDGET_ID_ATTR)
+        wid = el_js.call(:getAttribute, COMPONENT_ID_ATTR)
         next if wid.js_null?
         id = wid.to_s.to_i
-        instance = @widgets.delete(id)
+        instance = @components.delete(id)
         next unless instance
         instance.unmount
         begin
-          el_js.call(:removeAttribute, WIDGET_ID_ATTR)
+          el_js.call(:removeAttribute, COMPONENT_ID_ATTR)
         rescue StandardError
           # element may have been GC'd by host; ignore.
         end
@@ -105,29 +105,29 @@ module Grainet
 
     private
 
-    # Resolve a `data-widget` name to a class. Explicit `Grainet.register`
+    # Resolve a `data-component` name to a class. Explicit `Grainet.register`
     # always wins; otherwise delegate name → constant lookup to
-    # `Grainet::WidgetName` and validate the result is a Widget subclass.
-    def resolve_widget_class(name)
-      explicit = @widget_classes[name]
+    # `Grainet::ComponentName` and validate the result is a Component subclass.
+    def resolve_component_class(name)
+      explicit = @component_classes[name]
       return explicit if explicit
-      klass = WidgetName.find_class(name)
+      klass = ComponentName.find_class(name)
       return nil unless klass
-      unless klass.is_a?(Class) && klass < Grainet::Widget
-        raise Error, "data-widget=#{name.inspect} resolved to #{klass}, " \
-                     "which is not a Grainet::Widget subclass. " \
+      unless klass.is_a?(Class) && klass < Grainet::Component
+        raise Error, "data-component=#{name.inspect} resolved to #{klass}, " \
+                     "which is not a Grainet::Component subclass. " \
                      "Rename the class or call Grainet.register with a different name."
       end
       klass
     end
 
-    def collect_widgets(root_js, out)
+    def collect_components(root_js, out)
       stack = [root_js]
       until stack.empty?
         node = stack.pop
         next if node.js_null?
         next if node[:nodeType].to_i != 1
-        if node.call(:hasAttribute, "data-widget").js_bool
+        if node.call(:hasAttribute, "data-component").js_bool
           out << node
         end
         kids = node[:children]
@@ -141,32 +141,32 @@ module Grainet
       end
     end
 
-    def instantiate_widget(el_js)
-      existing_attr = el_js.call(:getAttribute, WIDGET_ID_ATTR)
+    def instantiate_component(el_js)
+      existing_attr = el_js.call(:getAttribute, COMPONENT_ID_ATTR)
       return nil if !existing_attr.js_null?
-      name = el_js.call(:getAttribute, "data-widget")
+      name = el_js.call(:getAttribute, "data-component")
       return nil if name.js_null?
-      klass = resolve_widget_class(name.to_s)
+      klass = resolve_component_class(name.to_s)
       unless klass
-        Grainet.logger.warn("No widget registered or resolvable for name: #{name.to_s.inspect}")
+        Grainet.logger.warn("No component registered or resolvable for name: #{name.to_s.inspect}")
         return nil
       end
-      @next_widget_id += 1
-      id = @next_widget_id
-      el_js.call(:setAttribute, WIDGET_ID_ATTR, id.to_s)
+      @next_component_id += 1
+      id = @next_component_id
+      el_js.call(:setAttribute, COMPONENT_ID_ATTR, id.to_s)
       instance = klass.new(el_js)
-      @widgets[id] = instance
-      parent = nearest_ancestor_widget(el_js)
+      @components[id] = instance
+      parent = nearest_ancestor_component(el_js)
       parent.add_child(instance) if parent
       instance
     end
 
-    def nearest_ancestor_widget(el_js)
+    def nearest_ancestor_component(el_js)
       node = el_js[:parentElement]
       while !node.js_null? && node.typeof == "object"
-        attr = node.call(:getAttribute, WIDGET_ID_ATTR)
+        attr = node.call(:getAttribute, COMPONENT_ID_ATTR)
         if !attr.js_null?
-          return @widgets[attr.to_s.to_i]
+          return @components[attr.to_s.to_i]
         end
         node = node[:parentElement]
       end
@@ -212,16 +212,16 @@ module Grainet
     # whose DOM root is no longer connected (e.g., leftover from a
     # previous test that didn't call `Grainet.reset!`). NOT called from
     # the MO callback: transient body mutations during another fiber's
-    # await would otherwise falsely prune live widgets — `unmount_subtree`
+    # await would otherwise falsely prune live components — `unmount_subtree`
     # on the MO's `removedNodes` is the authoritative cleanup path.
-    def prune_disconnected_widgets
+    def prune_disconnected_components
       stale = []
-      @widgets.each do |id, instance|
+      @components.each do |id, instance|
         root_js = instance.root.to_js
         stale << id unless root_js[:isConnected].js_bool
       end
       stale.each do |id|
-        instance = @widgets.delete(id)
+        instance = @components.delete(id)
         instance&.unmount
       end
     end
@@ -237,7 +237,7 @@ module Grainet
     end
 
     def register(name, klass)
-      registry.register(AttrName.new(name, kind: "data-widget"), klass)
+      registry.register(AttrName.new(name, kind: "data-component"), klass)
     end
 
     def start(root_js = nil)
@@ -249,11 +249,11 @@ module Grainet
     end
 
     def find_for_element(js_element)
-      registry.widget_for_element(js_element)
+      registry.component_for_element(js_element)
     end
 
     # Module-level shortcut to clone a `<template data-template="...">`
-    # outside any widget context. Inside a widget, prefer the instance
+    # outside any component context. Inside a component, prefer the instance
     # method `template(name)` so that any listeners attached to refs in
     # the cloned content get auto-cleanup tracking.
     def template(name, &block)

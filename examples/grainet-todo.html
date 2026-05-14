@@ -89,7 +89,7 @@
     </p>
 
     <!-- The <ul> is empty in the seed HTML; bind_list owns its children. -->
-    <div data-widget="todo-list" class="panel">
+    <div data-component="todo-list" class="panel">
       <div data-ref="notice_overlay" class="overlay" hidden>
         <div class="dialog" role="dialog" aria-labelledby="notice-title">
           <h3 id="notice-title">入力エラー</h3>
@@ -110,7 +110,7 @@
     <!-- Row markup lives here as inert template content. bind_list
          clones it per item; setup_row fills in title + data-id. -->
     <template data-template="todo-row">
-      <li data-widget="todo-item" draggable="true">
+      <li data-component="todo-item" draggable="true">
         <span class="handle" aria-hidden="true">⋮⋮</span>
         <span class="title" data-ref="title"></span>
         <button class="dismiss" data-ref="dismiss" aria-label="delete">×</button>
@@ -120,17 +120,17 @@
     <p id="boot">booting…</p>
 
     <script type="text/ruby" id="ruby-source">
-# Each <li> is its own widget. lifecycle scoped to the row: when
+# Each <li> is its own component. lifecycle scoped to the row: when
 # bind_list removes the <li>, the MutationObserver unmounts this and
 # the click handler / cleanup is released.
-class TodoItem < Grainet::Widget
+class TodoItem < Grainet::Component
   include Grainet::Sortable::Item
 
   def setup
     make_sortable
 
     refs.dismiss.on(:click) do
-      # bubbles: true lets the event cross the data-widget boundary up
+      # bubbles: true lets the event cross the data-component boundary up
       # to the parent TodoList. event.target on the parent side is the
       # <li> that fired, so the parent can read its data-id.
       root.dispatch(:item_dismissed, bubbles: true)
@@ -138,7 +138,7 @@ class TodoItem < Grainet::Widget
   end
 end
 
-class TodoList < Grainet::Widget
+class TodoList < Grainet::Component
   include Grainet::Sortable::List
 
   def setup
@@ -179,7 +179,7 @@ class TodoList < Grainet::Widget
     # The whole list rendering. The <template data-template="todo-row">
     # in the page holds the row markup; bind_list clones it per item
     # and fills the title slot. Returning the same JS node when prev
-    # is set keeps the row's todo-item widget mounted across updates.
+    # is set keeps the row's todo-item component mounted across updates.
     bind_list refs.list, @items, key: "id", template: "todo-row" do |it, t|
       t.data(:id, it["id"])
       t.refs.title.text = it["title"]

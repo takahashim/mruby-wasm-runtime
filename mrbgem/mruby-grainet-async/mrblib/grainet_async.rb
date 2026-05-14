@@ -1,7 +1,7 @@
 # Grainet async extensions.
 #
 # Loaded after core `mruby-grainet`. Houses the optional async / data
-# layer so apps that only need the reactive widget core can omit it.
+# layer so apps that only need the reactive component core can omit it.
 
 module Grainet
   module AsyncExtensions
@@ -318,5 +318,5 @@ module Grainet
     end
   end
 
-  Widget.include(AsyncExtensions)
+  Component.include(AsyncExtensions)
 end

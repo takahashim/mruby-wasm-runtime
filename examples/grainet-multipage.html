@@ -82,7 +82,7 @@
       A small multipage app with client-side navigation and route-based views.
     </p>
 
-    <nav data-widget="nav">
+    <nav data-component="nav">
       <a href="/" data-ref="home">Home</a>
       <a href="/counter" data-ref="counter">Counter</a>
       <a href="/users" data-ref="users">Users</a>
@@ -100,7 +100,7 @@
     <!-- ============== Templates (route content) ============== -->
 
     <template id="page-home">
-      <div data-widget="home-page">
+      <div data-component="home-page">
         <h2>Home</h2>
         <p>A simple landing page for the demo app.</p>
         <p>Use the navigation above to move between pages.</p>
@@ -108,7 +108,7 @@
     </template>
 
     <template id="page-counter">
-      <div data-widget="counter-page">
+      <div data-component="counter-page">
         <h2>Counter</h2>
         <div class="row">
           <button data-ref="decrement">-</button>
@@ -121,7 +121,7 @@
     </template>
 
     <template id="page-users">
-      <div data-widget="users-page">
+      <div data-component="users-page">
         <h2>Users</h2>
         <p>Select a user to open a detail page.</p>
         <ul class="users-list" data-ref="list"></ul>
@@ -129,7 +129,7 @@
     </template>
 
     <template id="page-user">
-      <div data-widget="user-page">
+      <div data-component="user-page">
         <h2 data-ref="title">User</h2>
         <p>route param: <code data-ref="id"></code></p>
         <p><a href="/users" data-ref="back">← back to Users</a></p>
@@ -137,7 +137,7 @@
     </template>
 
     <template id="page-about">
-      <div data-widget="about-page">
+      <div data-component="about-page">
         <h2>About</h2>
         <p>A basic informational page inside the demo app.</p>
         <p>Example links: home → <code data-ref="home_link"></code>,
@@ -146,7 +146,7 @@
     </template>
 
     <template id="page-404">
-      <div data-widget="not-found-page">
+      <div data-component="not-found-page">
         <h2>Not found</h2>
         <p>This page does not exist. <a href="/" data-ref="home">Go home</a></p>
       </div>
@@ -155,9 +155,9 @@
     <!-- ============== Ruby source ============== -->
 
     <script type="text/ruby" id="ruby-source">
-# Nav widget — always-mounted (outside outlet). Highlights active link
+# Nav component — always-mounted (outside outlet). Highlights active link
 # via router.current, intercepts clicks for SPA navigation.
-class Nav < Grainet::Widget
+class Nav < Grainet::Component
   def setup
     bind_link refs.home,    href: router.home_path
     bind_link refs.counter, href: router.counter_path
@@ -167,14 +167,14 @@ class Nav < Grainet::Widget
   end
 end
 
-class HomePage < Grainet::Widget
+class HomePage < Grainet::Component
   def setup
     # ホーム表示のみ。状態なし。
   end
 end
 
 # Counter — state lives only while this page is mounted.
-class CounterPage < Grainet::Widget
+class CounterPage < Grainet::Component
   def setup
     @count = signal(0)
 
@@ -197,7 +197,7 @@ USERS = [
   { "id" => 3, "name" => "Carol" },
 ].freeze
 
-class UsersPage < Grainet::Widget
+class UsersPage < Grainet::Component
   def setup
     # bind_list expects a signal/computed source — wrap the static array.
     @users = signal(USERS)
@@ -213,7 +213,7 @@ class UsersPage < Grainet::Widget
   end
 end
 
-class UserPage < Grainet::Widget
+class UserPage < Grainet::Component
   def setup
     user_id = computed { router.params[:id] }
     bind refs.title, text: computed { "User #{user_id.value}" }
@@ -224,14 +224,14 @@ class UserPage < Grainet::Widget
   end
 end
 
-class AboutPage < Grainet::Widget
+class AboutPage < Grainet::Component
   def setup
     refs.home_link.text = router.home_path
     refs.user_link.text = router.user_path(id: 1)
   end
 end
 
-class NotFoundPage < Grainet::Widget
+class NotFoundPage < Grainet::Component
   def setup
     refs.home.on(:click) { |event| router.intercept_link(event) }
   end
@@ -247,7 +247,7 @@ Grainet.register "user-page",      UserPage
 Grainet.register "about-page",     AboutPage
 Grainet.register "not-found-page", NotFoundPage
 
-# Routes must be declared *before* `Grainet.start` mounts the widgets:
+# Routes must be declared *before* `Grainet.start` mounts the components:
 # Nav#setup calls `router.home_path` etc., and those `*_path` methods
 # only exist after `page :home, ...` has run.
 Grainet::Router.draw outlet: "[data-router-outlet]" do
@@ -259,7 +259,7 @@ Grainet::Router.draw outlet: "[data-router-outlet]" do
   fallback template: "page-404"
 end
 
-Grainet.start          # mount widgets (Nav etc.)
+Grainet.start          # mount components (Nav etc.)
 Grainet::Router.start  # install listeners + render outlet for current path
 
 puts "multipage SPA mounted"

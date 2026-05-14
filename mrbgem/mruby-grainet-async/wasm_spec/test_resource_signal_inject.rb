@@ -54,7 +54,7 @@ Spec.describe "Grainet::Resource.current_run + Fetchy signal injection" do
       "/data" => JS.object(status: 200, body: '{"ok":true}', delay: 30),
     ))
 
-    klass = Class.new(Grainet::Widget) do
+    klass = Class.new(Grainet::Component) do
       define_method(:setup) do
         # NOTE: no explicit `signal:` and no `|r|` block arg.
         @data = resource(initial: nil) do
@@ -66,11 +66,11 @@ Spec.describe "Grainet::Resource.current_run + Fetchy signal injection" do
 
     doc = JS.global[:document]
     body = doc[:body]
-    body[:innerHTML] = '<div data-widget="inject-basic"></div>'
+    body[:innerHTML] = '<div data-component="inject-basic"></div>'
     Grainet.register "inject-basic", klass
     Grainet.start
 
-    inst = Grainet.find_for_element(doc.call(:querySelector, "[data-widget='inject-basic']"))
+    inst = Grainet.find_for_element(doc.call(:querySelector, "[data-component='inject-basic']"))
     JS.eval_javascript("new Promise(r => setTimeout(r, 60))").await
     value, state, error = inst.snapshot
     Spec.assert_equal true, value["ok"]
@@ -91,7 +91,7 @@ Spec.describe "Grainet::Resource.current_run + Fetchy signal injection" do
     user_controller = ctor.new
     user_signal = user_controller[:signal]
 
-    klass = Class.new(Grainet::Widget) do
+    klass = Class.new(Grainet::Component) do
       define_method(:setup) do
         @data = resource(initial: nil) do
           Fetchy.json("/data", signal: user_signal)
@@ -102,11 +102,11 @@ Spec.describe "Grainet::Resource.current_run + Fetchy signal injection" do
 
     doc = JS.global[:document]
     body = doc[:body]
-    body[:innerHTML] = '<div data-widget="inject-override"></div>'
+    body[:innerHTML] = '<div data-component="inject-override"></div>'
     Grainet.register "inject-override", klass
     Grainet.start
 
-    inst = Grainet.find_for_element(doc.call(:querySelector, "[data-widget='inject-override']"))
+    inst = Grainet.find_for_element(doc.call(:querySelector, "[data-component='inject-override']"))
     # Abort via the user-controlled controller — if explicit wins,
     # the resource transitions to :errored. If the resource's own
     # signal had been used, the user controller would have no effect.
@@ -133,7 +133,7 @@ Spec.describe "Grainet::Resource.current_run + Fetchy signal injection" do
 
   Spec.assert "current_run restores correctly on block exit and exception" do
     seen_inside = []
-    klass = Class.new(Grainet::Widget) do
+    klass = Class.new(Grainet::Component) do
       define_method(:setup) do
         @ok = resource(initial: nil) do
           seen_inside << Grainet::Resource.current_run
@@ -144,7 +144,7 @@ Spec.describe "Grainet::Resource.current_run + Fetchy signal injection" do
 
     doc = JS.global[:document]
     body = doc[:body]
-    body[:innerHTML] = '<div data-widget="inject-restore"></div>'
+    body[:innerHTML] = '<div data-component="inject-restore"></div>'
     Grainet.register "inject-restore", klass
     Grainet.start
 

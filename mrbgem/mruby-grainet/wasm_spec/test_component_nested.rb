@@ -1,13 +1,13 @@
-Spec.describe "Nested widgets" do
+Spec.describe "Nested components" do
   Spec.after { Grainet.reset! }
 
-  Spec.assert "refs do not cross widget boundaries" do
+  Spec.assert "refs do not cross component boundaries" do
     doc = JS.global[:document]
     body = doc[:body]
     body[:innerHTML] = <<~HTML
-      <div data-widget="parent-w">
+      <div data-component="parent-w">
         <h1 data-ref="title">parent title</h1>
-        <div data-widget="child-w">
+        <div data-component="child-w">
           <h1 data-ref="title">child title</h1>
         </div>
       </div>
@@ -16,10 +16,10 @@ Spec.describe "Nested widgets" do
     parent_titles = []
     child_titles = []
 
-    parent_klass = Class.new(Grainet::Widget) do
+    parent_klass = Class.new(Grainet::Component) do
       define_method(:setup) { parent_titles << refs.title.text }
     end
-    child_klass = Class.new(Grainet::Widget) do
+    child_klass = Class.new(Grainet::Component) do
       define_method(:setup) { child_titles << refs.title.text }
     end
     Grainet.register "parent-w", parent_klass
@@ -36,20 +36,20 @@ Spec.describe "Nested widgets" do
     doc = JS.global[:document]
     body = doc[:body]
     body[:innerHTML] = <<~HTML
-      <div data-widget="po-parent">
-        <div data-widget="po-child" data-ref="kid"></div>
+      <div data-component="po-parent">
+        <div data-component="po-child" data-ref="kid"></div>
       </div>
     HTML
 
     order = []
-    child_klass = Class.new(Grainet::Widget) do
+    child_klass = Class.new(Grainet::Component) do
       define_method(:setup) { order << :child }
       define_method(:hello) { "hi" }
     end
-    parent_klass = Class.new(Grainet::Widget) do
+    parent_klass = Class.new(Grainet::Component) do
       define_method(:setup) do
         order << :parent
-        order << refs.kid.widget.hello
+        order << refs.kid.component.hello
       end
     end
     Grainet.register "po-child", child_klass
@@ -65,20 +65,20 @@ Spec.describe "Nested widgets" do
     doc = JS.global[:document]
     body = doc[:body]
     body[:innerHTML] = <<~HTML
-      <div data-widget="bubble-parent">
-        <div data-widget="bubble-child">
+      <div data-component="bubble-parent">
+        <div data-component="bubble-child">
           <button data-ref="btn">x</button>
         </div>
       </div>
     HTML
 
     received = []
-    child_klass = Class.new(Grainet::Widget) do
+    child_klass = Class.new(Grainet::Component) do
       define_method(:setup) do
         refs.btn.on(:click) { root.dispatch(:dismissed, detail: { id: 7 }, bubbles: true) }
       end
     end
-    parent_klass = Class.new(Grainet::Widget) do
+    parent_klass = Class.new(Grainet::Component) do
       define_method(:setup) do
         root.on(:dismissed) { |ev| received << ev[:detail][:id].to_i }
       end
@@ -97,18 +97,18 @@ Spec.describe "Nested widgets" do
     doc = JS.global[:document]
     body = doc[:body]
     body[:innerHTML] = <<~HTML
-      <div data-widget="td-parent">
-        <div data-widget="td-child" data-ref="kid">
+      <div data-component="td-parent">
+        <div data-component="td-child" data-ref="kid">
           <span data-ref="label">hi</span>
         </div>
       </div>
     HTML
 
     log = []
-    child_klass = Class.new(Grainet::Widget) do
+    child_klass = Class.new(Grainet::Component) do
       define_method(:setup) { cleanup { log << :child_cleanup } }
     end
-    parent_klass = Class.new(Grainet::Widget) do
+    parent_klass = Class.new(Grainet::Component) do
       define_method(:setup) do
         cleanup { log << :parent_cleanup }
       end
@@ -117,7 +117,7 @@ Spec.describe "Nested widgets" do
     Grainet.register "td-child", child_klass
     Grainet.start
 
-    el = doc.call(:querySelector, "[data-widget='td-parent']")
+    el = doc.call(:querySelector, "[data-component='td-parent']")
     el.call(:remove)
     # Drain several macrotask boundaries — CI runners need more than one
     # turn before the MO callback fires the cascading unmount.

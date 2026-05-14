@@ -79,7 +79,7 @@
       A playable Breakout game with mouse controls, score tracking, and lives.
     </p>
 
-    <div data-widget="breakout">
+    <div data-component="breakout">
       <div class="hud">
         <span>Score: <span data-ref="score">0</span></span>
         <span>Lives: <span class="lives" data-ref="lives"></span></span>
@@ -107,7 +107,7 @@
     <p id="boot">booting…</p>
 
     <script type="text/ruby" id="ruby-source">
-class Breakout < Grainet::Widget
+class Breakout < Grainet::Component
   WIDTH                = 480
   HEIGHT               = 360
   PADDLE_W             = 80

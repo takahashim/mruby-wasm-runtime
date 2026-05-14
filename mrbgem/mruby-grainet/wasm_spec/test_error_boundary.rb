@@ -1,15 +1,15 @@
-Spec.describe "Widget#on_error (error boundary)" do
-  Spec.assert "catches an effect raise from the widget itself" do
+Spec.describe "Component#on_error (error boundary)" do
+  Spec.assert "catches an effect raise from the component itself" do
     doc = JS.global[:document]
     body = doc[:body]
-    body[:innerHTML] = '<div data-widget="eb-self"><span data-ref="fallback"></span></div>'
+    body[:innerHTML] = '<div data-component="eb-self"><span data-ref="fallback"></span></div>'
 
     captured_global = []
     Grainet.logger = ->(_severity, msg, err) { captured_global << [msg, err] }
 
     captured_local = []
     boom_signal = nil
-    klass = Class.new(Grainet::Widget) do
+    klass = Class.new(Grainet::Component) do
       define_method(:setup) do
         on_error do |label, err|
           captured_local << [label, err]
@@ -39,20 +39,20 @@ Spec.describe "Widget#on_error (error boundary)" do
     JS.eval_javascript("new Promise(r => setTimeout(r, 0))").await
   end
 
-  Spec.assert "bubbles to a parent widget when child has no handler" do
+  Spec.assert "bubbles to a parent component when child has no handler" do
     doc = JS.global[:document]
     body = doc[:body]
     body[:innerHTML] = <<~HTML
-      <div data-widget="eb-parent">
+      <div data-component="eb-parent">
         <span data-ref="msg"></span>
-        <div data-widget="eb-child"></div>
+        <div data-component="eb-child"></div>
       </div>
     HTML
 
     captured_global = []
     Grainet.logger = ->(_severity, msg, err) { captured_global << [msg, err] }
 
-    parent = Class.new(Grainet::Widget) do
+    parent = Class.new(Grainet::Component) do
       define_method(:setup) do
         on_error do |_label, err|
           refs.msg.text = "parent caught: #{err.message}"
@@ -63,7 +63,7 @@ Spec.describe "Widget#on_error (error boundary)" do
     Grainet.register "eb-parent", parent
 
     boom_signal = nil
-    child = Class.new(Grainet::Widget) do
+    child = Class.new(Grainet::Component) do
       define_method(:setup) do
         s = signal(0)
         boom_signal = s
@@ -87,13 +87,13 @@ Spec.describe "Widget#on_error (error boundary)" do
   Spec.assert "handler returning false continues to global logger" do
     doc = JS.global[:document]
     body = doc[:body]
-    body[:innerHTML] = '<div data-widget="eb-pass"></div>'
+    body[:innerHTML] = '<div data-component="eb-pass"></div>'
 
     captured_global = []
     Grainet.logger = ->(_severity, msg, err) { captured_global << [msg, err] }
 
     boom_signal = nil
-    klass = Class.new(Grainet::Widget) do
+    klass = Class.new(Grainet::Component) do
       define_method(:setup) do
         on_error { |_label, _err| false }
         s = signal(0)
@@ -115,7 +115,7 @@ Spec.describe "Widget#on_error (error boundary)" do
     JS.eval_javascript("new Promise(r => setTimeout(r, 0))").await
   end
 
-  Spec.assert "no source widget falls back directly to global logger" do
+  Spec.assert "no source component falls back directly to global logger" do
     captured = []
     Grainet.logger = ->(severity, msg, err) { captured << [severity, msg, err] }
     begin
@@ -136,8 +136,8 @@ Spec.describe "Widget#on_error (error boundary)" do
     doc = JS.global[:document]
     body = doc[:body]
     body[:innerHTML] = <<~HTML
-      <div data-widget="eb-cls-parent">
-        <div data-widget="eb-cls-child"></div>
+      <div data-component="eb-cls-parent">
+        <div data-component="eb-cls-child"></div>
       </div>
     HTML
 
@@ -145,9 +145,9 @@ Spec.describe "Widget#on_error (error boundary)" do
     captured_local = []
     Grainet.logger = ->(_severity, msg, err) { captured_global << [msg, err] }
 
-    parent = Class.new(Grainet::Widget) do
+    parent = Class.new(Grainet::Component) do
       # Boundary fires during the post-order setup pass — before this
-      # widget's own `mount` runs — so refs aren't ready. Test uses
+      # component's own `mount` runs — so refs aren't ready. Test uses
       # a closure capture instead of touching the DOM.
       error_boundary do |label, err|
         captured_local << [label, err.message]
@@ -156,7 +156,7 @@ Spec.describe "Widget#on_error (error boundary)" do
     end
     Grainet.register "eb-cls-parent", parent
 
-    child = Class.new(Grainet::Widget) do
+    child = Class.new(Grainet::Component) do
       define_method(:setup) { raise "child setup boom" }
     end
     Grainet.register "eb-cls-child", child
@@ -176,9 +176,9 @@ Spec.describe "Widget#on_error (error boundary)" do
   Spec.assert "class-level boundary block runs in instance context (@ivars resolve)" do
     doc = JS.global[:document]
     body = doc[:body]
-    body[:innerHTML] = '<div data-widget="eb-cls-ivar"><span data-ref="out"></span></div>'
+    body[:innerHTML] = '<div data-component="eb-cls-ivar"><span data-ref="out"></span></div>'
 
-    klass = Class.new(Grainet::Widget) do
+    klass = Class.new(Grainet::Component) do
       error_boundary do |_label, err|
         @captured = err.message
         refs.out.text = @captured
@@ -199,9 +199,9 @@ Spec.describe "Widget#on_error (error boundary)" do
   Spec.assert "instance on_error overrides class-level error_boundary" do
     doc = JS.global[:document]
     body = doc[:body]
-    body[:innerHTML] = '<div data-widget="eb-cls-override"><span data-ref="out"></span></div>'
+    body[:innerHTML] = '<div data-component="eb-cls-override"><span data-ref="out"></span></div>'
 
-    klass = Class.new(Grainet::Widget) do
+    klass = Class.new(Grainet::Component) do
       error_boundary do |_l, _e|
         refs.out.text = "class-level"
         true
@@ -220,7 +220,7 @@ Spec.describe "Widget#on_error (error boundary)" do
     Grainet.register "eb-cls-override", klass
     Grainet.start
 
-    el = doc.call(:querySelector, "[data-widget='eb-cls-override']")
+    el = doc.call(:querySelector, "[data-component='eb-cls-override']")
     Grainet.find_for_element(el).trigger
 
     Spec.assert_equal "instance: boom",
@@ -233,9 +233,9 @@ Spec.describe "Widget#on_error (error boundary)" do
   Spec.assert "subclass inherits parent class's error_boundary" do
     doc = JS.global[:document]
     body = doc[:body]
-    body[:innerHTML] = '<div data-widget="eb-cls-sub"><span data-ref="out"></span></div>'
+    body[:innerHTML] = '<div data-component="eb-cls-sub"><span data-ref="out"></span></div>'
 
-    base = Class.new(Grainet::Widget) do
+    base = Class.new(Grainet::Component) do
       error_boundary do |_l, e|
         refs.out.text = "base: #{e.message}"
         true
@@ -257,13 +257,13 @@ Spec.describe "Widget#on_error (error boundary)" do
   Spec.assert "listener block raise routes to error boundary" do
     doc = JS.global[:document]
     body = doc[:body]
-    body[:innerHTML] = '<div data-widget="eb-listener"><button data-ref="btn">go</button></div>'
+    body[:innerHTML] = '<div data-component="eb-listener"><button data-ref="btn">go</button></div>'
 
     captured_global = []
     captured_local = []
     Grainet.logger = ->(_severity, msg, err) { captured_global << [msg, err] }
 
-    klass = Class.new(Grainet::Widget) do
+    klass = Class.new(Grainet::Component) do
       define_method(:setup) do
         on_error do |label, err|
           captured_local << [label, err.message]
@@ -293,13 +293,13 @@ Spec.describe "Widget#on_error (error boundary)" do
   Spec.assert "raise inside handler is reported to global logger (no infinite loop)" do
     doc = JS.global[:document]
     body = doc[:body]
-    body[:innerHTML] = '<div data-widget="eb-hr"></div>'
+    body[:innerHTML] = '<div data-component="eb-hr"></div>'
 
     captured = []
     Grainet.logger = ->(_severity, msg, err) { captured << [msg, err] }
 
     boom_signal = nil
-    klass = Class.new(Grainet::Widget) do
+    klass = Class.new(Grainet::Component) do
       define_method(:setup) do
         on_error { |_l, _e| raise "handler boom" }
         s = signal(0)

@@ -3,12 +3,12 @@ Spec.describe "bind_input (two-way binding)" do
     doc = JS.global[:document]
     body = doc[:body]
     body[:innerHTML] = <<~HTML
-      <div data-widget="bi-text">
+      <div data-component="bi-text">
         <input data-ref="email" type="email">
       </div>
     HTML
 
-    klass = Class.new(Grainet::Widget) do
+    klass = Class.new(Grainet::Component) do
       attr_reader :email
       define_method(:setup) do
         @email = signal("init@example.com")
@@ -18,7 +18,7 @@ Spec.describe "bind_input (two-way binding)" do
     Grainet.register "bi-text", klass
     Grainet.start
 
-    el = doc.call(:querySelector, "[data-widget='bi-text']")
+    el = doc.call(:querySelector, "[data-component='bi-text']")
     inst = Grainet.find_for_element(el)
     input = doc.call(:querySelector, "input[data-ref='email']")
 
@@ -42,12 +42,12 @@ Spec.describe "bind_input (two-way binding)" do
     doc = JS.global[:document]
     body = doc[:body]
     body[:innerHTML] = <<~HTML
-      <div data-widget="bi-cb">
+      <div data-component="bi-cb">
         <input data-ref="cb" type="checkbox">
       </div>
     HTML
 
-    klass = Class.new(Grainet::Widget) do
+    klass = Class.new(Grainet::Component) do
       attr_reader :flag
       define_method(:setup) do
         @flag = signal(false)
@@ -57,7 +57,7 @@ Spec.describe "bind_input (two-way binding)" do
     Grainet.register "bi-cb", klass
     Grainet.start
 
-    el = doc.call(:querySelector, "[data-widget='bi-cb']")
+    el = doc.call(:querySelector, "[data-component='bi-cb']")
     inst = Grainet.find_for_element(el)
     cb = doc.call(:querySelector, "[data-ref='cb']")
 

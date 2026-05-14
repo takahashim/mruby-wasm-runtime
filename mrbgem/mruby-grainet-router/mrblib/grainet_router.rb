@@ -11,7 +11,7 @@
 #     `define_singleton_method`, plus `params` / `current` computeds. Active
 #     route's `<template id="...">` is cloned into the outlet on every
 #     location change (lazy mount via existing
-#     MutationObserver-driven widget lifecycle).
+#     MutationObserver-driven component lifecycle).
 #
 # This gem is opt-in: `mruby-grainet` core does not depend on it. MPA
 # constructions (each route is its own HTML file) should not load this
@@ -78,7 +78,7 @@ module Grainet
     end
 
     # Stateful router object. `Grainet::Router` exposes the default context as
-    # a compatibility facade, while widgets receive a context-shaped `router`
+    # a compatibility facade, while components receive a context-shaped `router`
     # object that can later be replaced through provider injection.
     class Context
       def initialize
@@ -104,7 +104,7 @@ module Grainet
 
       # Install listeners and seed the location signal. Idempotent: a
       # second call after the first start is a no-op. Safe to call
-      # *after* widgets that already accessed `path` / `match` / etc.
+      # *after* components that already accessed `path` / `match` / etc.
       # — those triggered `ensure_signal!` lazily, and we reuse the same
       # signal here so their subscriptions stay connected.
       def start(mode: nil, base: nil)
@@ -192,7 +192,7 @@ module Grainet
       end
 
       # Match computed for an arbitrary pattern. Cached per pattern string so
-      # two widgets matching the same pattern share one computed (avoids
+      # two components matching the same pattern share one computed (avoids
       # graph blowup on hot paths).
       def match(pattern)
         ensure_signal!
@@ -288,15 +288,15 @@ module Grainet
       #   active_class:     — CSS class to toggle on match (default `"active"`)
       #   inactive_class:   — CSS class to toggle on miss (default nil)
       #   exact:            — disable prefix matching for path-string `match`
-      #   owner_widget:     — Widget that owns the lifetime of the binding.
-      #                       Internal: the WidgetMixin passes itself so the
+      #   owner_component:     — Component that owns the lifetime of the binding.
+      #                       Internal: the ComponentMixin passes itself so the
       #                       effect is auto-disposed on unmount. When nil,
       #                       a free-standing Effect lives until VM teardown.
       #
       # Returns nil. Effect lifecycle:
-      # - `widget.bind_link(...)` (mixin form) → tracked on widget, auto-cleanup
+      # - `component.bind_link(...)` (mixin form) → tracked on component, auto-cleanup
       # - `router.bind_link(raw_el, ...)` → leaks until VM exits
-      def bind_link(el, href:, match: nil, active_class: "active", inactive_class: nil, exact: false, owner_widget: nil)
+      def bind_link(el, href:, match: nil, active_class: "active", inactive_class: nil, exact: false, owner_component: nil)
         runner = proc do
           route = source_value(href)
           set_anchor_href(el, self.href(route))
@@ -306,8 +306,8 @@ module Grainet
           toggle_anchor_class(el, inactive_class, !is_active) if inactive_class
         end
 
-        if owner_widget
-          owner_widget.effect(label: "router-link") { runner.call }
+        if owner_component
+          owner_component.effect(label: "router-link") { runner.call }
         else
           Grainet::Effect.new(label: "router-link") { runner.call }
         end
@@ -604,7 +604,7 @@ module Grainet
         @rendering = true
         begin
           # Always clear: this triggers our MutationObserver to unmount
-          # any widgets mounted in the previous route, regardless of
+          # any components mounted in the previous route, regardless of
           # whether a new template will replace them.
           outlet[:innerHTML] = ""
           if template_id
@@ -646,7 +646,7 @@ module Grainet
       # "called once at boot" operations: `draw` declares the route
       # table, `start` installs listeners + first render. Per-call
       # operations (`path`, `navigate`, `params`, ...) are intentionally
-      # NOT exposed here — those should be reached via Widget#router
+      # NOT exposed here — those should be reached via Component#router
       # (auto-tracked through `lookup(:router)`) or
       # `Grainet::Router.default_context` directly, so sub-contexts
       # remain a clean override path.
@@ -659,12 +659,12 @@ module Grainet
       end
     end
 
-    # Mixed into `Grainet::Widget` so users can write `bind_link refs.x,
+    # Mixed into `Grainet::Component` so users can write `bind_link refs.x,
     # href: ..., match: ...` directly inside `setup`, alongside the other
     # binding helpers (`bind`, `bind_list`, `bind_input`). Same pattern as the
     # Form Builder's `Grainet::FormBuilder` mixin — keeps the Router gem
-    # opt-in: Widget gains `bind_link` only when this gem is required.
-    module WidgetMixin
+    # opt-in: Component gains `bind_link` only when this gem is required.
+    module ComponentMixin
       def router
         lookup(:router) { Grainet::Router.default_context }
       end
@@ -674,10 +674,10 @@ module Grainet
           el,
           href: href, match: match,
           active_class: active_class, inactive_class: inactive_class,
-          exact: exact, owner_widget: self)
+          exact: exact, owner_component: self)
       end
     end
   end
 end
 
-Grainet::Widget.include(Grainet::Router::WidgetMixin)
+Grainet::Component.include(Grainet::Router::ComponentMixin)

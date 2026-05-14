@@ -7,8 +7,8 @@ Provides:
 - `Fetchy`
 - `Grainet::Selector`
 - `Grainet::Resource`
-- `Grainet::Widget#selector`
-- `Grainet::Widget#resource`
+- `Grainet::Component#selector`
+- `Grainet::Component#resource`
 
 Load this gem when your Grainet app needs async data loading or
-selection helpers on top of the core widget/runtime layer.
+selection helpers on top of the core component/runtime layer.

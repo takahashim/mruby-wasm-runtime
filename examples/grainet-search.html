@@ -66,7 +66,7 @@
       Search and filter a list of countries by name and region.
     </p>
 
-    <div data-widget="country-picker" class="panel">
+    <div data-component="country-picker" class="panel">
       <div class="row">
         <input data-ref="query" type="text" placeholder="国名 (英語) を入力…">
         <select data-ref="region">
@@ -85,7 +85,7 @@
     <p id="boot">booting…</p>
 
     <script type="text/ruby" id="ruby-source">
-class CountryPicker < Grainet::Widget
+class CountryPicker < Grainet::Component
   def setup
     @query   = signal("")
     @region  = signal("")

@@ -1,34 +1,34 @@
 # Top-level classes used by the autoregister tests below. Defined here
 # (not via Class.new) so Ruby constant resolution can find them.
-class AutoCounter < Grainet::Widget
+class AutoCounter < Grainet::Component
   def setup
     @ran = signal(:auto_counter_ran)
   end
 end
 
 module AutoNs
-  class InnerCard < Grainet::Widget
+  class InnerCard < Grainet::Component
     def setup
       @ran = signal(:inner_card_ran)
     end
   end
 end
 
-# Used to verify the "constant exists but isn't a Widget subclass" error
-# path. Resolved by data-widget="resolve-not-a-widget".
-class ResolveNotAWidget; end
+# Used to verify the "constant exists but isn't a Component subclass" error
+# path. Resolved by data-component="resolve-not-a-component".
+class ResolveNotAComponent; end
 
-Spec.describe "Widget autoregister (naming convention)" do
+Spec.describe "Component autoregister (naming convention)" do
   Spec.after { Grainet.reset! }
 
   Spec.assert "top-level constant resolves via kebab-to-CamelCase" do
     doc = JS.global[:document]
     body = doc[:body]
-    body[:innerHTML] = '<div data-widget="auto-counter"></div>'
+    body[:innerHTML] = '<div data-component="auto-counter"></div>'
 
     Grainet.start
 
-    el = doc.call(:querySelector, "[data-widget='auto-counter']")
+    el = doc.call(:querySelector, "[data-component='auto-counter']")
     inst = Grainet.find_for_element(el)
     Spec.assert_true inst.is_a?(AutoCounter)
 
@@ -38,11 +38,11 @@ Spec.describe "Widget autoregister (naming convention)" do
   Spec.assert "namespaced constant resolves via `--` separator" do
     doc = JS.global[:document]
     body = doc[:body]
-    body[:innerHTML] = '<div data-widget="auto-ns--inner-card"></div>'
+    body[:innerHTML] = '<div data-component="auto-ns--inner-card"></div>'
 
     Grainet.start
 
-    el = doc.call(:querySelector, "[data-widget='auto-ns--inner-card']")
+    el = doc.call(:querySelector, "[data-component='auto-ns--inner-card']")
     inst = Grainet.find_for_element(el)
     Spec.assert_true inst.is_a?(AutoNs::InnerCard)
 
@@ -52,15 +52,15 @@ Spec.describe "Widget autoregister (naming convention)" do
   Spec.assert "explicit Grainet.register wins over a same-named top-level constant" do
     doc = JS.global[:document]
     body = doc[:body]
-    body[:innerHTML] = '<div data-widget="auto-counter"></div>'
+    body[:innerHTML] = '<div data-component="auto-counter"></div>'
 
-    override = Class.new(Grainet::Widget) do
+    override = Class.new(Grainet::Component) do
       define_method(:setup) { @from_override = signal(true) }
     end
     Grainet.register "auto-counter", override
     Grainet.start
 
-    el = doc.call(:querySelector, "[data-widget='auto-counter']")
+    el = doc.call(:querySelector, "[data-component='auto-counter']")
     inst = Grainet.find_for_element(el)
     Spec.assert_false inst.is_a?(AutoCounter)
     Spec.assert_true inst.is_a?(override)
@@ -68,10 +68,10 @@ Spec.describe "Widget autoregister (naming convention)" do
     body[:innerHTML] = ""
   end
 
-  Spec.assert "constant resolves but is not a Widget subclass -> Grainet::Error" do
+  Spec.assert "constant resolves but is not a Component subclass -> Grainet::Error" do
     doc = JS.global[:document]
     body = doc[:body]
-    body[:innerHTML] = '<div data-widget="resolve-not-a-widget"></div>'
+    body[:innerHTML] = '<div data-component="resolve-not-a-component"></div>'
 
     Spec.assert_raises(Grainet::Error) { Grainet.start }
 
@@ -82,11 +82,11 @@ Spec.describe "Widget autoregister (naming convention)" do
     doc = JS.global[:document]
     body = doc[:body]
 
-    body[:innerHTML] = '<div data-widget="foo--"></div>'
+    body[:innerHTML] = '<div data-component="foo--"></div>'
     Spec.assert_raises(Grainet::Error) { Grainet.start }
 
     Grainet.reset!
-    body[:innerHTML] = '<div data-widget="foo----bar"></div>'
+    body[:innerHTML] = '<div data-component="foo----bar"></div>'
     Spec.assert_raises(Grainet::Error) { Grainet.start }
 
     body[:innerHTML] = ""
@@ -98,7 +98,7 @@ Spec.describe "Widget autoregister (naming convention)" do
     # "123-thing" camelizes to "123Thing", which Object.const_defined?
     # rejects with NameError. The resolver must swallow that and fall
     # through to the same warn+skip path as unknown names.
-    body[:innerHTML] = '<div data-widget="123-thing"></div>'
+    body[:innerHTML] = '<div data-component="123-thing"></div>'
 
     captured = []
     Grainet.logger = ->(_severity, msg, _err) { captured << msg }
@@ -114,14 +114,14 @@ Spec.describe "Widget autoregister (naming convention)" do
   Spec.assert "unknown name with no matching constant -> warn + skip (no raise)" do
     doc = JS.global[:document]
     body = doc[:body]
-    body[:innerHTML] = '<div data-widget="never-defined-thing"></div>'
+    body[:innerHTML] = '<div data-component="never-defined-thing"></div>'
 
     captured = []
     Grainet.logger = ->(_severity, msg, _err) { captured << msg }
 
     Grainet.start  # must not raise
 
-    el = doc.call(:querySelector, "[data-widget='never-defined-thing']")
+    el = doc.call(:querySelector, "[data-component='never-defined-thing']")
     inst = Grainet.find_for_element(el)
     Spec.assert_true inst.nil?
     Spec.assert_true captured.any? { |m| m.include?("never-defined-thing") }

@@ -171,11 +171,11 @@ Spec.describe "bind_list with Template" do
     body = doc[:body]
     body[:innerHTML] = <<~HTML
       <template data-template="bl_row1"><li><span data-ref="t"></span></li></template>
-      <div data-widget="bl-tmpl-1"><ul data-ref="list"></ul></div>
+      <div data-component="bl-tmpl-1"><ul data-ref="list"></ul></div>
     HTML
 
     items_sig = nil
-    klass = Class.new(Grainet::Widget) do
+    klass = Class.new(Grainet::Component) do
       define_method(:setup) do
         items = signal([{id: 1, t: "a"}, {id: 2, t: "b"}])
         items_sig = items
@@ -209,11 +209,11 @@ Spec.describe "bind_list with Template" do
     body = doc[:body]
     body[:innerHTML] = <<~HTML
       <template data-template="bl_row2"><li><span data-ref="t"></span></li></template>
-      <div data-widget="bl-tmpl-2"><ul data-ref="list"></ul></div>
+      <div data-component="bl-tmpl-2"><ul data-ref="list"></ul></div>
     HTML
 
     items_sig = nil
-    klass = Class.new(Grainet::Widget) do
+    klass = Class.new(Grainet::Component) do
       define_method(:setup) do
         items = signal([{id: 1, t: "alpha"}, {id: 2, t: "beta"}])
         items_sig = items
@@ -249,12 +249,12 @@ Spec.describe "bind_list with Template" do
   Spec.assert "raw JS::Object return raises clear error" do
     doc = JS.global[:document]
     body = doc[:body]
-    body[:innerHTML] = '<div data-widget="bl-tmpl-raw"><ul data-ref="list"></ul></div>'
+    body[:innerHTML] = '<div data-component="bl-tmpl-raw"><ul data-ref="list"></ul></div>'
 
     captured = []
     Grainet.logger = ->(_severity, label, err) { captured << [label, err] }
 
-    klass = Class.new(Grainet::Widget) do
+    klass = Class.new(Grainet::Component) do
       define_method(:setup) do
         items = signal([{id: 1}])
         bind_list refs.list, items, key: ->(it) { it[:id] } do |_it|
@@ -281,11 +281,11 @@ Spec.describe "bind_list with Template" do
     body = doc[:body]
     body[:innerHTML] = <<~HTML
       <template data-template="bl_mgd"><li><span data-ref="t"></span></li></template>
-      <div data-widget="bl-mgd-1"><ul data-ref="list"></ul></div>
+      <div data-component="bl-mgd-1"><ul data-ref="list"></ul></div>
     HTML
 
     items_sig = nil
-    klass = Class.new(Grainet::Widget) do
+    klass = Class.new(Grainet::Component) do
       define_method(:setup) do
         items = signal([{"id" => 1, "t" => "alpha"}, {"id" => 2, "t" => "beta"}])
         items_sig = items
@@ -319,10 +319,10 @@ Spec.describe "bind_list with Template" do
     body = doc[:body]
     body[:innerHTML] = <<~HTML
       <template data-template="bl_mgd2"><li><span data-ref="t"></span></li></template>
-      <div data-widget="bl-mgd-2"><ul data-ref="list"></ul></div>
+      <div data-component="bl-mgd-2"><ul data-ref="list"></ul></div>
     HTML
 
-    klass = Class.new(Grainet::Widget) do
+    klass = Class.new(Grainet::Component) do
       define_method(:setup) do
         items = signal([{"id" => 1, "t" => "x"}])
         bind_list refs.list, items, key: "id", template: "bl_mgd2" do |it, t|
@@ -346,12 +346,12 @@ Spec.describe "bind_list with Template" do
   Spec.assert "non-Template / non-String return raises clear error" do
     doc = JS.global[:document]
     body = doc[:body]
-    body[:innerHTML] = '<div data-widget="bl-tmpl-bogus"><ul data-ref="list"></ul></div>'
+    body[:innerHTML] = '<div data-component="bl-tmpl-bogus"><ul data-ref="list"></ul></div>'
 
     captured = []
     Grainet.logger = ->(_severity, label, err) { captured << [label, err] }
 
-    klass = Class.new(Grainet::Widget) do
+    klass = Class.new(Grainet::Component) do
       define_method(:setup) do
         items = signal([{id: 1}])
         bind_list refs.list, items, key: ->(it) { it[:id] } do |_it|
