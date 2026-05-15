@@ -8,6 +8,68 @@
 # Loaded after grainet.rb (Grainet module + AttrName).
 
 module Grainet
+  # Turbo Streams-style basic DOM operations as explicit Ruby methods.
+  # Avoids `method_missing` pass-through so IDEs can complete and readers
+  # can tell apart "Ruby method call" from "raw JS pass-through". Included
+  # into both RefElement and Template; including classes must define
+  # `to_js` returning the wrapped JS::Object.
+  #
+  # Variadic `other` args accept RefElement / Template / JS::Object /
+  # String. Strings are converted to Text nodes (DOM `Element.append(...)`
+  # accepts strings natively, but the mruby → JS bridge for plain strings
+  # is unstable in places, so coerce on the Ruby side).
+  #
+  # Return value: ops that leave self in the DOM (append/prepend/before/
+  # after) return self for chaining. Ops that detach self (remove/
+  # replace_with) return nil so chained misuse fails fast.
+  module NodeOperations
+    def append(*others)
+      to_js.call(:append, *others.map { |o| NodeOperations.coerce_node(o) })
+      self
+    end
+
+    def prepend(*others)
+      to_js.call(:prepend, *others.map { |o| NodeOperations.coerce_node(o) })
+      self
+    end
+
+    def before(*others)
+      to_js.call(:before, *others.map { |o| NodeOperations.coerce_node(o) })
+      self
+    end
+
+    def after(*others)
+      to_js.call(:after, *others.map { |o| NodeOperations.coerce_node(o) })
+      self
+    end
+
+    def remove
+      to_js.call(:remove)
+      nil
+    end
+
+    def replace_with(*others)
+      to_js.call(:replaceWith, *others.map { |o| NodeOperations.coerce_node(o) })
+      nil
+    end
+
+    # RefElement / Template are unwrapped via `to_js`. Strings are
+    # converted to Text nodes via `document.createTextNode` — DOM's
+    # `Element.append(...)` accepts strings natively, but the mruby → JS
+    # bridge for plain strings can drop the value, so coerce explicitly.
+    # Anything else (JS::Object etc.) is passed through.
+    def self.coerce_node(arg)
+      case arg
+      when RefElement, Template
+        arg.to_js
+      when String
+        JS.global[:document].call(:createTextNode, arg)
+      else
+        arg
+      end
+    end
+  end
+
   # Wraps a JS DOM element together with a back-reference to the
   # owning component. Lets `el.on(:click)` register a listener that gets
   # auto-removed on component unmount, and `el.component` resolve to a child
@@ -17,6 +79,8 @@ module Grainet
   # Unrecognised methods fall through to the wrapped JS::Object so the
   # element behaves like a plain JS::Object handle for advanced use.
   class RefElement
+    include NodeOperations
+
     # Bound DOM properties exposed on RefElement. Each tuple is
     # `[ruby_name, js_dom_property, kind]`. `kind` controls cast:
     #   :string — getter returns String, setter does `v.to_s`
@@ -252,6 +316,8 @@ module Grainet
   # JS::Object so external (non-template) elements can flow through
   # `bind_list` without raw-element handling.
   class Template
+    include NodeOperations
+
     # Clone `<template data-template="NAME">` from the document and
     # wrap its first element child as a Template. `component` is consulted
     # by `TemplateRefs` for listener auto-cleanup tracking when the
