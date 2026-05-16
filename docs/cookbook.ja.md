@@ -60,7 +60,7 @@ end
 ```
 
 `vm.eval` はトップレベルで自動的に Fiber で wrap されるので `.await` が使えます。
-タイマーや callback の中で `.await` を使いたい場合は[`errors.md`](errors.md) の Fiber エラー節を参照してください。
+タイマーや callback の中で `.await` を使いたい場合は[`errors.ja.md`](errors.ja.md) の Fiber エラー節を参照してください。
 
 ## 4. Promise と await
 
@@ -99,7 +99,7 @@ JS.global.clearTimeout(@timer)
 ```
 
 `setInterval` も同様です。
-callback の中で `.await` したい場合は、ブロック全体を `JS.__run_in_fiber__ do ... end` で囲んでください(詳細は [`errors.md`](errors.md))。
+callback の中で `.await` したい場合は、ブロック全体を `JS.__run_in_fiber__ do ... end` で囲んでください(詳細は [`errors.ja.md`](errors.ja.md))。
 
 ## 6. localStorage
 
@@ -142,5 +142,5 @@ Ruby 側の `@ivar` や定数は VM をまたぎません。
 ## 関連
 
 - 重い処理を別スレッドで動かす → [`worker.ja.md`](worker.ja.md)
-- エラーの読み方とデバッグ → [`errors.md`](errors.md)
+- エラーの読み方とデバッグ → [`errors.ja.md`](errors.ja.md)
 - 全 JS::Object API リファレンス → [`../mrbgem/mruby-wasm-js/README.md`](../mrbgem/mruby-wasm-js/README.md)

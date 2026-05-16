@@ -104,5 +104,5 @@ Ruby から JS のオブジェクトを掴むときも、JS が Ruby Proc を保
 
 ## 関連
 
-- WASI 関連の詳細 → [`wasi.md`](wasi.md)
+- WASI 関連の詳細 → [`wasi.ja.md`](wasi.ja.md)
 - JS::Object API 仕様 → [`../mrbgem/mruby-wasm-js/README.md`](../mrbgem/mruby-wasm-js/README.md)

@@ -25,7 +25,7 @@ the main thread).
 | `JS.global[:document]` | the DOM | **undefined** |
 | `JS.global[:fetch]` | available | available |
 | `JS.global[:Date]` | available | available |
-| `JS.global.postMessage` | not present | sends message to the spawning thread |
+| `JS.global.postMessage` | cross-document (`window.postMessage(msg, targetOrigin)` — for iframes / opened windows) | sends message to the spawning thread (`self.postMessage(msg)`) |
 | `JS.global[:localStorage]` | available | not present |
 | `JS.global[:requestAnimationFrame]` | available | not present |
 

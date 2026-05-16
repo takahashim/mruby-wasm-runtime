@@ -19,7 +19,7 @@
 | `JS.global[:document]` | DOM | **undefined** |
 | `JS.global[:fetch]` | 利用可 | 利用可 |
 | `JS.global[:Date]` | 利用可 | 利用可 |
-| `JS.global.postMessage` | 存在しない | 親スレッドへメッセージ送信 |
+| `JS.global.postMessage` | cross-document (`window.postMessage(msg, targetOrigin)`、iframe や別ウィンドウ宛て) | 親スレッドへメッセージ送信 (`self.postMessage(msg)`) |
 | `JS.global[:localStorage]` | 利用可 | 存在しない |
 | `JS.global[:requestAnimationFrame]` | 利用可 | 存在しない |
 
