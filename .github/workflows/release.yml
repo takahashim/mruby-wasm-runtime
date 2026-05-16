@@ -41,11 +41,15 @@ jobs:
           path: ~/.cache/mruby-wasm-runtime
           key: wasi-sdk-33.0-x86_64-linux
 
-      - name: Cache mruby clone
+      # Source only — including mruby/build would let stale libmruby.a
+      # / .o files mask C source changes. Same key as test.yml.
+      - name: Cache mruby clone (source only)
         uses: actions/cache@v4
         with:
-          path: mruby
-          key: mruby-4.0.0
+          path: |
+            mruby
+            !mruby/build
+          key: mruby-4.0.0-src
 
       # ── Pre-flight: tag, package.json, and Makefile must agree ──────
       - name: Verify version consistency
