@@ -53,8 +53,7 @@ jobs:
         run: make smoke-cmd
 
       - name: Typecheck @takahashim/mruby-wasm-js .d.ts
-        working-directory: mrbgem/mruby-wasm-js
-        run: npm install --no-audit --no-fund --silent && npm run typecheck
+        run: npm run typecheck
 
       - name: Install wasmtime
         run: |
