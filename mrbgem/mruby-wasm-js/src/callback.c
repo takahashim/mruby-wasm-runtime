@@ -11,6 +11,7 @@
 #include <string.h>
 #include <mruby/array.h>
 #include <mruby/compile.h>
+#include <mruby/error.h>
 #include <mruby/hash.h>
 #include <mruby/class.h>
 #include <mruby/irep.h>
@@ -224,7 +225,15 @@ js_eval_handle(int src_handle, int filename_handle, int line_offset) {
   int len = js_to_string_len(src_handle);
   if (len <= 0) return 0;
 
-  static const char FIBER_PREAMBLE[]  = "::JS.__run_in_fiber__ do\n";
+  /* Preamble has NO trailing newline so user source line 1 remains line
+   * 1 of the input. (mruby's parser treats `cxt->lineno = 0` as "use
+   * default"; the default when a filename is first set is 1, so a
+   * `do\n` preamble would push user code to line 2+ with no way to
+   * compensate.) The trailing space lets the user's first token follow
+   * `do` without merging into an identifier. Edge cases: user source
+   * starting with `=begin` or `__END__` at column 0 won't be honored as
+   * such (rare). */
+  static const char FIBER_PREAMBLE[]  = "::JS.__run_in_fiber__ do ";
   static const char FIBER_POSTAMBLE[] = "\nend\n";
   size_t pre = sizeof(FIBER_PREAMBLE) - 1;
   size_t post = sizeof(FIBER_POSTAMBLE) - 1;
@@ -235,9 +244,10 @@ js_eval_handle(int src_handle, int filename_handle, int line_offset) {
   buf[pre + len + post] = '\0';
 
   /* Build a compile context if filename or lineOffset was supplied. The
-   * fiber preamble adds 1 line before user source, so we subtract 1
-   * from the requested line_offset (default 1) — that way user-source
-   * line 1 maps to file line `line_offset` in backtraces. */
+   * fiber preamble is 0-line so cxt->lineno maps directly: user source
+   * line N reports as line (lineOffset + N - 1), with lineOffset
+   * defaulting to 1 (mruby treats cxt->lineno == 0 as "use default 1"
+   * for first-time-set filenames). */
   mrbc_context *cxt = NULL;
   if (filename_handle || line_offset > 0) {
     cxt = mrbc_context_new(mrb);
@@ -251,8 +261,7 @@ js_eval_handle(int src_handle, int filename_handle, int line_offset) {
         mrb_free(mrb, fname);
       }
     }
-    int base = line_offset > 0 ? line_offset : 1;
-    cxt->lineno = base > 0 ? (uint16_t)(base - 1) : 0;
+    if (line_offset > 0) cxt->lineno = (uint16_t)line_offset;
   }
 
   /* Pop transient allocations off the arena after eval returns —
@@ -311,7 +320,18 @@ js_load_irep_handle(int bytes_handle) {
   }
 
   int arena_idx = mrb_gc_arena_save(mrb);
-  mrb_load_irep(mrb, buf);
+  mrb_value loaded = mrb_load_irep(mrb, buf);
+  /* mrb_load_irep returns mrb_undef on bytecode-level failure
+   * (wrong magic, version mismatch, truncated). It already sets
+   * mrb->exc in the common cases, but synthesize one defensively for
+   * the rare path where it returns undef without setting exc — keeps
+   * the JS host's invariant that rc=1 ⇒ a structured error is
+   * available. */
+  if (mrb_undef_p(loaded) && !mrb->exc) {
+    mrb_value exc = mrb_exc_new_lit(mrb, E_RUNTIME_ERROR,
+      "mrb_load_irep failed (malformed or unsupported bytecode)");
+    mrb->exc = mrb_obj_ptr(exc);
+  }
   mrb_free(mrb, buf);
   mrb_gc_arena_restore(mrb, arena_idx);
 

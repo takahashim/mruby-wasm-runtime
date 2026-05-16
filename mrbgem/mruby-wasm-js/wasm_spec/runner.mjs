@@ -99,43 +99,21 @@ assert(!vm.fs.has("/data"), "fs.has returns false for directories");
 const testDir = here;
 const helper = "spec_helper.rb";
 
-// --- Host-side smoke: structured RubyError surface ----------------------
-// Verifies the new `vm.eval` throwing contract before loading the real
-// spec suite. A failure here points at the C / JS bridge (callback.c +
-// index.js), not at any individual test.
+// --- Host-side eval/error surface tests ---------------------------------
+// Verifies the JS-side error contract (vm.eval throwing RubyError with
+// rubyClass + message + backtrace, filename/lineOffset, throw:false
+// opt-out). Lives in host_eval_error_test.mjs because the surface is
+// JS-side, not Ruby-side. Run before the in-wasm spec suite so a
+// regression here points at the C/JS bridge, not at any single test.
 {
   const { RubyError } = await import(
     pathToFileURL(resolve(here, "../js/index.js")).href
   );
-  function hostAssert(cond, msg) {
-    if (!cond) { console.error("[runner] host smoke FAIL:", msg); process.exit(1); }
-  }
-  // Parse error → throws RubyError with class === "SyntaxError"
-  let caught = null;
-  try { vm.eval("def foo", { filename: "smoke.rb" }); }
-  catch (e) { caught = e; }
-  hostAssert(caught instanceof RubyError, "parse error → RubyError");
-  hostAssert(caught.rubyClass === "SyntaxError", `parse rubyClass: ${caught.rubyClass}`);
-  hostAssert(typeof caught.message === "string" && caught.message.length > 0, "parse message");
-
-  // Runtime error → backtrace includes the filename hint
-  caught = null;
-  try { vm.eval("raise 'boom'", { filename: "smoke.rb", lineOffset: 10 }); }
-  catch (e) { caught = e; }
-  hostAssert(caught instanceof RubyError, "runtime error → RubyError");
-  hostAssert(caught.rubyClass === "RuntimeError", `runtime rubyClass: ${caught.rubyClass}`);
-  hostAssert(caught.message === "boom", `runtime message: ${caught.message}`);
-  hostAssert(caught.backtrace.length > 0, "backtrace non-empty");
-  hostAssert(
-    caught.backtrace.some((f) => f.includes("smoke.rb:10")),
-    `lineOffset reflected in backtrace: ${JSON.stringify(caught.backtrace)}`,
+  const { runHostEvalErrorTests } = await import(
+    pathToFileURL(resolve(here, "host_eval_error_test.mjs")).href
   );
-
-  // throw:false opt-out — legacy rc contract
-  const rc = vm.eval("nope_undef", { throw: false });
-  hostAssert(rc === 1, `throw:false returned rc=${rc}`);
-
-  console.log("[runner] host smoke: structured RubyError surface OK");
+  const rc = await runHostEvalErrorTests(vm, RubyError);
+  if (rc !== 0) process.exit(1);
 }
 
 console.log(`[runner] loading ${helper}`);
