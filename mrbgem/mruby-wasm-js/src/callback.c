@@ -10,6 +10,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <mruby/array.h>
+#include <mruby/compile.h>
 #include <mruby/hash.h>
 #include <mruby/class.h>
 #include <mruby/irep.h>
@@ -22,6 +23,72 @@
 mrb_state *g_mrb = NULL;
 mrb_value g_callback_table; /* Ruby Hash, lazily created */
 int g_next_callback_id = 1;
+
+/* Slot holding a JS handle to the most recent eval/loadBytecode error,
+ * or 0 when none is pending. Owned + cleared by js_take_last_error. */
+static int g_last_error_handle = 0;
+
+/* Build a plain JS object describing an mruby exception:
+ *   { class: "NoMethodError",
+ *     message: "undefined method 'foo' for nil",
+ *     backtrace: ["app.rb:3:in main", ...] }
+ *
+ * Returns 0 if the JS host failed to allocate the object (rare). The
+ * caller stashes the handle in g_last_error_handle for JS to drain.
+ */
+static int
+build_error_handle(mrb_state *mrb, mrb_value exc) {
+  int obj_h = js_eval("({})", 4);
+  if (!obj_h) return 0;
+
+  int arena_idx = mrb_gc_arena_save(mrb);
+
+  const char *cname = mrb_obj_classname(mrb, exc);
+  if (cname) {
+    int v = js_from_string(cname, (int)strlen(cname));
+    js_set(obj_h, "class", 5, v);
+    js_release(v);
+  }
+
+  mrb_value msg = mrb_funcall(mrb, exc, "message", 0);
+  if (mrb_string_p(msg)) {
+    int v = js_from_string(RSTRING_PTR(msg), (int)RSTRING_LEN(msg));
+    js_set(obj_h, "message", 7, v);
+    js_release(v);
+  }
+
+  mrb_value bt = mrb_funcall(mrb, exc, "backtrace", 0);
+  if (mrb_array_p(bt)) {
+    int arr_h = js_eval("([])", 4);
+    if (arr_h) {
+      mrb_int n = RARRAY_LEN(bt);
+      for (mrb_int i = 0; i < n; i++) {
+        mrb_value frame = mrb_ary_ref(mrb, bt, i);
+        if (!mrb_string_p(frame)) continue;
+        int s = js_from_string(RSTRING_PTR(frame), (int)RSTRING_LEN(frame));
+        int args[1] = { s };
+        int r = js_call(arr_h, "push", 4, args, 1);
+        if (r) js_release(r);
+        js_release(s);
+      }
+      js_set(obj_h, "backtrace", 9, arr_h);
+      js_release(arr_h);
+    }
+  }
+
+  mrb_gc_arena_restore(mrb, arena_idx);
+  return obj_h;
+}
+
+/* WASM export: returns + clears the pending error handle. JS calls this
+ * immediately after any eval/loadBytecode that returned non-zero. */
+__attribute__((export_name("js_take_last_error")))
+int
+js_take_last_error(void) {
+  int h = g_last_error_handle;
+  g_last_error_handle = 0;
+  return h;
+}
 
 /* Lazily create the callback Hash and pin it from GC. */
 void
@@ -147,10 +214,10 @@ mrb_to_fresh_js_handle(mrb_state *mrb, mrb_value v) {
  */
 __attribute__((export_name("js_eval_handle")))
 int
-js_eval_handle(int src_handle) {
+js_eval_handle(int src_handle, int filename_handle, int line_offset) {
   if (!g_mrb) return 1;
 #ifdef MRUBY_WASM_NO_COMPILER
-  (void)src_handle;
+  (void)src_handle; (void)filename_handle; (void)line_offset;
   return 2;
 #else
   mrb_state *mrb = g_mrb;
@@ -167,15 +234,39 @@ js_eval_handle(int src_handle) {
   memcpy(buf + pre + len, FIBER_POSTAMBLE, post);
   buf[pre + len + post] = '\0';
 
+  /* Build a compile context if filename or lineOffset was supplied. The
+   * fiber preamble adds 1 line before user source, so we subtract 1
+   * from the requested line_offset (default 1) — that way user-source
+   * line 1 maps to file line `line_offset` in backtraces. */
+  mrbc_context *cxt = NULL;
+  if (filename_handle || line_offset > 0) {
+    cxt = mrbc_context_new(mrb);
+    if (filename_handle) {
+      int flen = js_to_string_len(filename_handle);
+      if (flen > 0) {
+        char *fname = (char *)mrb_malloc(mrb, (size_t)flen + 1);
+        js_to_string_copy(filename_handle, fname, flen);
+        fname[flen] = '\0';
+        mrbc_filename(mrb, cxt, fname);
+        mrb_free(mrb, fname);
+      }
+    }
+    int base = line_offset > 0 ? line_offset : 1;
+    cxt->lineno = base > 0 ? (uint16_t)(base - 1) : 0;
+  }
+
   /* Pop transient allocations off the arena after eval returns —
    * persistent state assigned to constants/ivars survives via mark
    * phase. */
   int arena_idx = mrb_gc_arena_save(mrb);
-  mrb_load_string(mrb, buf);
+  if (cxt) mrb_load_string_cxt(mrb, buf, cxt);
+  else     mrb_load_string(mrb, buf);
   mrb_free(mrb, buf);
+  if (cxt) mrbc_context_free(mrb, cxt);
   mrb_gc_arena_restore(mrb, arena_idx);
 
   if (mrb->exc) {
+    g_last_error_handle = build_error_handle(mrb, mrb_obj_value(mrb->exc));
     mrb_print_error(mrb);
     mrb->exc = NULL;
     return 1;
@@ -225,6 +316,7 @@ js_load_irep_handle(int bytes_handle) {
   mrb_gc_arena_restore(mrb, arena_idx);
 
   if (mrb->exc) {
+    g_last_error_handle = build_error_handle(mrb, mrb_obj_value(mrb->exc));
     mrb_print_error(mrb);
     mrb->exc = NULL;
     return 1;

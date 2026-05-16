@@ -99,8 +99,47 @@ assert(!vm.fs.has("/data"), "fs.has returns false for directories");
 const testDir = here;
 const helper = "spec_helper.rb";
 
+// --- Host-side smoke: structured RubyError surface ----------------------
+// Verifies the new `vm.eval` throwing contract before loading the real
+// spec suite. A failure here points at the C / JS bridge (callback.c +
+// index.js), not at any individual test.
+{
+  const { RubyError } = await import(
+    pathToFileURL(resolve(here, "../js/index.js")).href
+  );
+  function hostAssert(cond, msg) {
+    if (!cond) { console.error("[runner] host smoke FAIL:", msg); process.exit(1); }
+  }
+  // Parse error → throws RubyError with class === "SyntaxError"
+  let caught = null;
+  try { vm.eval("def foo", { filename: "smoke.rb" }); }
+  catch (e) { caught = e; }
+  hostAssert(caught instanceof RubyError, "parse error → RubyError");
+  hostAssert(caught.rubyClass === "SyntaxError", `parse rubyClass: ${caught.rubyClass}`);
+  hostAssert(typeof caught.message === "string" && caught.message.length > 0, "parse message");
+
+  // Runtime error → backtrace includes the filename hint
+  caught = null;
+  try { vm.eval("raise 'boom'", { filename: "smoke.rb", lineOffset: 10 }); }
+  catch (e) { caught = e; }
+  hostAssert(caught instanceof RubyError, "runtime error → RubyError");
+  hostAssert(caught.rubyClass === "RuntimeError", `runtime rubyClass: ${caught.rubyClass}`);
+  hostAssert(caught.message === "boom", `runtime message: ${caught.message}`);
+  hostAssert(caught.backtrace.length > 0, "backtrace non-empty");
+  hostAssert(
+    caught.backtrace.some((f) => f.includes("smoke.rb:10")),
+    `lineOffset reflected in backtrace: ${JSON.stringify(caught.backtrace)}`,
+  );
+
+  // throw:false opt-out — legacy rc contract
+  const rc = vm.eval("nope_undef", { throw: false });
+  hostAssert(rc === 1, `throw:false returned rc=${rc}`);
+
+  console.log("[runner] host smoke: structured RubyError surface OK");
+}
+
 console.log(`[runner] loading ${helper}`);
-vm.eval(await readFile(join(testDir, helper), "utf8"));
+vm.eval(await readFile(join(testDir, helper), "utf8"), { filename: helper });
 
 async function runDir(dir, label) {
   let entries;
@@ -115,9 +154,11 @@ async function runDir(dir, label) {
   for (const f of testFiles) {
     const src = await readFile(join(dir, f), "utf8");
     console.log(`[runner] running ${label}/${f}`);
-    const rc = vm.eval(src);
-    if (rc !== 0) {
-      console.error(`[runner] ${label}/${f} failed to load (parse/runtime error)`);
+    try {
+      vm.eval(src, { filename: `${label}/${f}` });
+    } catch (err) {
+      console.error(`[runner] ${label}/${f} failed to load (${err.name}: ${err.message})`);
+      if (err.backtrace) for (const frame of err.backtrace) console.error(`    ${frame}`);
       process.exit(1);
     }
     await drainPendingFibers(label, f);

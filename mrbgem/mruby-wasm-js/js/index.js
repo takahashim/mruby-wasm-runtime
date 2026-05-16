@@ -34,6 +34,24 @@ import { debug } from "./debug.js";
 
 export { Directory, File, createFsFacade, debug };
 
+/**
+ * Thrown by `vm.eval` / `vm.loadBytecode` / `vm.evalScript` when mruby
+ * raises an unhandled exception. The fields mirror what mruby itself
+ * exposes — `rubyClass` is `exc.class.name`, `backtrace` is what
+ * `exc.backtrace` returned (file:line:in method, one entry per frame).
+ *
+ * Stack is best-effort: the JS engine's own stack trace shows where
+ * `vm.eval` was called from; the Ruby backtrace is the real one.
+ */
+export class RubyError extends Error {
+  constructor({ class: rubyClass, message, backtrace } = {}) {
+    super(message || rubyClass || "mruby exception");
+    this.name = "RubyError";
+    this.rubyClass = rubyClass || "Exception";
+    this.backtrace = Array.isArray(backtrace) ? backtrace : [];
+  }
+}
+
 // `env` import object for instantiateStreaming. Empty in current builds:
 // the gem's mruby-js.wasm uses hal-wasi-io (mrbgem/hal-wasi-io/) for the
 // IO HAL backend, and mruby-wasi-stubs (mrbgem/mruby-wasi-stubs/) for
@@ -336,11 +354,30 @@ export async function createVM(options = {}) {
     }
   }
 
-  function evalRuby(source) {
-    const handle = handles.alloc(source);
+  // Pull the structured exception left by the previous failing eval /
+  // loadBytecode and surface it as a RubyError. The wasm side stashes a
+  // JS object handle in g_last_error_handle when mrb->exc is set; we
+  // drain + release it here. Returns null when no error is pending
+  // (e.g., a parse fail before mruby ever got to raise).
+  function takeRubyError() {
+    const h = instance.exports.js_take_last_error();
+    if (!h) return null;
+    const info = handles.get(h);
+    handles.release(h);
+    return info ? new RubyError(info) : null;
+  }
+
+  function evalRuby(source, options = {}) {
+    const { filename, lineOffset = 0, throw: shouldThrow = true } = options;
+    const srcH = handles.alloc(source);
+    const fileH = filename ? handles.alloc(String(filename)) : 0;
     let rc;
-    try { rc = instance.exports.js_eval_handle(handle); }
-    finally { handles.release(handle); }
+    try {
+      rc = instance.exports.js_eval_handle(srcH, fileH, lineOffset | 0);
+    } finally {
+      handles.release(srcH);
+      if (fileH) handles.release(fileH);
+    }
     // rc === 2: compiler-less build signalled that source eval is not
     // available. Surface as NotImplementedError so the caller learns to
     // pre-compile with mrbc and use loadBytecode instead.
@@ -352,6 +389,14 @@ export async function createVM(options = {}) {
       err.name = "NotImplementedError";
       throw err;
     }
+    if (rc !== 0 && shouldThrow) {
+      const err = takeRubyError();
+      if (err) throw err;
+      throw new Error("mruby eval failed with no structured error info");
+    }
+    // throw: false branch — keep the legacy rc=0/1 contract and let the
+    // caller decide whether to inspect the (now-drained) error slot.
+    if (!shouldThrow && rc !== 0) takeRubyError();
     return rc;
   }
 
@@ -362,25 +407,34 @@ export async function createVM(options = {}) {
   //
   // Accepts `Uint8Array` or `ArrayBuffer` (auto-wrapped as a zero-copy
   // view), since `await fetch(...).arrayBuffer()` returns the latter.
-  function loadBytecode(bytes) {
+  function loadBytecode(bytes, options = {}) {
     if (bytes instanceof ArrayBuffer) bytes = new Uint8Array(bytes);
     if (!(bytes instanceof Uint8Array)) {
       throw new TypeError("loadBytecode: expected Uint8Array or ArrayBuffer");
     }
+    const { throw: shouldThrow = true } = options;
     const handle = handles.alloc(bytes);
-    try { return instance.exports.js_load_irep_handle(handle); }
+    let rc;
+    try { rc = instance.exports.js_load_irep_handle(handle); }
     finally { handles.release(handle); }
+    if (rc !== 0 && shouldThrow) {
+      const err = takeRubyError();
+      if (err) throw err;
+      throw new Error("mruby loadBytecode failed with no structured error info");
+    }
+    if (!shouldThrow && rc !== 0) takeRubyError();
+    return rc;
   }
 
   // Eval the textContent of a DOM element matched by `selector`.
   // Pairs with `<script type="text/ruby">` blocks. Browser-only.
-  function evalScript(selector) {
+  function evalScript(selector, options = {}) {
     if (typeof document === "undefined") {
       throw new Error("evalScript: requires a DOM (document is undefined)");
     }
     const el = document.querySelector(selector);
     if (!el) throw new Error(`evalScript: no element matches ${JSON.stringify(selector)}`);
-    return evalRuby(el.textContent);
+    return evalRuby(el.textContent, options);
   }
 
   // Core VM surface plus, when we own the WASI side, the bundled VFS

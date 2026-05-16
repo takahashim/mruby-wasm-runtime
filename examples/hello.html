@@ -87,10 +87,13 @@ puts "(also wrote a line to the browser console)"
 
       runBtn.addEventListener("click", () => {
         outEl.classList.remove("err");
-        const rc = vm.eval(srcEl.value);
-        if (rc !== 0) {
+        try {
+          vm.eval(srcEl.value, { filename: "hello.rb" });
+        } catch (err) {
           outEl.classList.add("err");
-          outEl.textContent = "(eval returned non-zero — check console)";
+          const frames = (err.backtrace ?? []).map((f) => "  " + f).join("\n");
+          outEl.textContent = `${err.rubyClass ?? err.name}: ${err.message}` +
+            (frames ? "\n" + frames : "");
         }
       });
     </script>

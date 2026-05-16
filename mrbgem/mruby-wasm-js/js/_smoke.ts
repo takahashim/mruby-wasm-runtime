@@ -10,10 +10,13 @@ import {
   File,
   createFsFacade,
   debug,
+  RubyError,
   type FsFacade,
   type VMCore,
   type VMWithBundledWasi,
   type CreateVMOptions,
+  type EvalOptions,
+  type LoadBytecodeOptions,
 } from "./index.js";
 
 // --- Directory / File ---------------------------------------------------
@@ -92,3 +95,23 @@ void back; void live;
 
 // --- evalScript ---------------------------------------------------------
 vmBundled.evalScript("#ruby");
+vmBundled.evalScript("#ruby", { filename: "embedded.rb", lineOffset: 5 });
+
+// --- RubyError + eval options -------------------------------------------
+const evalOpts: EvalOptions = { filename: "app.rb", lineOffset: 1, throw: false };
+const loadOpts: LoadBytecodeOptions = { throw: false };
+const noThrowRc: number = vmBundled.eval("nope", evalOpts);
+const noThrowLoad: number = vmBundled.loadBytecode(new Uint8Array(0), loadOpts);
+void noThrowRc; void noThrowLoad;
+
+try {
+  vmBundled.eval("def foo", { filename: "x.rb" });
+} catch (e) {
+  if (e instanceof RubyError) {
+    const cls: string = e.rubyClass;
+    const bt: string[] = e.backtrace;
+    void cls; void bt;
+  }
+}
+const re: RubyError = new RubyError({ class: "Boom", message: "x", backtrace: [] });
+void re;
