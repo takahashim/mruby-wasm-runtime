@@ -23,7 +23,7 @@ now ships only the mruby ↔ JavaScript bridge plus WASI shims.
 | `build_config/wasi-js.rb` | mruby cross-build for the JS-host wasm |
 | `build_config/wasi-cmd.rb` | mruby cross-build for the WASI command wasm |
 | `examples/` | Browser demos + Node smoke runners |
-| `docs/` | Topic-specific guides (see [docs/worker.md](docs/worker.md)) |
+| `docs/` | Topic-specific guides (see [Documentation](#documentation) below) |
 | `Makefile` | Build orchestration (downloads wasi-sdk, clones mruby, links wasm) |
 
 ## Quick start
@@ -98,6 +98,23 @@ for the full bridge reference.
   end-to-end self-test for the wasmtime command path
 
 `make serve` exposes `examples/` over HTTP for the browser demos.
+
+## Documentation
+
+- Cookbook — practical recipes (DOM, click, fetch, await, timer,
+  localStorage, multi-VM):
+  [English](docs/cookbook.md) / [日本語](docs/cookbook.ja.md)
+- Errors — `RubyError` shape, `eval` options, common error
+  categories, debugging tips:
+  [English](docs/errors.md) / [日本語](docs/errors.ja.md)
+- WASI — supported WASI surface, in-memory VFS (`vm.fs`), what's
+  NOT supported:
+  [English](docs/wasi.md) / [日本語](docs/wasi.ja.md)
+- Worker — running mruby in a Web Worker:
+  [English](docs/worker.md) / [日本語](docs/worker.ja.md)
+- Architecture — Ruby → C → wasm → JS layer map, handle table,
+  VM lifecycle:
+  [English](docs/architecture.md) / [日本語](docs/architecture.ja.md)
 
 ## Runtime requirements
 

@@ -15,6 +15,8 @@ See `examples/worker.html` + `examples/worker-host.js` for a working demo
 (prime counting up to 100,000 in a Worker while a spinner animates on
 the main thread).
 
+(日本語版: [`worker.ja.md`](worker.ja.md))
+
 ## What's different in a Worker
 
 | | Main thread | Worker |
