@@ -52,6 +52,10 @@ jobs:
       - name: Run command smoke via Node WASI
         run: make smoke-cmd
 
+      - name: Typecheck @takahashim/mruby-wasm-js .d.ts
+        working-directory: mrbgem/mruby-wasm-js
+        run: npm install --no-audit --no-fund --silent && npm run typecheck
+
       - name: Install wasmtime
         run: |
           curl https://wasmtime.dev/install.sh -sSf | bash

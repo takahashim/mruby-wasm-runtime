@@ -4,14 +4,19 @@
   "description": "Minimal mruby ↔ JavaScript bridge for WebAssembly. Run mruby in browsers and Node with a JS::Object DOM/JS interop API.",
   "type": "module",
   "main": "./index.js",
+  "types": "./index.d.ts",
   "exports": {
-    ".": "./index.js",
+    ".": {
+      "types": "./index.d.ts",
+      "default": "./index.js"
+    },
     "./wasm": "./mruby-js.wasm"
   },
   "files": [
     "_memory.js",
     "debug.js",
     "index.js",
+    "index.d.ts",
     "wasi-preview1.js",
     "mruby-js.wasm",
     "README.md",
@@ -40,5 +45,11 @@
   "publishConfig": {
     "access": "public"
   },
-  "engines": { "node": ">=18" }
+  "engines": { "node": ">=18" },
+  "scripts": {
+    "typecheck": "tsc --noEmit --module nodenext --moduleResolution nodenext --target es2022 --strict js/_smoke.ts"
+  },
+  "devDependencies": {
+    "typescript": "^5.0.0"
+  }
 }

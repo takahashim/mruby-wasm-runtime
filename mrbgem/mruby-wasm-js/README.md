@@ -57,6 +57,10 @@ const vm = await createVM({ wasm: "/path/to/mruby-js.wasm" });
 vm.eval("puts JS.global[:navigator][:userAgent].to_s");
 ```
 
+TypeScript users get type definitions out of the box (`index.d.ts`
+ships with the package; `createVM` is overloaded so the returned
+shape narrows depending on whether you pass `wasi` or not).
+
 `createVM(options)` fetches the wasm, instantiates it with all required
 imports (`js.*` for the JS imports, `wasi_snapshot_preview1.*` for
 `puts`, `Time.now`, `File.read`, etc.), runs the reactor's
