@@ -181,9 +181,18 @@ module Grainet
       checked: { event: :change, normalize: ->(v) { !!v } },
     }.freeze
 
+    # URL-bearing HTML attributes that get sanitized per spec Appendix B.
+    # Comparison is case-insensitive on the attribute name.
+    URL_ATTRIBUTES = %w[href src action formaction].freeze
+    # Dangerous URL protocol prefixes (case-insensitive, leading
+    # whitespace tolerated). Default mruby has no Regexp engine, so
+    # we match by lstrip + downcase + start_with? rather than regex.
+    DANGEROUS_PROTOCOLS = %w[javascript: vbscript: data:text/html].freeze
+
     # bind(ref, prop: signal_or_computed)         # single property
     # bind(ref, class: { "is-active" => @on })    # multi-toggle classes
     # bind(ref, style: { "color" => @color })     # multi inline styles
+    # bind(ref, attr:  { "href" => @url })        # multi HTML attributes
     # bind(ref, :prop) { ...computed... }         # block form
     def bind(ref, prop_or_kwargs = nil, **kwargs, &block)
       el = coerce_ref(ref)
@@ -196,6 +205,7 @@ module Grainet
           case prop
           when :class then bind_class(el, source)
           when :style then bind_style(el, source)
+          when :attr  then bind_attr(el, source)
           else bind_one(el, prop) { source.value }
           end
         end
@@ -280,6 +290,48 @@ module Grainet
         label = "bind(#{el.name || "?"}, style[#{prop}])"
         effect(label: label) { el.set_style(prop, source.value) }
       end
+    end
+
+    # Multi-attribute reactive binding. Each entry is `"name" => signal`;
+    # `nil`/`false` removes the attribute (spec Section 7); URL-bearing
+    # attributes (`href` etc.) get dangerous-protocol values rewritten to
+    # `about:blank` with a logger warning (spec Section 13 / Appendix B).
+    def bind_attr(el, mapping)
+      unless mapping.is_a?(Hash)
+        raise ArgumentError, "bind attr: requires a Hash of name => signal"
+      end
+      mapping.each do |name, source|
+        attr_name = name.to_s
+        label = "bind(#{el.name || "?"}, attr[#{attr_name}])"
+        effect(label: label) { apply_attr(el, attr_name, source.value) }
+      end
+    end
+
+    # Applies one attribute value, with nil/falsy removal and the URL
+    # sanitizer. Factored out of `bind_attr` so `data-arg-X` codegen
+    # (Phase D1) can reuse the same falsy-removal shape.
+    def apply_attr(el, name, value)
+      if value.nil? || value == false
+        el.attr(name, nil)
+        return
+      end
+      str = value.to_s
+      if URL_ATTRIBUTES.include?(name.downcase) && dangerous_url?(str)
+        Grainet.logger.warn(
+          "Unsafe URL blocked for #{name.inspect}: #{str[0, 80].inspect}",
+        )
+        el.attr(name, "about:blank")
+        return
+      end
+      el.attr(name, str)
+    end
+
+    # Spec Appendix B regex equivalent without a Regexp engine:
+    # leading whitespace, then a dangerous protocol prefix
+    # (case-insensitive).
+    def dangerous_url?(str)
+      head = str.lstrip.downcase
+      DANGEROUS_PROTOCOLS.any? { |p| head.start_with?(p) }
     end
 
     # Symbol is rejected (not coerced) so users coming from Rails-style
