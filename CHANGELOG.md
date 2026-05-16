@@ -2,8 +2,11 @@
 
 ## [Unreleased]
 
-JS interop polish, callback bookkeeping fixes, and extraction of the
-signal-based UI layer into a separate repo.
+## [0.2.0] - 2026-05-16
+
+JS interop polish, structured error surface, TypeScript definitions,
+Web Worker example, and extraction of the signal-based UI layer into
+a separate repo.
 
 ### Added
 
@@ -22,9 +25,35 @@ signal-based UI layer into a separate repo.
 - `JS::Object#call` / `#new` / `[]=` auto-wrap Hash/Array literals — pass
   `{ once: true }` directly without `JS.object(...)`
 
+#### Structured error surface
+- `vm.eval` / `vm.loadBytecode` / `vm.evalScript` now throw a
+  structured `RubyError` (with `rubyClass`, `message`, `backtrace`)
+  by default, instead of returning a bare `rc`. Pass `{ throw: false }`
+  to keep the legacy contract.
+- `vm.eval(source, { filename, lineOffset })` lets callers attach a
+  filename + line offset to mruby backtraces (was `(unknown):0`).
+- New `js_take_last_error` wasm export + `build_error_handle` C helper
+  to carry mruby exceptions across the wasm boundary.
+
+#### TypeScript definitions
+- `mrbgem/mruby-wasm-js/js/index.d.ts` ships with the npm package;
+  `createVM` overloads narrow the return shape on whether `wasi` is
+  supplied. Includes `RubyError`, `EvalOptions`, `VMCore`, etc.
+- `npm run typecheck` from repo root verifies the definitions; CI
+  runs it on every push.
+
 #### `mruby-metaprog` (mruby core gem)
 added to wasi-js / wasi-cmd builds to enable `define_singleton_method`
 for downstream gems.
+
+#### Examples + docs
+- `examples/hello.html` — minimal browser demo (`createVM` + JS
+  interop, textarea-driven eval).
+- `examples/worker.html` + `examples/worker-host.js` — mruby in a
+  Web Worker (heavy compute off the main thread).
+- `docs/cookbook.md`, `docs/errors.md`, `docs/wasi.md`,
+  `docs/worker.md`, `docs/architecture.md` — practical guides
+  (English + Japanese versions for each).
 
 ### Fixed
 
@@ -36,6 +65,18 @@ for downstream gems.
 - Callback bookkeeping is now keyed by id rather than JS handle: handle
   slot recycling on JS::Object GC no longer causes silent overwrites in
   `@callback_ids` and resulting C/Ruby count divergence
+- `js_eval_handle` preamble no longer adds a leading newline, so a
+  user's source line N maps to file line N in backtraces (previously
+  shifted by +1).
+- `mrb_load_irep` failures that don't set `mrb->exc` are surfaced as
+  a synthetic `RuntimeError` instead of silently succeeding.
+
+### Changed
+
+- CI: cache `mruby/` source clone only (excluding `mruby/build`)
+  to avoid stale `libmruby.a` masking C source changes.
+
+[0.2.0]: https://github.com/takahashim/mruby-wasm-runtime/releases/tag/v0.2.0
 
 ## [0.1.0] - 2026-05-09
 

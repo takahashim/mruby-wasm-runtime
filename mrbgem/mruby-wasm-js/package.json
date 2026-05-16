@@ -1,6 +1,6 @@
 {
   "name": "@takahashim/mruby-wasm-js",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Minimal mruby ↔ JavaScript bridge for WebAssembly. Run mruby in browsers and Node with a JS::Object DOM/JS interop API.",
   "type": "module",
   "main": "./index.js",

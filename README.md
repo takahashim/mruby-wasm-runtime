@@ -29,7 +29,7 @@ now ships only the mruby ↔ JavaScript bridge plus WASI shims.
 ## Quick start
 
 ```bash
-make wasi-sdk      # Downloads + extracts wasi-sdk (one-time, ~150 MB)
+make wasi-sdk      # Downloads + extracts wasi-sdk (one-time, ~200 MB)
 make js            # Builds build/mruby-js.wasm
 make cmd           # Builds build/mruby-cmd.wasm
 make test          # Runs wasm_spec (208 in-wasm tests + 61 host-side error tests)
@@ -47,7 +47,7 @@ make serve         # http://localhost:8001/examples/ for the browser demos
 `make dist` packages redistributables under:
 
 - `dist/mruby-wasm-js/` — JS adapter + wasm + `package.json` (drop into a consumer project's `vendor/`)
-- `dist/mruby-wasm-cmd/` — command wasm + README
+- `dist/mruby-wasm-cmd/` — command wasm + LICENSE
 
 ## Using the JS-host build
 

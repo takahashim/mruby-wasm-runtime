@@ -94,7 +94,7 @@ BUILD_WASM_CMD                   := $(BUILD_DIR)/mruby-cmd.wasm
 GEM_DIR := $(CURDIR)/mrbgem/mruby-wasm-js
 DIST_DIR_JS               := $(CURDIR)/dist/mruby-wasm-js
 DIST_DIR_CMD              := $(CURDIR)/dist/mruby-wasm-cmd
-DIST_VERSION := 0.1.0
+DIST_VERSION := 0.2.0
 
 .PHONY: all wasi-sdk \
         js js-release \
@@ -224,11 +224,11 @@ dist-js: js-release
 	@rm -rf $(DIST_DIR_JS)
 	@mkdir -p $(DIST_DIR_JS)
 	cp $(GEM_DIR)/js/*.js              $(DIST_DIR_JS)/
+	cp $(GEM_DIR)/js/index.d.ts        $(DIST_DIR_JS)/
 	cp $(GEM_DIR)/README.md            $(DIST_DIR_JS)/README.md
 	cp $(GEM_DIR)/LICENSE              $(DIST_DIR_JS)/LICENSE
 	cp $(BUILD_WASM_JS_RELEASE)        $(DIST_DIR_JS)/mruby-js.wasm
-	@sed 's/"version": "0.0.0-dev"/"version": "$(DIST_VERSION)"/' \
-	    $(GEM_DIR)/package.json > $(DIST_DIR_JS)/package.json
+	cp $(GEM_DIR)/package.json         $(DIST_DIR_JS)/package.json
 	@echo "Built $(DIST_DIR_JS)/ (version $(DIST_VERSION))"
 
 dist-cmd: cmd
