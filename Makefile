@@ -219,6 +219,16 @@ smoke-cmd-wasmtime: cmd
 smoke-all: test smoke-cmd smoke-cmd-wasmtime
 	@echo "[smoke-all] all checks passed"
 
+# Real-browser smoke (Playwright + Chromium). Drives the demos in
+# examples/hello.html and examples/worker.html through the actual UI
+# event loop — catches regressions happy-dom misses (e.g., real Worker
+# spawning, wasm streaming, DOM timing).
+#
+# Requires `npm install` to have brought in Playwright, plus
+# `npx playwright install chromium` (browser binary, ~200 MB).
+smoke-browser: js node_modules
+	node test/browser-smoke.mjs
+
 # ── distribution bundles ────────────────────────────────────────────────
 dist-js: js-release
 	@rm -rf $(DIST_DIR_JS)

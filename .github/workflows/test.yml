@@ -69,3 +69,17 @@ jobs:
 
       - name: Run command smoke via wasmtime
         run: make smoke-cmd-wasmtime
+
+      # Cache the Playwright browser binaries (~200 MB) keyed on the
+      # playwright version pinned in package.json.
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ hashFiles('package.json') }}
+
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Run browser smoke (examples/hello.html + worker.html)
+        run: make smoke-browser

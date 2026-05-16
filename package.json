@@ -4,9 +4,11 @@
   "type": "module",
   "description": "Dev dependencies for mruby-wasm-runtime test runner.",
   "devDependencies": {
-    "happy-dom": "^15.11.7"
+    "happy-dom": "^15.11.7",
+    "playwright": "^1.49.0"
   },
   "scripts": {
-    "typecheck": "npm --prefix mrbgem/mruby-wasm-js install --silent --no-audit --no-fund && npm --prefix mrbgem/mruby-wasm-js run typecheck"
+    "typecheck": "npm --prefix mrbgem/mruby-wasm-js install --silent --no-audit --no-fund && npm --prefix mrbgem/mruby-wasm-js run typecheck",
+    "smoke:browser": "node test/browser-smoke.mjs"
   }
 }
