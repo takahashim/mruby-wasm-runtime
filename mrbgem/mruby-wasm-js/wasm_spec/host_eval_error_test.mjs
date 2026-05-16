@@ -32,7 +32,7 @@ function catchSync(fn) {
   catch (e) { return e; }
 }
 
-export async function runHostEvalErrorTests(vm, RubyError) {
+export async function runHostEvalErrorTests({ vm, RubyError, createVM, wasmUrl }) {
   // -- 1. parse errors ----------------------------------------------------
   {
     const err = catchSync(() => vm.eval("def foo", { filename: "parse.rb" }));
@@ -192,6 +192,101 @@ export async function runHostEvalErrorTests(vm, RubyError) {
     assert(
       err.backtrace.some((f) => f.includes("es.rb")),
       `evalScript passes filename through (got ${JSON.stringify(err.backtrace)})`,
+    );
+    el.remove();
+  }
+
+  // -- A. RubyError is a regular Error (catch-as-Error interop) ---------
+  {
+    const err = catchSync(() => vm.eval("raise 'shape'"));
+    assert(err instanceof Error, "RubyError instanceof Error");
+    assert(err.name === "RubyError", "err.name === 'RubyError'");
+    assert(typeof err.stack === "string" && err.stack.length > 0,
+      "RubyError has a JS-side stack");
+  }
+
+  // -- B. Error path doesn't leak JS handles (≥50 iterations) -----------
+  {
+    // Warm-up: first eval may allocate stable per-VM objects we don't
+    // want to count. Then measure delta over a loop.
+    catchSync(() => vm.eval("raise 'warmup'"));
+    const before = vm.handleCount();
+    for (let i = 0; i < 50; i++) {
+      catchSync(() => vm.eval("raise 'leak-check'", { filename: "leak.rb" }));
+    }
+    const after = vm.handleCount();
+    assertEq(after, before,
+      `error path leaks handles: ${after - before} over 50 iterations`);
+  }
+
+  // -- D. Multi-VM: error in vm1 doesn't pollute vm2 --------------------
+  {
+    const vm2 = await createVM({ wasm: wasmUrl });
+    vm.eval("raise 'vm1 error'", { throw: false });   // pending in vm1
+    const rc = vm2.eval("42");                         // vm2 unaffected
+    assertEq(rc, 0, "vm2 succeeds despite vm1 pending error");
+    const err = catchSync(() => vm2.eval("raise 'vm2 error'"));
+    assertEq(err.message, "vm2 error",
+      "vm2 reports its own error, not vm1's");
+  }
+
+  // -- E. Empty / whitespace / comment-only source returns rc=0 ---------
+  {
+    assertEq(vm.eval(""), 0, "empty source rc=0");
+    assertEq(vm.eval("\n\n   \t\n"), 0, "whitespace-only source rc=0");
+    assertEq(vm.eval("# just a comment\n# and another"), 0, "comment-only source rc=0");
+  }
+
+  // -- F. mruby-specific exception classes -----------------------------
+  {
+    const err1 = catchSync(() => vm.eval("1 / 0"));
+    assertEq(err1.rubyClass, "ZeroDivisionError", "1/0 → ZeroDivisionError");
+
+    const err2 = catchSync(() => vm.eval("NoSuchConstantXYZ"));
+    assertEq(err2.rubyClass, "NameError", "uninitialized constant → NameError");
+
+    const err3 = catchSync(() => vm.eval("[].fetch(0)"));
+    assertEq(err3.rubyClass, "IndexError", "[].fetch(0) → IndexError");
+
+    const err4 = catchSync(() => vm.eval("{}.fetch(:missing)"));
+    assertEq(err4.rubyClass, "KeyError", "{}.fetch(:missing) → KeyError");
+
+    const err5 = catchSync(() => vm.eval("[1, 2, 3][nil]"));
+    assertEq(err5.rubyClass, "TypeError", "array index with nil → TypeError");
+
+    const err6 = catchSync(() => vm.eval("Integer('not-a-number')"));
+    assertEq(err6.rubyClass, "ArgumentError", "Integer('xx') → ArgumentError");
+  }
+
+  // -- G. RubyError tolerates missing / nil backtrace info -------------
+  {
+    const empty = new RubyError();
+    assertEq(empty.rubyClass, "Exception", "default rubyClass");
+    assert(Array.isArray(empty.backtrace) && empty.backtrace.length === 0,
+      "default backtrace is empty array");
+    assert(empty.message.length > 0, "default message non-empty");
+
+    const partial = new RubyError({ class: "X", message: "y", backtrace: null });
+    assert(Array.isArray(partial.backtrace) && partial.backtrace.length === 0,
+      "null backtrace → empty array");
+
+    const garbage = new RubyError({ class: "X", message: "y", backtrace: "not-an-array" });
+    assert(Array.isArray(garbage.backtrace) && garbage.backtrace.length === 0,
+      "non-array backtrace → empty array");
+  }
+
+  // -- H. evalScript passes lineOffset through --------------------------
+  if (typeof document !== "undefined") {
+    const el = document.createElement("script");
+    el.id = "evalscript-line-fixture";
+    el.textContent = "raise 'es'";
+    document.body.appendChild(el);
+    const err = catchSync(() => vm.evalScript("#evalscript-line-fixture",
+      { filename: "es.rb", lineOffset: 100 }));
+    assert(err instanceof RubyError, "evalScript with lineOffset throws RubyError");
+    assert(
+      err.backtrace.some((f) => f.includes("es.rb:100")),
+      `evalScript respects lineOffset (got ${JSON.stringify(err.backtrace)})`,
     );
     el.remove();
   }

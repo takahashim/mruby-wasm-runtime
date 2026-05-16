@@ -112,7 +112,7 @@ const helper = "spec_helper.rb";
   const { runHostEvalErrorTests } = await import(
     pathToFileURL(resolve(here, "host_eval_error_test.mjs")).href
   );
-  const rc = await runHostEvalErrorTests(vm, RubyError);
+  const rc = await runHostEvalErrorTests({ vm, RubyError, createVM, wasmUrl });
   if (rc !== 0) process.exit(1);
 }
 
