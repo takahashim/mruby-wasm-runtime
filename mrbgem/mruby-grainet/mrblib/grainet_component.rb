@@ -207,6 +207,17 @@ module Grainet
     def setup
     end
 
+    # Called automatically by `mount` immediately after `setup` returns.
+    # Default is a no-op; the build-time codegen (grainet-cli) generates a
+    # `Grainet::Bindings::<ClassName>` module whose `bind_template_hook`
+    # applies the data-* directive bindings declared in the `.gnt`
+    # template (e.g. `bind refs.gN, text: @count`,
+    # `refs.gM.on(:click) { ... }`). The user class includes the
+    # generated module, so this default no-op is overridden in practice.
+    # See docs/grainet-directive-spec.md Section 11 (Mount order).
+    def bind_template_hook
+    end
+
     # ---- Expose / Lookup -------------------------------------------
 
     def expose(key, value)
@@ -463,6 +474,15 @@ module Grainet
         setup
       rescue => e
         Grainet.logger.error("#{self.class.name}#setup", e, source: self)
+      end
+      # Generated directive bindings (Section 11 of the spec). Same
+      # error-routing shape as `setup` so a faulty generated `bind`
+      # call surfaces through the existing logger / error_boundary path
+      # rather than aborting the whole mount.
+      begin
+        bind_template_hook
+      rescue => e
+        Grainet.logger.error("#{self.class.name}#bind_template_hook", e, source: self)
       end
       @mounted = true
     end
