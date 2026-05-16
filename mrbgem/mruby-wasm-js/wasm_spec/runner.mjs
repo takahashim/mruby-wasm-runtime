@@ -28,11 +28,11 @@ globalThis.fetch = async (url) => {
 // happy-dom is a devDependency of the repo root package.json. Kept for
 // the JS-bridge tests that touch DOM interop (event handling,
 // DocumentFragment round-trips); downstream framework repos (e.g.
-// grainet) also depend on this same shim layout.
+// lilac) also depend on this same shim layout.
 //
 // We only expose `document` on the host globalThis. CustomEvent /
 // MutationObserver / Event are read from `document.defaultView` (the
-// happy-dom Window instance) by the Ruby Grainet layer, so we avoid
+// happy-dom Window instance) by the Ruby Lilac layer, so we avoid
 // shadowing Node's built-in Event constructor and breaking the existing
 // EventTarget tests.
 const { Window } = await import("happy-dom");

@@ -80,7 +80,7 @@ data = js.to_ruby(freeze: false)
 data << {"name" => "Carol"}   # OK
 ```
 
-frozen な値を Grainet の Signal に格納しても `update` / `mutate` は通常通り動く (`update` のブロック内で `arr + [item]` のように新 Array を返せばよい)。`mutate` で in-place 変更したい場合のみ `freeze: false` 経由で受け取る必要がある。
+frozen な値を Lilac の Signal に格納しても `update` / `mutate` は通常通り動く (`update` のブロック内で `arr + [item]` のように新 Array を返せばよい)。`mutate` で in-place 変更したい場合のみ `freeze: false` 経由で受け取る必要がある。
 
 ## なぜ `js_null?` 専用メソッドが必要か
 

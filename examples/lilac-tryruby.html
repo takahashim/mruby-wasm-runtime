@@ -317,7 +317,7 @@ doc[:title].to_s</span>
     </main>
 
     <script type="text/ruby" id="ruby-source">
-class TryRubyApp < Grainet::Component
+class TryRubyApp < Lilac::Component
   SNIPPETS = {
     "math" => "1 + 2",
     "strings" => <<~RUBY.chomp,
@@ -502,8 +502,8 @@ class TryRubyApp < Grainet::Component
   end
 end
 
-Grainet.register "try-ruby-app", TryRubyApp
-Grainet.start
+Lilac.register "try-ruby-app", TryRubyApp
+Lilac.start
     </script>
 
     <script type="module">
@@ -558,7 +558,7 @@ Grainet.start
       globalThis.__tryRubyHost = host;
 
       try {
-        host.vm = await createVM({ wasm: "../build/mruby-js-grainet-full.wasm" });
+        host.vm = await createVM({ wasm: "../build/mruby-js-lilac-full.wasm" });
         host.vm.evalScript("#ruby-source");
       } catch (err) {
         const status = document.querySelector("[data-ref='status']");

@@ -1,11 +1,11 @@
 # mruby cross-build for the JS-host variant — general purpose mruby
-# without the Grainet stack. Produces `mruby-js.wasm` (npm package
+# without the Lilac stack. Produces `mruby-js.wasm` (npm package
 # `@takahashim/mruby-wasm-js`).
 #
-# For builds that include Grainet, see:
-#   build_config/wasi-js-grainet-min.rb    — no compiler, Grainet core
-#   build_config/wasi-js-grainet-small.rb  — compiler, Grainet core
-#   build_config/wasi-js-grainet-full.rb   — compiler, Grainet core + async + router + form
+# For builds that include Lilac, see:
+#   build_config/wasi-js-lilac-min.rb    — no compiler, Lilac core
+#   build_config/wasi-js-lilac-small.rb  — compiler, Lilac core
+#   build_config/wasi-js-lilac-full.rb   — compiler, Lilac core + async + router + form
 #
 # Build mode (debug vs release) is selected via MRUBY_WASM_RELEASE:
 #

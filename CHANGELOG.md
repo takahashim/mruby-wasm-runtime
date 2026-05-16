@@ -2,16 +2,16 @@
 
 ## [Unreleased]
 
-A feature release introducing **Grainet**, a signal-based fine-grained
+A feature release introducing **Lilac**, a signal-based fine-grained
 reactive network system for browser UIs in Ruby, the **Fetchy** HTTP
-client, nine demos under `examples/grainet-*.html`, and substantial
+client, nine demos under `examples/lilac-*.html`, and substantial
 polish on the JS interop layer.
 
 ### Added
 
-#### `mrbgem/mruby-grainet` (new gem)
+#### `mrbgem/mruby-lilac` (new gem)
 Signal-based fine-grained reactive network system for browser UIs in
-Ruby. Includes the **Fetchy** HTTP client. See `docs/grainet-spec.md`
+Ruby. Includes the **Fetchy** HTTP client. See `docs/lilac-spec.md`
 and `docs/fetchy-spec.md` for the full reference.
 
 #### `mrbgem/mruby-wasm-js` improvements
@@ -31,19 +31,19 @@ and `docs/fetchy-spec.md` for the full reference.
 
 #### `mruby-metaprog` (mruby core gem)
 added to wasi-js / wasi-cmd builds to enable `define_singleton_method`
-(used by `mruby-grainet-router`'s DSL helpers).
+(used by `mruby-lilac-router`'s DSL helpers).
 
 #### Examples
-- `grainet-counter.html`: signal + bind basics
-- `grainet-form.html`: form validation with `model` and class binding
-- `grainet-todo.html`: `bind_list` + HTML helpers + custom events
-- `grainet-theme.html`: `provide` / `inject` for theme propagation
-- `grainet-search.html`: debounced search with Fetchy
-- `grainet-kanban.html`: drag-and-drop kanban with error overlay
-- `grainet-receipt.html`: per-row `model`, URL-fragment state
-- `grainet-breakout.html`: signal-driven canvas-less breakout game
-- `grainet-racer.html`: pseudo-3D racing demo (Canvas + `each_frame`)
-- `grainet-multipage.html` : 4-page SPA demo with 404 fallback
+- `lilac-counter.html`: signal + bind basics
+- `lilac-form.html`: form validation with `model` and class binding
+- `lilac-todo.html`: `bind_list` + HTML helpers + custom events
+- `lilac-theme.html`: `provide` / `inject` for theme propagation
+- `lilac-search.html`: debounced search with Fetchy
+- `lilac-kanban.html`: drag-and-drop kanban with error overlay
+- `lilac-receipt.html`: per-row `model`, URL-fragment state
+- `lilac-breakout.html`: signal-driven canvas-less breakout game
+- `lilac-racer.html`: pseudo-3D racing demo (Canvas + `each_frame`)
+- `lilac-multipage.html` : 4-page SPA demo with 404 fallback
 
 ### Fixed
 
@@ -55,7 +55,7 @@ added to wasi-js / wasi-cmd builds to enable `define_singleton_method`
 - Callback bookkeeping is now keyed by id rather than JS handle: handle
   slot recycling on JS::Object GC no longer causes silent overwrites in
   `@callback_ids` and resulting C/Ruby count divergence
-- (Grainet-internal fixes are documented in `docs/grainet-spec.md`)
+- (Lilac-internal fixes are documented in `docs/lilac-spec.md`)
 
 [0.2.0]: https://github.com/takahashim/mruby-wasm-runtime/releases/tag/v0.2.0
 

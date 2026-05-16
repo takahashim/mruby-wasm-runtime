@@ -1,6 +1,6 @@
 # Console-backed shim for `puts` / `print` / `p` / `STDOUT` / `STDERR`
 # when mruby-io is not linked into the build (typically the "min"
-# Grainet variant). No-op when mruby-io is present — `STDERR` is then
+# Lilac variant). No-op when mruby-io is present — `STDERR` is then
 # already a real `IO`, so `const_defined?(:STDERR)` returns truthy and
 # the whole block is skipped.
 #
@@ -13,7 +13,7 @@
 # calls `::JS.global[:console]`. The `z_` filename prefix forces
 # alphabetical sort to keep this file last in the gem's mrblib.
 #
-# Rationale: production Grainet apps want browser-visible output, but
+# Rationale: production Lilac apps want browser-visible output, but
 # mruby-io is ~400 KB. Routing through `globalThis.console` keeps the
 # wasm small and matches what a browser user expects (the message shows
 # up in DevTools rather than going to a missing stdio fd).
@@ -22,7 +22,7 @@ unless ::Object.const_defined?(:STDERR)
   module JS
     # Tiny IO-like surface backed by a JS console method (`:log`,
     # `:warn`, ...). Only `puts` / `print` / `write` are implemented —
-    # the subset Grainet (and most user code) actually touches.
+    # the subset Lilac (and most user code) actually touches.
     class ConsoleStream
       def initialize(method)
         @method = method

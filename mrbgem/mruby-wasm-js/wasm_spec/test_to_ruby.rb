@@ -83,7 +83,7 @@ Spec.describe "JS::Object#to_ruby" do
   end
 
   # NB: a cross-contract test ("frozen `to_ruby` result still works with
-  # `Grainet::Signal#update` via the array-rebuild path") lived here
-  # historically; it moved to grainet's wasm_spec when the framework
+  # `Lilac::Signal#update` via the array-rebuild path") lived here
+  # historically; it moved to lilac's wasm_spec when the framework
   # split out of this repo.
 end

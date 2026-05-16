@@ -75,8 +75,8 @@ MRUBY_TAG := 4.0.0
 #   js   — general mruby + mruby-wasm-js bridge          → mruby-js.wasm
 #   cmd  — CLI mruby (mruby-bin-mruby on WASI)           → mruby-cmd.wasm
 #
-# Grainet-stack variants (grainet-min / grainet-small / grainet-full)
-# live in the separate `grainet` repo, which depends on this repo for
+# Lilac-stack variants (lilac-min / lilac-small / lilac-full)
+# live in the separate `lilac` repo, which depends on this repo for
 # the `mruby-wasm-js` bridge via `conf.gem github:` or a local path.
 MRUBY_CONFIG_JS            := $(CURDIR)/build_config/wasi-js.rb
 MRUBY_CONFIG_CMD           := $(CURDIR)/build_config/wasi-cmd.rb
@@ -149,7 +149,7 @@ $(BUILD_DIR):
 # ── JS-host wasm (link libmruby.a into a reactor module) ────────────────
 # Debug build (.wasm) and release build (.release.wasm, -Os +
 # --strip-debug). `LINK_JS_WASM` factors out the CLANG link line so
-# adding a variant in a downstream repo (e.g. grainet's bundle) is
+# adding a variant in a downstream repo (e.g. lilac's bundle) is
 # one rule + one library dependency.
 define LINK_JS_WASM
 $(CLANG) --target=$(TARGET) --sysroot=$(SYSROOT) \
@@ -188,8 +188,8 @@ node_modules: package.json
 	@touch node_modules
 
 # Runs only the mruby-wasm-js bridge tests against the base wasm.
-# Grainet's wasm_spec lives in the separate `grainet` repo and runs
-# there against the grainet-full bundle.
+# Lilac's wasm_spec lives in the separate `lilac` repo and runs
+# there against the lilac-full bundle.
 test: js node_modules
 	MRUBY_WASM_PATH=$(BUILD_WASM_JS) node mrbgem/mruby-wasm-js/wasm_spec/runner.mjs
 
