@@ -82,13 +82,8 @@ Spec.describe "JS::Object#to_ruby" do
     Spec.assert_equal ["extra"], ruby[0]["tags"]
   end
 
-  Spec.assert "frozen result still works with Signal#update (gets a new dup)" do
-    js = JS.eval_javascript('([1, 2, 3])')
-    s = Grainet::Signal.new(js.to_ruby)   # frozen Array
-
-    # update receives a frozen view, but `+ [4]` returns a new array,
-    # so the update flow is unaffected.
-    s.update { |arr| arr + [4] }
-    Spec.assert_equal [1, 2, 3, 4], s.value
-  end
+  # NB: a cross-contract test ("frozen `to_ruby` result still works with
+  # `Grainet::Signal#update` via the array-rebuild path") lived here
+  # historically; it moved to grainet's wasm_spec when the framework
+  # split out of this repo.
 end

@@ -24,8 +24,11 @@ globalThis.fetch = async (url) => {
   });
 };
 
-// --- DOM shim (happy-dom) for Grainet widget specs -----------------------
-// happy-dom is a devDependency of the repo root package.json.
+// --- DOM shim (happy-dom) -------------------------------------------------
+// happy-dom is a devDependency of the repo root package.json. Kept for
+// the JS-bridge tests that touch DOM interop (event handling,
+// DocumentFragment round-trips); downstream framework repos (e.g.
+// grainet) also depend on this same shim layout.
 //
 // We only expose `document` on the host globalThis. CustomEvent /
 // MutationObserver / Event are read from `document.defaultView` (the
@@ -94,10 +97,6 @@ assert(!vm.fs.has("/data"), "fs.has returns false for directories");
 
 // --- Load spec_helper + all test_*.rb -------------------------------------
 const testDir = here;
-const grainetSpecDir = resolve(here, "../../mruby-grainet/wasm_spec");
-const grainetAsyncSpecDir = resolve(here, "../../mruby-grainet-async/wasm_spec");
-const routerSpecDir = resolve(here, "../../mruby-grainet-router/wasm_spec");
-const formSpecDir = resolve(here, "../../mruby-grainet-form/wasm_spec");
 const helper = "spec_helper.rb";
 
 console.log(`[runner] loading ${helper}`);
@@ -150,10 +149,6 @@ async function drainPendingFibers(label, f) {
 }
 
 await runDir(testDir, "mruby-wasm-js");
-await runDir(grainetSpecDir, "mruby-grainet");
-await runDir(grainetAsyncSpecDir, "mruby-grainet-async");
-await runDir(routerSpecDir, "mruby-grainet-router");
-await runDir(formSpecDir, "mruby-grainet-form");
 
 // Wait so any pending Promises (await tests, real-async setTimeout
 // inside tests) have time to settle before we print the summary.
