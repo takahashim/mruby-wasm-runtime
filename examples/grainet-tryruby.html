@@ -1,0 +1,577 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>mruby-wasm-runtime - try mruby</title>
+    <style>
+      :root {
+        --bg: #f6f1e8;
+        --panel: #fffaf1;
+        --panel-strong: #fff;
+        --border: #dfd1bb;
+        --text: #2f2418;
+        --muted: #7a6856;
+        --accent: #b94f3f;
+        --accent-strong: #8f3a2f;
+        --console: #201710;
+        --console-text: #f7ead8;
+        --console-muted: #d5b896;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        background:
+          radial-gradient(circle at top, #fff8ef 0, #f6f1e8 50%, #ece2d1 100%);
+        color: var(--text);
+        font-family: Georgia, "Times New Roman", serif;
+      }
+      main {
+        width: min(980px, calc(100% - 32px));
+        margin: 32px auto 48px;
+      }
+      .hero {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(320px, 0.78fr);
+        gap: 18px;
+        align-items: start;
+        margin-bottom: 12px;
+      }
+      h1 {
+        margin: 0;
+        font-size: clamp(1.15rem, 2.8vw, 1.9rem);
+        line-height: 1.02;
+        letter-spacing: -0.03em;
+      }
+      .lede {
+        max-width: 32rem;
+        margin: 0 0 0 auto;
+        color: var(--muted);
+        font-size: 0.92rem;
+        line-height: 1.55;
+        text-align: right;
+      }
+      .layout {
+        display: grid;
+        grid-template-columns: minmax(0, 1.1fr) minmax(280px, 0.72fr);
+        gap: 18px;
+        align-items: start;
+      }
+      .main-column,
+      .side {
+        display: grid;
+        gap: 18px;
+      }
+      .card {
+        background: rgba(255, 250, 241, 0.92);
+        border: 1px solid var(--border);
+        border-radius: 18px;
+        box-shadow: 0 10px 30px rgba(47, 36, 24, 0.08);
+      }
+      .editor {
+        padding: 18px;
+      }
+      .toolbar {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 12px;
+      }
+      .toolbar h2,
+      .side h2,
+      .console h2 {
+        margin: 0;
+        font: 700 0.95rem/1.2 ui-monospace, SFMono-Regular, Menlo, monospace;
+        letter-spacing: 0.02em;
+        text-transform: uppercase;
+        color: var(--muted);
+      }
+      .actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+      button {
+        appearance: none;
+        border: 1px solid var(--accent);
+        background: var(--accent);
+        color: #fff8f3;
+        border-radius: 999px;
+        padding: 0.62rem 0.95rem;
+        font: 600 0.95rem/1 system-ui, sans-serif;
+        cursor: pointer;
+      }
+      button:hover { background: var(--accent-strong); }
+      button.secondary {
+        border-color: var(--border);
+        background: var(--panel-strong);
+        color: var(--text);
+      }
+      button.secondary:hover { background: #f4e8d7; }
+      textarea {
+        width: 100%;
+        min-height: 216px;
+        resize: vertical;
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        padding: 14px 16px;
+        background: var(--panel-strong);
+        color: var(--text);
+        font: 500 15px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace;
+      }
+      .hint {
+        margin: 10px 0 0;
+        color: var(--muted);
+        font-size: 0.9rem;
+      }
+      .side section {
+        padding: 18px;
+      }
+      .console {
+        padding: 18px;
+        background: var(--console);
+        color: var(--console-text);
+      }
+      .console h2 {
+        color: var(--console-muted);
+      }
+      .console-body {
+        position: relative;
+        margin-top: 14px;
+      }
+      .snippet-list {
+        display: grid;
+        gap: 10px;
+        margin-top: 14px;
+      }
+      .snippet {
+        width: 100%;
+        text-align: left;
+        border-radius: 14px;
+        padding: 12px 14px;
+      }
+      .snippet strong {
+        display: block;
+        margin-bottom: 4px;
+        font: 700 0.94rem/1.2 system-ui, sans-serif;
+      }
+      .snippet span {
+        display: block;
+        color: var(--muted);
+        font: 0.84rem/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+        white-space: pre-wrap;
+      }
+      .console pre {
+        margin: 0;
+        height: 231px;
+        overflow-x: auto;
+        overflow-y: scroll;
+        white-space: pre-wrap;
+        word-break: break-word;
+        font: 500 14px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace;
+        scrollbar-color: #b97a52 #3a2a1d;
+        padding-right: 18px;
+      }
+      .console pre::-webkit-scrollbar {
+        width: 12px;
+      }
+      .console pre::-webkit-scrollbar-track {
+        background: #3a2a1d;
+        border-left: 1px solid #5b4330;
+      }
+      .console pre::-webkit-scrollbar-thumb {
+        background: #b97a52;
+        border-radius: 999px;
+        border: 2px solid #3a2a1d;
+      }
+      .console pre::-webkit-scrollbar-thumb:hover {
+        background: #d19167;
+      }
+      .console-scrollbar {
+        position: absolute;
+        top: 0;
+        right: 0;
+        width: 12px;
+        height: 231px;
+        border-radius: 999px;
+        background: #3a2a1d;
+        border-left: 1px solid #5b4330;
+        pointer-events: none;
+      }
+      .console-scrollbar-thumb {
+        position: absolute;
+        left: 2px;
+        top: 0;
+        width: 8px;
+        min-height: 28px;
+        border-radius: 999px;
+        background: #b97a52;
+      }
+      .console .meta {
+        color: var(--console-muted);
+        font: 0.88rem/1.5 system-ui, sans-serif;
+      }
+      .console .meta.error {
+        color: #ffb6aa;
+      }
+      code {
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      }
+      @media (max-width: 860px) {
+        .hero {
+          grid-template-columns: 1fr;
+          gap: 10px;
+        }
+        .lede {
+          margin-left: 0;
+          text-align: left;
+        }
+        .layout {
+          grid-template-columns: 1fr;
+        }
+        main {
+          width: min(100%, calc(100% - 20px));
+          margin-top: 20px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main data-component="try-ruby-app">
+      <section class="hero">
+        <h1>Try mruby in the browser</h1>
+        <p class="lede">
+          A small REPL-style playground for <code>mruby-wasm-runtime</code>.
+          Each run executes on the same VM, so method definitions, constants,
+          globals, and instance variables stay available across commands.
+        </p>
+      </section>
+
+      <div class="layout">
+        <div class="main-column">
+          <section class="card editor">
+            <div class="toolbar">
+              <h2>Editor</h2>
+              <div class="actions">
+                <button data-ref="run" type="button">Run</button>
+                <button data-ref="clear_editor" type="button" class="secondary">Clear editor</button>
+              </div>
+            </div>
+            <textarea data-ref="source" spellcheck="false">1 + 2</textarea>
+            <p class="hint">
+              <code>Shift+Enter</code> runs the code. The last expression is auto-printed with <code>p</code> when it is not <code>nil</code>.
+            </p>
+          </section>
+
+          <section class="card console">
+            <h2>Console</h2>
+            <div class="meta" data-ref="status">booting VM...</div>
+            <div class="console-body">
+              <pre data-ref="output"></pre>
+              <div class="console-scrollbar" aria-hidden="true">
+                <div class="console-scrollbar-thumb" data-ref="scrollbar_thumb"></div>
+              </div>
+            </div>
+            <div class="actions" style="margin-top: 14px;">
+              <button data-ref="clear_output" type="button" class="secondary">Clear output</button>
+            </div>
+          </section>
+        </div>
+
+        <div class="side">
+          <section class="card">
+            <h2>Starter Snippets</h2>
+            <div class="snippet-list">
+              <button data-ref="snippet_math" class="snippet secondary" type="button">
+                <strong>Math</strong>
+                <span>1 + 2</span>
+              </button>
+              <button data-ref="snippet_strings" class="snippet secondary" type="button">
+                <strong>Strings</strong>
+                <span>name = "mruby"
+"hello #{name}"</span>
+              </button>
+              <button data-ref="snippet_arrays" class="snippet secondary" type="button">
+                <strong>Arrays</strong>
+                <span>items = %w[wasm ruby browser]
+items.map { |item| item.upcase }</span>
+              </button>
+              <button data-ref="snippet_persistent_state" class="snippet secondary" type="button">
+                <strong>Persistent state</strong>
+                <span>@count ||= 0
+@count += 1
+@count</span>
+              </button>
+              <button data-ref="snippet_js_bridge" class="snippet secondary" type="button">
+                <strong>JS bridge</strong>
+                <span>doc = JS.global[:document]
+doc[:title] = "mruby says hi"
+doc[:title].to_s</span>
+              </button>
+            </div>
+          </section>
+        </div>
+      </div>
+    </main>
+
+    <script type="text/ruby" id="ruby-source">
+class TryRubyApp < Grainet::Component
+  SNIPPETS = {
+    "math" => "1 + 2",
+    "strings" => <<~RUBY.chomp,
+      name = "mruby"
+      "hello \#{name}"
+    RUBY
+    "arrays" => <<~RUBY.chomp,
+      items = %w[wasm ruby browser]
+      items.map { |item| item.upcase }
+    RUBY
+    "persistent_state" => <<~RUBY.chomp,
+      @count ||= 0
+      @count += 1
+      @count
+    RUBY
+    "js_bridge" => <<~RUBY.chomp,
+      doc = JS.global[:document]
+      doc[:title] = "mruby says hi"
+      doc[:title].to_s
+    RUBY
+  }.freeze
+
+  def setup
+    @host = JS.global[:__tryRubyHost]
+    @source = signal("1 + 2")
+    @status = signal("ready")
+    @status_error = signal(false)
+    @output = signal("")
+    @command_count = 0
+    @thumb_height = signal("231px")
+    @thumb_transform = signal("translateY(0px)")
+    @on_output = JS.callback { |text| append_output(text.to_s) }
+
+    bind_input refs.source, @source
+    bind refs.status, text: @status
+    bind refs.status, class: { "error" => @status_error }
+    bind refs.output, text: @output
+    bind refs.scrollbar_thumb, style: {
+      "height" => @thumb_height,
+      "transform" => @thumb_transform,
+    }
+
+    @host.call(:setHooks, JS.object(onOutput: @on_output))
+    cleanup do
+      @host.call(:setHooks, nil)
+      JS.release_callback(@on_output)
+    end
+
+    refs.run.on(:click) { run_current_source }
+    refs.clear_editor.on(:click) do
+      @source.value = ""
+      focus_source_to_end
+    end
+    refs.clear_output.on(:click) do
+      @output.value = ""
+      after_paint { sync_console_scrollbar }
+    end
+    refs.source.on(:keydown) do |event|
+      next unless event[:key].to_s == "Enter" && event[:shiftKey].js_bool
+      event.call(:preventDefault)
+      run_current_source
+    end
+    wrap(JS.global).on(:resize) { sync_console_scrollbar }
+    refs.output.on(:scroll) { sync_console_scrollbar }
+
+    SNIPPETS.each_key do |key|
+      refs.__send__("snippet_#{key}").on(:click) do
+        @source.value = SNIPPETS[key]
+        focus_source_to_end
+      end
+    end
+
+    append_output("# mruby VM ready")
+    after_paint { sync_console_scrollbar }
+  end
+
+  private
+
+  def run_current_source
+    source = @source.value.to_s.rstrip
+    if source.strip.empty?
+      append_output("# editor is empty")
+      return
+    end
+
+    @status_error.value = false
+    @status.value = "running..."
+    @command_count += 1
+
+    append_output("\n> #{@command_count}:")
+    append_output(source)
+
+    error = @host.call(:execute, build_runner_source(source))
+    apply_run_status(error)
+    focus_source_to_end
+  rescue => e
+    append_output("JavaScript host error: #{e.message}")
+    @status.value = "run failed: #{e.message}"
+    @status_error.value = true
+  end
+
+  def append_output(text)
+    line = text.end_with?("\n") ? text : "#{text}\n"
+    @output.value = "#{@output.value}#{line}"
+    after_paint do
+      refs.output.to_js[:scrollTop] = refs.output.to_js[:scrollHeight]
+      sync_console_scrollbar
+    end
+  end
+
+  def focus_source_to_end
+    after_paint do
+      node = refs.source.to_js
+      value = @source.value.to_s
+      node.call(:focus)
+      node.call(:setSelectionRange, value.length, value.length)
+    end
+  end
+
+  def apply_run_status(error)
+    if error.js_null?
+      suffix = @command_count == 1 ? "" : "s"
+      @status.value = "ready - #{@command_count} command#{suffix} executed"
+      return
+    end
+
+    @status.value = "run failed: #{error.to_s}"
+    @status_error.value = true
+  end
+
+  def build_runner_source(source)
+    <<~RUBY
+      begin
+        __repl_value__ = begin
+      #{indent_source(source, 4)}
+        end
+        p(__repl_value__) unless __repl_value__.nil?
+      rescue => e
+        puts("\#{e.class}: \#{e.message}")
+        e.backtrace.each { |line| puts("  \#{line}") } if e.backtrace
+      end
+    RUBY
+  end
+
+  def indent_source(source, spaces)
+    pad = " " * spaces
+    source.to_s.split("\n", -1).map { |line| "#{pad}#{line}" }.join("\n")
+  end
+
+  def after_paint(&block)
+    callback = nil
+    callback = JS.callback do |_ts|
+      begin
+        block.call
+      ensure
+        JS.release_callback(callback)
+      end
+    end
+    JS.global.call(:requestAnimationFrame, callback)
+  end
+
+  def sync_console_scrollbar
+    output = refs.output.to_js
+    viewport = output[:clientHeight].to_f
+    total = output[:scrollHeight].to_f
+    track = viewport
+
+    if total <= 0 || track <= 0
+      @thumb_height.value = "231px"
+      @thumb_transform.value = "translateY(0px)"
+      return
+    end
+
+    thumb_height = [(viewport / total) * track, 28.0].max
+    thumb_height = [thumb_height, track].min
+    max_top = [track - thumb_height, 0.0].max
+    max_scroll = [total - viewport, 1.0].max
+    thumb_top = max_top * (output[:scrollTop].to_f / max_scroll)
+
+    @thumb_height.value = "#{thumb_height.round(2)}px"
+    @thumb_transform.value = "translateY(#{thumb_top.round(2)}px)"
+  end
+end
+
+Grainet.register "try-ruby-app", TryRubyApp
+Grainet.start
+    </script>
+
+    <script type="module">
+      import { createVM } from "../mrbgem/mruby-wasm-js/js/index.js";
+
+      const host = {
+        vm: null,
+        hooks: null,
+
+        setHooks(hooks) {
+          this.hooks = hooks;
+        },
+
+        emitOutput(text) {
+          this.hooks?.onOutput?.(String(text));
+        },
+
+        execute(compiledSource) {
+          if (!this.vm) {
+            throw new Error("mruby VM is not ready");
+          }
+
+          const originalLog = console.log;
+          const originalError = console.error;
+
+          console.log = (...args) => {
+            if (args[0] === "[mruby]") {
+              this.emitOutput(args.slice(1).join(" "));
+              return;
+            }
+            originalLog(...args);
+          };
+
+          console.error = (...args) => {
+            this.emitOutput(args.map(String).join(" "));
+            originalError(...args);
+          };
+
+          try {
+            this.vm.eval(compiledSource);
+            return null;
+          } catch (err) {
+            this.emitOutput(`JavaScript host error: ${err.message}`);
+            return err.message;
+          } finally {
+            console.log = originalLog;
+            console.error = originalError;
+          }
+        },
+      };
+
+      globalThis.__tryRubyHost = host;
+
+      try {
+        host.vm = await createVM({ wasm: "../build/mruby-js-grainet-full.wasm" });
+        host.vm.evalScript("#ruby-source");
+      } catch (err) {
+        const status = document.querySelector("[data-ref='status']");
+        const output = document.querySelector("[data-ref='output']");
+        if (status) {
+          status.textContent = `boot failed: ${err.message}`;
+          status.classList.add("error");
+        }
+        if (output) {
+          output.textContent = `boot failed: ${err.message}\n`;
+        }
+        console.error(err);
+      }
+    </script>
+  </body>
+</html>
