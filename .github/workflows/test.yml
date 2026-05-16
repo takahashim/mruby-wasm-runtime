@@ -34,11 +34,18 @@ jobs:
           path: ~/.cache/mruby-wasm-runtime
           key: wasi-sdk-33.0-x86_64-linux
 
-      - name: Cache mruby clone
+      # Cache the mruby SOURCE clone (heavy git fetch) but NOT the build
+       # artifacts. Caching `mruby/build/` causes stale libmruby.a +
+       # stale .o files to survive across runs, so changes to
+       # mrbgem/*/src/*.c don't get rebuilt (rake sees its outputs as
+       # newer than the modified source).
+      - name: Cache mruby clone (source only)
         uses: actions/cache@v4
         with:
-          path: mruby
-          key: mruby-4.0.0
+          path: |
+            mruby
+            !mruby/build
+          key: mruby-4.0.0-src
 
       - name: Build JS-host wasm
         run: make js
