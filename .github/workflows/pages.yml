@@ -1,0 +1,72 @@
+name: Deploy GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.4'
+          bundler-cache: false
+
+      - name: Cache wasi-sdk tarball
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/mruby-wasm-runtime
+          key: wasi-sdk-33.0-x86_64-linux
+
+      - name: Cache mruby clone
+        uses: actions/cache@v4
+        with:
+          path: mruby
+          key: mruby-4.0.0
+
+      - name: Build JS-host wasm
+        run: make js
+
+      - name: Assemble site
+        run: |
+          mkdir -p site/build site/mrbgem/mruby-wasm-js
+          cp -r examples site/
+          cp build/mruby-js.wasm site/build/
+          cp -r mrbgem/mruby-wasm-js/js site/mrbgem/mruby-wasm-js/
+          # site root redirects to examples/index.html
+          printf '<meta http-equiv="refresh" content="0;url=examples/">' > site/index.html
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v4
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
