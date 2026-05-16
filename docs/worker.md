@@ -35,9 +35,10 @@ Worker, and send results out via `postMessage`.
 
 ## Minimal pattern
 
-**Worker side** (`worker-host.js`):
+### Worker side
 
 ```js
+// worker-host.js
 import { createVM, RubyError } from "@takahashim/mruby-wasm-js";
 
 let vm;
@@ -55,7 +56,7 @@ self.addEventListener("message", async (e) => {
 });
 ```
 
-**Main thread**:
+### Main thread
 
 ```js
 const worker = new Worker(new URL("./worker-host.js", import.meta.url),
