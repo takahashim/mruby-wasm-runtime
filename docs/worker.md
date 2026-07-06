@@ -51,8 +51,13 @@ self.addEventListener("message", async (e) => {
   } else if (e.data.type === "run") {
     try { vm.eval(e.data.source, { filename: "worker.rb" }); }
     catch (err) {
-      self.postMessage({ type: "error", message: err.message,
-        rubyClass: err instanceof RubyError ? err.rubyClass : null });
+      self.postMessage({
+        type: "error",
+        name: err.name,
+        rubyClass: err instanceof RubyError ? err.rubyClass : null,
+        message: err.message,
+        backtrace: err.backtrace,
+      });
     }
   }
 });
@@ -90,10 +95,15 @@ JS numbers come back as `JS::Object` wrappers, not Ruby `Integer`. To
 do Ruby arithmetic on `JS.global[:Date].now`, convert first:
 
 ```ruby
-t0 = JS.global[:Date].now.to_i   # → Integer
+t0 = JS.global[:Date].now.to_f   # → Float
 # ... work ...
-elapsed = JS.global[:Date].now.to_i - t0
+elapsed = JS.global[:Date].now.to_f - t0
 ```
+
+Use `.to_f`, not `.to_i`: `.to_i` routes through `js_to_int`, which does
+`v | 0` — a signed 32-bit truncation. A millisecond timestamp exceeds
+2³¹, so `.to_i` wraps it (often to a negative value) and corrupts any
+elapsed-time arithmetic across a 2³² boundary.
 
 `JSObject - JSObject` doesn't dispatch the way you might expect (mruby's
 `-` operator on a JS-wrapped Number routes through `method_missing` →

@@ -45,7 +45,7 @@ vm.eval(source, { filename, lineOffset, throw: shouldThrow });
 |---|---|---|
 | `filename` | (なし) | backtrace のファイル名表示。`"app.rb"` を指定すると `"app.rb:3"` 形式になる |
 | `lineOffset` | 1 | ソース 1 行目が file の何行目に対応するか。HTML 内の `<script>` ブロックを 17 行目から抽出した場合 `lineOffset: 17` |
-| `throw` | true | false にすると例外を投げず `rc=1` を返す。エラー情報は捨てられる |
+| `throw` | true | false にすると例外を投げず `rc=1` を返す。エラー情報は捨てられる。**注意:** コンパイラ無し (mruby-compiler なし) のビルドでは、`throw: false` でも `vm.eval(source)` は `NotImplementedError` を投げる。このフラグに関係なくソース eval 自体が利用できないため |
 
 `{ throw: false }` 例:
 
@@ -58,7 +58,7 @@ if (rc !== 0) console.log("eval failed but no exception thrown");
 
 ## よく出るエラー早見表
 
-`host_eval_error_test.mjs` の 61 ケースから抜粋。`rubyClass` を見れば原因の見当がつきます。
+`host_eval_error_test.mjs` のケースから抜粋。`rubyClass` を見れば原因の見当がつきます。
 
 | Ruby | rubyClass | 補足 |
 |---|---|---|
@@ -75,13 +75,13 @@ if (rc !== 0) console.log("eval failed but no exception thrown");
 | `Integer("x")` | `ArgumentError` | パース失敗 |
 | `raise MyError, "msg"` | `"MyError"` | ユーザ定義クラスもそのまま反映 |
 
-## `(unknown):0` が出るとき
+## `filename` を渡さないとバックトレースが空になる
 
-`filename` を渡さずに eval した場合、バックトレースに `(unknown):0`として現れます。
-ソース行が特定できないので、production / ライブラリコードでは必ず `filename` を渡してください。
+`filename` を渡さずに eval した場合、コンパイル結果にデバッグ情報が含まれないため、`err.backtrace` は **空 (`[]`)** で返ってきます。調べられるフレームがありません。
+production / ライブラリコードでは必ず `filename` を渡し、`file:line` 形式の使えるバックトレースが得られるようにしてください。
 
 ```js
-// Bad: backtrace に (unknown):0 と出る
+// Bad: backtrace が空 ([]) になる
 vm.eval(source);
 
 // Good: backtrace に "components/foo.rb:3" のように出る
@@ -97,7 +97,7 @@ elapsed = JS.global[:Date].now - t0   # ← JS::Error: undefined ...
 ```
 
 `JS::Object` 同士の `-` は method_missing 経由で `js_call("-")` を呼ぼうとし、JS Number に `"-"` プロパティが無いので失敗します。
-`.to_i` で Ruby Integer に変換してから演算してください。詳細は[`worker.ja.md` の "数値演算の罠"](worker.ja.md#数値演算の罠)。
+演算する前に Ruby の数値へ変換してください。ただし **`.to_i` ではなく `.to_f`** を使うこと。`.to_i` は符号付き 32bit 整数へ切り詰める (`js_to_int` が `v | 0` する) ため、`Date.now()` (> 2³¹) のようなミリ秒タイムスタンプはゴミ値に化けます。詳細は[`worker.ja.md` の "数値演算の罠"](worker.ja.md#数値演算の罠)。
 
 ## ハンドルリークの検出
 
@@ -139,8 +139,8 @@ end
 
 ### `can't cross C function boundary`
 
-`Array#sort` や `each` のように C 実装メソッドのブロックから `.await`すると出ます。
-mruby の Fiber は C フレームを跨げないので、`.await` を呼びたいコードはブロックの外に出してください。
+これは上記と **同じ `NotImplementedError` ("could not suspend")** で、`Array#sort` や `each` のように C 実装メソッドのブロックから `.await` したときに投げられます。
+mruby の Fiber は C フレームを跨げず、その際に元となる `FiberError` ("can't cross C function boundary") がメッセージに追記されます。`.await` を呼びたいコードはブロックの外に出してください。
 
 ```ruby
 # Bad

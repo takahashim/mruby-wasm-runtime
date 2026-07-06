@@ -40,7 +40,7 @@ The gem's C side declares WASM imports under the module name `js`
 these undefined symbols:
 
 ```
--Wl,--allow-undefined -Wl,--export=js_invoke_proc -Wl,--export=js_eval_handle
+-Wl,--allow-undefined -Wl,--export=js_invoke_proc -Wl,--export=js_eval_handle -Wl,--export=js_load_irep_handle
 ```
 
 ### 2. Spawn a VM from the JS host
@@ -83,7 +83,7 @@ The VM handle exposes:
 
 | Property | Purpose |
 |---|---|
-| `vm.eval(src)` | parse + run Ruby; returns 0 / 1 |
+| `vm.eval(src)` | parse + run Ruby; returns 0 on success and throws `RubyError` on error by default (pass `{ throw: false }` for the legacy rc=1 return) |
 | `vm.fs` | Map-like facade over the tree VFS |
 | `vm.env` | mutable env hash |
 | `vm.args` | mutable argv array |
@@ -100,6 +100,7 @@ Module-level exports:
 | `Directory` / `File` | tree-VFS node classes |
 | `createFsFacade(root)` | wrap a `Directory` tree as a Map-style fs facade |
 | `debug` | global debug toggle (`{ trace: false }`) |
+| `RubyError` | error class thrown by `eval` / `loadBytecode` / `evalScript` on an mruby exception |
 
 #### `createVM` options
 

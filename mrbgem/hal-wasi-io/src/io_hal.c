@@ -5,11 +5,18 @@
  * wasm32-wasip1 target. Identical surface to hal-posix-io but:
  *
  *   - Drops references to POSIX functions wasi-libc doesn't ship
- *     (dup, pipe, fork, execl, waitpid, flock, umask, getpwnam).
- *     Those operations return -1 with errno=ENOSYS at the HAL level
- *     so Ruby code that touches IO.popen / IO.pipe / Process.spawn /
- *     File.flock / etc. surfaces NotImplementedError-shaped messages
- *     rather than crashing the wasm linker with unresolved symbols.
+ *     (dup, pipe, fork, execl, waitpid, flock). Those operations
+ *     return -1 with errno=ENOSYS at the HAL level so Ruby code that
+ *     touches IO.popen / IO.pipe / Process.spawn / File.flock / etc.
+ *     surfaces NotImplementedError-shaped messages rather than
+ *     crashing the wasm linker with unresolved symbols.
+ *
+ *   - umask is a silent no-op: mrb_hal_io_umask always returns 0
+ *     (no ENOSYS) since WASI has no umask concept.
+ *
+ *   - getpwnam is replaced by mrb_hal_io_gethome: the unnamed (`~`)
+ *     case returns the HOME env var; only a *named*-user lookup
+ *     returns ENOSYS (no passwd database under WASI).
  *
  *   - select() and friends are stubbed (WASI's poll_oneoff is a
  *     different ABI; mapping it here would be substantial. Add when
@@ -19,9 +26,19 @@
  *     (wasi-libc accepts these but the bits are mostly no-ops).
  *
  * The available subset (open/close/read/write/lseek/stat/fstat/lstat/
- * chmod/unlink/rename/symlink/readlink/realpath/getcwd/getenv/
+ * unlink/rename/symlink/readlink/realpath/getcwd/getenv/
  * ftruncate/isatty) uses wasi-libc directly — exactly the same code
  * path as hal-posix-io.
+ *
+ *   - chmod is NOT in that subset: wasi-libc has no chmod, so
+ *     mrb_hal_io_chmod is a no-op stub that returns success (0) and
+ *     changes nothing.
+ *
+ *   - symlink/readlink DO call wasi-libc, but the bundled preview1
+ *     shim (mrbgem/mruby-wasm-js/js/wasi-preview1.js) stubs
+ *     path_symlink/path_readlink to EINVAL, so File.symlink and
+ *     File.readlink always fail under the bundled runtime. They would
+ *     work only against a real WASI implementation that supports them.
  */
 
 #include <mruby.h>

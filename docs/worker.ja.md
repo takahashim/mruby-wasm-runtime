@@ -42,8 +42,13 @@ self.addEventListener("message", async (e) => {
   } else if (e.data.type === "run") {
     try { vm.eval(e.data.source, { filename: "worker.rb" }); }
     catch (err) {
-      self.postMessage({ type: "error", message: err.message,
-        rubyClass: err instanceof RubyError ? err.rubyClass : null });
+      self.postMessage({
+        type: "error",
+        name: err.name,
+        rubyClass: err instanceof RubyError ? err.rubyClass : null,
+        message: err.message,
+        backtrace: err.backtrace,
+      });
     }
   }
 });
@@ -80,10 +85,13 @@ JS の数値は Ruby の `Integer` ではなく `JS::Object` ラッパとして�
 `JS.global[:Date].now` で Ruby の算術をするなら、先に変換してください。
 
 ```ruby
-t0 = JS.global[:Date].now.to_i   # → Integer
+t0 = JS.global[:Date].now.to_f   # → Float
 # ... 処理 ...
-elapsed = JS.global[:Date].now.to_i - t0
+elapsed = JS.global[:Date].now.to_f - t0
 ```
+
+`.to_i` ではなく `.to_f` を使ってください。`.to_i` は `js_to_int` を経由し、内部で `v | 0`(符号付き 32 ビットへの切り詰め)を行います。
+ミリ秒タイムスタンプは 2³¹ を超えるため、`.to_i` では値がラップして(多くの場合は負値になり)、2³² の境界をまたいだ経過時間の計算が壊れます。
 
 `JSObject - JSObject` 等は期待通りに動きません (mruby の `-` 演算子は JS でラップされた Number に対しては `method_missing` → `js_call` に転送され、JS の Number は `"-"` というプロパティを持たないので失敗します)。
 

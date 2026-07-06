@@ -90,7 +90,9 @@ WASI preview1 + mruby の構成上、以下は動きません。必要なら[rub
 | ネットワークソケット (`TCPSocket` 等) | preview1 にソケット import が無い (preview2 で対応予定) |
 | スレッド / `Thread.new` | wasm32 シングルスレッド、`wasm32-wasi-threads` 未採用 |
 | `Process.spawn` / `fork` | WASI にプロセスモデルなし |
-| `chmod` / `chown` / file lock | `hal-wasi-io` が ENOSYS を返す |
+| `File.chmod` / `chown` | 何もしない no-op: `hal-wasi-io` は成功 (0) を返すが実際には変化しない — WASI preview1 にパーミッションビットが無い |
+| file lock (`File.flock`) | `hal-wasi-io` が ENOSYS を返す |
+| シンボリックリンク / ハードリンク (`File.symlink` / `readlink` / `link`) | バンドル版 preview1 shim が `path_symlink`/`readlink`/`link` を `EINVAL` にスタブ、preview1 の範囲内だがバンドル VFS では未実装 |
 | `Dir.pwd` / `Dir.chdir` | WASI に cwd 概念なし |
 | memory-mapped file / 非同期 I/O | preview1 範囲外 |
 | ファイル監視 (`inotify` 等) | 同上 |

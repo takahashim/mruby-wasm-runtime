@@ -44,7 +44,7 @@ vm.eval(source, { filename, lineOffset, throw: shouldThrow });
 |---|---|---|
 | `filename` | (none) | Filename used in backtrace frames. Passing `"app.rb"` produces `"app.rb:3"`-style entries |
 | `lineOffset` | 1 | What file line number source line 1 should report as. If the Ruby was extracted from a `<script>` block starting at line 17 of an HTML file, pass `lineOffset: 17` |
-| `throw` | true | When `false`, don't throw — return `rc=1` instead. Error info is discarded |
+| `throw` | true | When `false`, don't throw — return `rc=1` instead. Error info is discarded. **Caveat:** in a compiler-less build (no mruby-compiler), `vm.eval(source)` still throws `NotImplementedError` even with `throw: false`, since source eval is unavailable regardless of this flag |
 
 `{ throw: false }` example:
 
@@ -58,7 +58,7 @@ take the same options.
 
 ## Common error categories
 
-Excerpted from the 61 cases in `host_eval_error_test.mjs`. The
+Excerpted from the cases in `host_eval_error_test.mjs`. The
 `rubyClass` tells you what happened at a glance.
 
 | Ruby | rubyClass | Notes |
@@ -76,14 +76,15 @@ Excerpted from the 61 cases in `host_eval_error_test.mjs`. The
 | `Integer("x")` | `ArgumentError` | Parse failure |
 | `raise MyError, "msg"` | `"MyError"` | User-defined classes flow through verbatim |
 
-## Why `(unknown):0` shows up
+## Missing backtrace without `filename`
 
-When you call `vm.eval` without `{filename}`, backtrace frames look
-like `(unknown):0`. The source location can't be reconstructed —
-always pass `filename` from production / library code.
+When you call `vm.eval` without `{filename}`, the compiled code carries
+no debug info, so `err.backtrace` comes back **empty** (`[]`) — there are
+no frames to inspect. Always pass `filename` from production / library
+code so backtraces have usable `file:line` entries.
 
 ```js
-// Bad: backtrace shows (unknown):0
+// Bad: backtrace is empty ([])
 vm.eval(source);
 
 // Good: backtrace shows "components/foo.rb:3"
@@ -99,8 +100,10 @@ elapsed = JS.global[:Date].now - t0   # ← JS::Error: undefined ...
 ```
 
 `JS::Object - JS::Object` routes through `method_missing` → `js_call("-")`,
-and JS Numbers don't expose `"-"` as a property. Convert to Ruby
-`Integer` with `.to_i` before arithmetic. See [`worker.md`'s
+and JS Numbers don't expose `"-"` as a property. Convert to a Ruby
+number before arithmetic — use **`.to_f`**, not `.to_i`: `.to_i` truncates
+to a signed 32-bit integer (`js_to_int` does `v | 0`), so a millisecond
+timestamp like `Date.now()` (> 2³¹) wraps to a garbage value. See [`worker.md`'s
 "Numeric arithmetic gotcha"](worker.md#numeric-arithmetic-gotcha) for
 more detail.
 
@@ -149,9 +152,11 @@ end
 
 ### `can't cross C function boundary`
 
-You get this when `.await` runs inside a block invoked by a C-level
-method (`Array#sort`, `each`, etc.) — mruby's Fiber can't yield
-across a C frame. Move `.await` out of those blocks.
+This is the **same `NotImplementedError` ("could not suspend")** as above,
+raised when `.await` runs inside a block invoked by a C-level method
+(`Array#sort`, `each`, etc.) — mruby's Fiber can't yield across a C frame,
+and the underlying `FiberError` ("can't cross C function boundary") is
+appended to the message. Move `.await` out of those blocks.
 
 ```ruby
 # Bad

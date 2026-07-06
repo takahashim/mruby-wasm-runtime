@@ -45,7 +45,7 @@ callback invoking a Ruby Proc (`js_invoke_proc`) comes back up.
 
 | File | Responsibility |
 |---|---|
-| `init.c` | Gem initialisation, ARGV/env import, the global boot constructor; holds `g_mrb` |
+| `init.c` | Gem initialisation, ARGV import, the global boot constructor; assigns `g_mrb` during boot (defined/owned in `callback.c`) |
 | `object.c` | `JS::Object` T_DATA + GC callback, `JS::Error` class, helper that turns a JS exception into a Ruby exception |
 | `callback.c` | Callback table (Ruby Hash), WASM exports (`js_eval_handle`, `js_load_irep_handle`, `js_invoke_proc`, `js_take_last_error`), structured-error builder for `RubyError` |
 | `bridge.c` | Low-level primitives (`JS._eval` / `_global` / `_get` / `_set` / `_call` / `_new` / `_to_string`) that forward to the WASM imports |
@@ -60,7 +60,7 @@ functions the JS adapter must satisfy.
 | `index.js` | `RubyError` class, `createVM` factory, handle table, all `js.*` import implementations, `vm.eval` / `loadBytecode` / `evalScript` |
 | `wasi-preview1.js` | Bundled WASI preview1 impl (in-memory VFS, stdin/stdout, env, args); `Directory` / `File` classes |
 | `_memory.js` | wasm memory helpers (`readUtf8` / `writeUtf8` / `readHandleArray`) |
-| `debug.js` | `debug.trace = true` switch that logs every import call |
+| `debug.js` | `debug.trace = true` switch that logs a narrow, fixed subset (handle release, callback dispatch, WASI fd_read, WASI path_open) — not every import call |
 
 `createVM(options)` does roughly:
 
@@ -98,7 +98,8 @@ For details, see the handle-leak section in [`errors.md`](errors.md).
 4. **VM handle returned**: caller can now invoke `vm.eval(...)`
 5. **`vm.eval(source)`**: source is wrapped in
    `JS.__run_in_fiber__ do ... end` → C-side `js_eval_handle` runs
-   `mrb_load_string_cxt`
+   `mrb_load_string` by default; it builds a context and calls
+   `mrb_load_string_cxt` only when `filename`/`lineOffset` is given
 6. **After eval**: if `mrb->exc` is set, `build_error_handle`
    packages class/message/backtrace into a JS object — surfaced to
    JS as `RubyError`

@@ -45,7 +45,7 @@ Ruby が JS を呼ぶときは下向き、JS callback が Ruby Proc を起動す
 
 | ファイル | 責務 |
 |---|---|
-| `init.c` | gem 初期化、ARGV/環境変数の取り込み、global boot コンストラクタ。`g_mrb` を保持する |
+| `init.c` | gem 初期化、ARGV の取り込み、global boot コンストラクタ。boot 時に `g_mrb` を代入する (定義・所有は `callback.c`) |
 | `object.c` | `JS::Object` の T_DATA 定義 + GC コールバック、`JS::Error` クラス、JS 例外を Ruby 例外に変換するヘルパ |
 | `callback.c` | callback テーブル (Ruby Hash)、WASM exports (`js_eval_handle`, `js_load_irep_handle`, `js_invoke_proc`, `js_take_last_error`)、`RubyError` 用の構造化エラー構築 |
 | `bridge.c` | 低レベル primitive (`JS._eval` / `_global` / `_get` / `_set` / `_call` / `_new` / `_to_string`) を WASM imports に転送 |
@@ -60,7 +60,7 @@ Ruby が JS を呼ぶときは下向き、JS callback が Ruby Proc を起動す
 | `index.js` | `RubyError` クラス、`createVM` ファクトリ、ハンドルテーブル、`js.*` imports の実装、`vm.eval` / `loadBytecode` / `evalScript` |
 | `wasi-preview1.js` | バンドル版 WASI preview1 実装 (in-memory VFS、stdin/stdout、env、args)、`Directory` / `File` クラス |
 | `_memory.js` | wasm memory ヘルパ (`readUtf8` / `writeUtf8` / `readHandleArray`) |
-| `debug.js` | `debug.trace = true` で全 imports のログを出すスイッチ |
+| `debug.js` | `debug.trace = true` で限定された固定の一部 (handle release、callback dispatch、WASI fd_read、WASI path_open) のログを出すスイッチ。全 imports ではない |
 
 `createVM(options)` を呼ぶと以下のようになります。
 
@@ -92,7 +92,7 @@ Ruby から JS のオブジェクトを掴むときも、JS が Ruby Proc を保
 2. **`_initialize` 実行**: reactor module の global コンストラクタが走る
 3. **`init.c` の boot ctor**: `mrb_open()` で mrb_state 作成、`g_mrb` に保持、JS / JS::Object / JS::Error クラスを define
 4. **VM ハンドルを return**: caller が `vm.eval(...)` を呼べる状態に
-5. **`vm.eval(source)`**: source を `JS.__run_in_fiber__ do ... end` で wrap → C 側 `js_eval_handle` 経由 `mrb_load_string_cxt` で実行
+5. **`vm.eval(source)`**: source を `JS.__run_in_fiber__ do ... end` で wrap → C 側 `js_eval_handle` はデフォルトでは `mrb_load_string` で実行。`filename`/`lineOffset` が渡されたときのみ context を構築して `mrb_load_string_cxt` を使う
 6. **`vm.eval` 後**: `mrb->exc` がセットされていれば `build_error_handle` で構造化情報を JS object として準備 → JS 側で `RubyError` として throw
 7. **コールバック起動** (任意): JS の Promise や addEventListener が fire すると `js_invoke_proc(id, args_handle)` で C 側に戻り、Ruby Proc を呼ぶ
 

@@ -53,15 +53,16 @@ js.to_ruby
 | JS 値 | Ruby 値 |
 |---|---|
 | string | String |
-| number (整数値) | Integer |
+| number (整数値) | Integer (符号付き 32bit 範囲のみ。`to_ruby` は `js_to_int` (`v \| 0`, 32bit 切り捨て) で `i = to_i` を求めるため、±2³¹ を超える整数値 (例: `3_000_000_000`) は `f == i.to_f` 判定に失敗し、Integer ではなく Float になる) |
 | number (非整数) | Float |
 | boolean | true / false |
 | null / undefined | nil |
 | Array | Array of converted elements (再帰) |
 | Object (plain) | Hash with **String keys** (再帰) |
-| その他 (Date / Map / Function 等) | `to_s` フォールバック |
+| Function / Symbol | `to_s` フォールバック |
+| その他 (Date / Map / plain object 等) | `Object.keys` 経由で Hash 化 (own enumerable キーを持たなければ空の `{}`) |
 
-`fetch().json()` の戻り値のような pure JSON を想定。Date / Map / DOM Node のように JSON ではない型は raise せずに `to_s` で文字列化してフォールバックする。
+`fetch().json()` の戻り値のような pure JSON を想定。`to_ruby` は `typeof` で分岐するため、`typeof === "function"` / `"symbol"` の値のみ `to_s` フォールバックに落ちる。Date / Map / DOM Node などは `typeof === "object"` (Array 以外) なので plain object と同じ分岐に入り、`Object.keys(...)` を読んで Hash 化される (own enumerable キーを公開しなければ空の `{}` になる)。いずれの型も raise せずに変換される。
 
 ### snapshot semantics と freeze
 

@@ -43,7 +43,8 @@ export interface VMStdin {
 }
 
 /**
- * Thrown by {@link VMCore.eval} / {@link VMCore.loadBytecode} when
+ * Thrown by {@link VMCore.eval} / {@link VMCore.loadBytecode} /
+ * {@link VMCore.evalScript} when
  * mruby raises an unhandled exception. `rubyClass` mirrors
  * `exception.class.name`; `backtrace` mirrors `exception.backtrace`.
  */
@@ -87,6 +88,9 @@ export interface VMCore {
    * Throws `NotImplementedError` in compiler-less builds (use
    * {@link loadBytecode} instead). With `options.throw === false`,
    * returns 1 on error instead of throwing.
+   * In the rare case there is no structured error info (e.g. a parse
+   * failure before mruby raised), a plain `Error` is thrown instead of
+   * `RubyError`.
    */
   eval(source: string, options?: EvalOptions): number;
 
@@ -95,13 +99,18 @@ export interface VMCore {
    * {@link RubyError} on runtime error. Returns 0 on success. Accepts
    * `Uint8Array` or `ArrayBuffer`. Available in every build variant.
    * With `options.throw === false`, returns 1 on error instead of throwing.
+   * In the rare case there is no structured error info (e.g. a parse
+   * failure before mruby raised), a plain `Error` is thrown instead of
+   * `RubyError`.
    */
   loadBytecode(bytes: Uint8Array | ArrayBuffer, options?: LoadBytecodeOptions): number;
 
   /**
    * Eval the textContent of a DOM element matched by `selector`. Pairs
    * with `<script type="text/ruby">` blocks. Browser-only — throws if
-   * `document` is undefined.
+   * `document` is undefined. Delegates to evalRuby, so it also throws
+   * {@link RubyError} on eval errors and `NotImplementedError` in
+   * compiler-less builds (same as {@link eval}).
    */
   evalScript(selector: string, options?: EvalOptions): number;
 

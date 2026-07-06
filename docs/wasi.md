@@ -99,7 +99,9 @@ or a host-side JS implementation if you need them:
 | Network sockets (`TCPSocket`, etc.) | preview1 has no socket imports (preview2 will) |
 | Threads / `Thread.new` | wasm32 is single-threaded; `wasm32-wasi-threads` not adopted |
 | `Process.spawn` / `fork` | WASI has no process model |
-| `chmod` / `chown` / file locking | `hal-wasi-io` returns ENOSYS |
+| `File.chmod` / `chown` | Silent no-op: `hal-wasi-io` returns success (0) but changes nothing — WASI preview1 has no permission bits |
+| file locking (`File.flock`) | `hal-wasi-io` returns ENOSYS |
+| Symlinks / hard links (`File.symlink` / `readlink` / `link`) | Bundled preview1 shim stubs `path_symlink`/`readlink`/`link` to `EINVAL`; within preview1's scope but not implemented in the bundled VFS |
 | `Dir.pwd` / `Dir.chdir` | No cwd concept in WASI |
 | mmap / async I/O | Out of preview1 scope |
 | File watching (`inotify`, etc.) | Same |

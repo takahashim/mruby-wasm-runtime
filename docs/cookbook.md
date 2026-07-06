@@ -26,8 +26,10 @@ heading[:style][:color] = "crimson"
 
 Instead of `addEventListener`, call `.on(:event)` with a block — the
 block is registered as the listener. The return value is a
-`JS::Subscription`. **Keep a reference to it**, otherwise the
-callback gets GC'd (= the button stops reacting).
+`JS::Subscription`. The underlying Proc is GC-pinned in the C-side
+`g_callback_table`, so the callback keeps firing even if you drop the
+Subscription — keeping the reference matters for *unsubscribing* /
+releasing the callback later (via `@sub.off`), not for keeping it alive.
 
 ```ruby
 button = JS.global[:document].getElementById("go")
@@ -93,11 +95,15 @@ end
 
 ## 5. setTimeout / setInterval
 
-You can call them directly as JS functions. Like the click example,
-the callback Proc must be retained somewhere or it gets released.
+You can call them directly as JS functions. Wrap the callable with
+`JS.callback` — a raw `proc` raises `ArgumentError, "cannot wrap Proc
+as JS value"`. The `JS.callback` wrapper's Proc is GC-pinned for the
+VM's lifetime (it won't be collected just because you drop the Ruby
+reference); free it explicitly with `JS.release_callback` when the
+timer is done.
 
 ```ruby
-@timer = JS.global.setTimeout(proc { puts "fired" }, 500)
+@timer = JS.global.setTimeout(JS.callback { puts "fired" }, 500)
 
 # Cancel
 JS.global.clearTimeout(@timer)

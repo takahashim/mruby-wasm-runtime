@@ -24,7 +24,8 @@ heading[:style][:color] = "crimson"
 
 `addEventListener` の代わりに `.on(:event)` をブロック付きで呼ぶと、ブロックが listener として登録されます。
 戻り値は `JS::Subscription` です。
-保持しておかないと callback が GC される (= ボタンが反応しなくなる)ので必ず変数に格納してください。
+内部の Proc は C 側の `g_callback_table` で GC からピン留めされているため、Subscription を手放しても callback は発火し続けます。
+参照を保持する意味は callback を生かしておくためではなく、後で解除 / release する (`@sub.off`) ためです。
 
 ```ruby
 button = JS.global[:document].getElementById("go")
@@ -89,10 +90,11 @@ end
 ## 5. setTimeout / setInterval
 
 JS 関数として直接呼べます。
-callback の Proc は (上のクリック例と同様)何かに保持しないと release されます。
+callable は `JS.callback` で wrap してください。生の `proc` を渡すと `ArgumentError, "cannot wrap Proc as JS value"` が raise されます。
+`JS.callback` でラップした Proc は VM のライフタイムの間 GC からピン留めされる (Ruby 側の参照を手放しても回収されません) ので、タイマーが不要になったら `JS.release_callback` で明示的に release してください。
 
 ```ruby
-@timer = JS.global.setTimeout(proc { puts "fired" }, 500)
+@timer = JS.global.setTimeout(JS.callback { puts "fired" }, 500)
 
 # 取り消し
 JS.global.clearTimeout(@timer)
